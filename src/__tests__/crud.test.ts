@@ -24,7 +24,7 @@ describe('CRUD Operations', () => {
 
 		it('should not add duplicate tool', () => {
 			server.addTool(mockTool);
-			server.addTool(mockTool); // Should not add again
+			expect(() => server.addTool(mockTool)).toThrow("tool 'test-tool' already exists");
 			const tools = server.getAvailableTools();
 			const testTools = tools.filter((t: Tool) => t.name === 'test-tool');
 			expect(testTools.length).toBe(1);
@@ -32,26 +32,23 @@ describe('CRUD Operations', () => {
 
 		it('should remove a tool', () => {
 			server.addTool(mockTool);
-			const removed = server.removeTool('test-tool');
-			expect(removed).toBe(true);
+			server.removeTool('test-tool');
 			expect(server.hasTool('test-tool')).toBe(false);
 		});
 
-		it('should return false when removing non-existent tool', () => {
-			const removed = server.removeTool('non-existent');
-			expect(removed).toBe(false);
+		it('should throw when removing non-existent tool', () => {
+			expect(() => server.removeTool('non-existent')).toThrow("tool 'non-existent' not found");
 		});
 
 		it('should update a tool', () => {
 			server.addTool(mockTool);
-			const updated = server.updateTool('test-tool', { description: 'Updated description' });
-			expect(updated).toBe(true);
+			server.updateTool('test-tool', { description: 'Updated description' });
 			expect(server.getTool('test-tool')?.description).toBe('Updated description');
 		});
 
-		it('should return false when updating non-existent tool', () => {
-			const updated = server.updateTool('non-existent', { description: 'New' });
-			expect(updated).toBe(false);
+		it('should throw when updating non-existent tool', () => {
+			expect(() => server.updateTool('non-existent', { description: 'New' }))
+				.toThrow("tool 'non-existent' not found");
 		});
 
 		it('should clear all tools', () => {
@@ -77,7 +74,7 @@ describe('CRUD Operations', () => {
 
 		it('should not add duplicate skill', () => {
 			server.addSkill(mockSkill);
-			server.addSkill(mockSkill); // Should not add again
+			expect(() => server.addSkill(mockSkill)).toThrow("skill 'test-skill' already exists");
 			const skills = server.getAvailableSkills();
 			const testSkills = skills.filter((s: Skill) => s.name === 'test-skill');
 			expect(testSkills.length).toBe(1);
@@ -85,26 +82,23 @@ describe('CRUD Operations', () => {
 
 		it('should remove a skill', () => {
 			server.addSkill(mockSkill);
-			const removed = server.removeSkill('test-skill');
-			expect(removed).toBe(true);
+			server.removeSkill('test-skill');
 			expect(server.hasSkill('test-skill')).toBe(false);
 		});
 
-		it('should return false when removing non-existent skill', () => {
-			const removed = server.removeSkill('non-existent');
-			expect(removed).toBe(false);
+		it('should throw when removing non-existent skill', () => {
+			expect(() => server.removeSkill('non-existent')).toThrow("skill 'non-existent' not found");
 		});
 
 		it('should update a skill', () => {
 			server.addSkill(mockSkill);
-			const updated = server.updateSkill('test-skill', { description: 'Updated description' });
-			expect(updated).toBe(true);
+			server.updateSkill('test-skill', { description: 'Updated description' });
 			expect(server.getSkill('test-skill')?.description).toBe('Updated description');
 		});
 
-		it('should return false when updating non-existent skill', () => {
-			const updated = server.updateSkill('non-existent', { description: 'New' });
-			expect(updated).toBe(false);
+		it('should throw when updating non-existent skill', () => {
+			expect(() => server.updateSkill('non-existent', { description: 'New' }))
+				.toThrow("skill 'non-existent' not found");
 		});
 
 		it('should clear all skills', () => {

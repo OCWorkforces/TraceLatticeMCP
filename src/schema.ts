@@ -208,7 +208,10 @@ export const SequentialThinkingSchema = v.object({
 	)),
 	branch_id: v.optional(v.pipe(
 		v.string(),
-		v.description('Branch identifier')
+		v.regex(/^[a-zA-Z0-9_-]+$/, 'Branch ID must contain only letters, numbers, hyphens, and underscores'),
+		v.minLength(1),
+		v.maxLength(50),
+		v.description('Branch identifier (alphanumeric, hyphens, underscores only, max 50 chars)')
 	)),
 	needs_more_thoughts: v.optional(v.pipe(
 		v.boolean(),
