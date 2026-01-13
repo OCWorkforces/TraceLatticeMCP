@@ -42,6 +42,8 @@ const server = new McpServer(
 
 interface ServerOptions {
 	maxHistorySize?: number;
+	maxBranches?: number;      // Maximum number of branches to store
+	maxBranchSize?: number;    // Maximum thoughts per branch
 }
 
 export class ToolAwareSequentialThinkingServer {
@@ -50,6 +52,8 @@ export class ToolAwareSequentialThinkingServer {
 	private available_tools: Map<string, Tool> = new Map();
 	private available_skills: Map<string, Skill> = new Map();
 	private maxHistorySize: number;
+	private maxBranches: number;
+	private maxBranchSize: number;
 
 	public getAvailableTools(): Tool[] {
 		return Array.from(this.available_tools.values());
@@ -61,6 +65,8 @@ export class ToolAwareSequentialThinkingServer {
 
 	constructor(options: ServerOptions = {}) {
 		this.maxHistorySize = options.maxHistorySize || 1000;
+		this.maxBranches = options.maxBranches || 50;
+		this.maxBranchSize = options.maxBranchSize || 100;
 
 		// Always include the sequential thinking tool
 		this.addTool(SEQUENTIAL_THINKING_TOOL);
@@ -73,8 +79,10 @@ export class ToolAwareSequentialThinkingServer {
 		collectionName: string,
 	): void {
 		if (collection.has(entity.name)) {
-			console.error(`Warning: ${collectionName} '${entity.name}' already exists`);
-			return;
+			throw new Error(`${collectionName} '${entity.name}' already exists`);
+		}
+		if (!entity.name) {
+			throw new Error(`${collectionName} must have a valid name`);
 		}
 		collection.set(entity.name, entity);
 		console.error(`Added ${collectionName}: ${entity.name}`);
@@ -84,14 +92,12 @@ export class ToolAwareSequentialThinkingServer {
 		collection: Map<string, T>,
 		name: string,
 		collectionName: string,
-	): boolean {
+	): void {
 		if (!collection.has(name)) {
-			console.error(`Warning: ${collectionName} '${name}' not found, cannot remove`);
-			return false;
+			throw new Error(`${collectionName} '${name}' not found, cannot remove`);
 		}
 		collection.delete(name);
 		console.error(`Removed ${collectionName}: ${name}`);
-		return true;
 	}
 
 	private updateEntity<T>(
@@ -99,16 +105,14 @@ export class ToolAwareSequentialThinkingServer {
 		name: string,
 		updates: Partial<T>,
 		collectionName: string,
-	): boolean {
+	): void {
 		if (!collection.has(name)) {
-			console.error(`Warning: ${collectionName} '${name}' not found, cannot update`);
-			return false;
+			throw new Error(`${collectionName} '${name}' not found, cannot update`);
 		}
 		const existing = collection.get(name)!;
 		const updated = { ...existing, ...updates };
 		collection.set(name, updated);
 		console.error(`Updated ${collectionName}: ${name}`);
-		return true;
 	}
 
 	private hasEntity<T>(collection: Map<string, T>, name: string): boolean {
@@ -125,6 +129,26 @@ export class ToolAwareSequentialThinkingServer {
 		console.error('History cleared');
 	}
 
+	private cleanupBranches(): void {
+		const branchCount = Object.keys(this.branches).length;
+		if (branchCount > this.maxBranches) {
+			// Remove oldest branches (FIFO)
+			const branchesToRemove = Object.keys(this.branches).slice(0, branchCount - this.maxBranches);
+			for (const branchId of branchesToRemove) {
+				delete this.branches[branchId];
+				console.error(`Removed old branch: ${branchId}`);
+			}
+		}
+	}
+
+	private trimBranchSize(branchId: string): void {
+		if (this.branches[branchId].length > this.maxBranchSize) {
+			const removed = this.branches[branchId].length - this.maxBranchSize;
+			this.branches[branchId] = this.branches[branchId].slice(-this.maxBranchSize);
+			console.error(`Trimmed branch '${branchId}': removed ${removed} old thoughts`);
+		}
+	}
+
 	// Tool CRUD methods - using generic helpers
 	public addTool(tool: Tool): void {
 		this.addEntity(this.available_tools, tool, 'tool');
@@ -134,20 +158,20 @@ export class ToolAwareSequentialThinkingServer {
 		this.addEntity(this.available_skills, skill, 'skill');
 	}
 
-	public removeTool(name: string): boolean {
-		return this.removeEntity(this.available_tools, name, 'tool');
+	public removeTool(name: string): void {
+		this.removeEntity(this.available_tools, name, 'tool');
 	}
 
-	public removeSkill(name: string): boolean {
-		return this.removeEntity(this.available_skills, name, 'skill');
+	public removeSkill(name: string): void {
+		this.removeEntity(this.available_skills, name, 'skill');
 	}
 
-	public updateTool(name: string, updates: Partial<Tool>): boolean {
-		return this.updateEntity(this.available_tools, name, updates, 'tool');
+	public updateTool(name: string, updates: Partial<Tool>): void {
+		this.updateEntity(this.available_tools, name, updates, 'tool');
 	}
 
-	public updateSkill(name: string, updates: Partial<Skill>): boolean {
-		return this.updateEntity(this.available_skills, name, updates, 'skill');
+	public updateSkill(name: string, updates: Partial<Skill>): void {
+		this.updateEntity(this.available_skills, name, updates, 'skill');
 	}
 
 	public clearTools(): void {
@@ -174,12 +198,6 @@ export class ToolAwareSequentialThinkingServer {
 
 	public getSkill(name: string): Skill | undefined {
 		return this.getEntity(this.available_skills, name);
-	}
-
-	public discoverTools(): void {
-		// MCP tools are provided by the LLM in each call via available_mcp_tools parameter
-		// This server tracks them but doesn't discover them from the environment
-		console.error('Tool discovery: Tools are provided by LLM per call, not discovered');
 	}
 
 	public discoverSkills(): number {
@@ -222,6 +240,11 @@ export class ToolAwareSequentialThinkingServer {
 					const content = readFileSync(skillFile, 'utf-8');
 					const skillData = this.parseSkillFrontmatter(content);
 
+					if (skillData._error) {
+						console.error(`Skipping skill in ${entry.name}: ${skillData._error}`);
+						continue;
+					}
+
 					if (skillData.name) {
 						// Ensure we have a complete Skill object before adding
 						const skill: Skill = {
@@ -243,18 +266,18 @@ export class ToolAwareSequentialThinkingServer {
 		return discovered;
 	}
 
-	private parseSkillFrontmatter(content: string): Partial<Skill> {
+	private parseSkillFrontmatter(content: string): Partial<Skill> & { _error?: string } {
 		// Parse YAML frontmatter from skill file (SKILL.md or skill.md)
 		const match = content.match(/^---\n([\s\S]+?)\n---/);
 		if (!match) {
-			console.error('Warning: No frontmatter found in skill file');
+			// No frontmatter - this is normal for some files
 			return {};
 		}
 
 		try {
 			const frontmatter = parseYaml(match[1]) as Record<string, unknown>;
 
-			return {
+			const result: Partial<Skill> = {
 				name: typeof frontmatter.name === 'string' ? frontmatter.name : undefined,
 				description: typeof frontmatter.description === 'string' ? frontmatter.description : '',
 				user_invocable: frontmatter['user-invocable'] === true,
@@ -262,9 +285,16 @@ export class ToolAwareSequentialThinkingServer {
 					? frontmatter['allowed-tools'].map(String)
 					: undefined,
 			};
+
+			// Validate required field
+			if (!result.name) {
+				return { _error: 'Missing required field: name' };
+			}
+
+			return result;
 		} catch (error) {
 			console.error('Error parsing YAML frontmatter:', error instanceof Error ? error.message : String(error));
-			return {};
+			return { _error: 'YAML parse error' };
 		}
 	}
 
@@ -373,14 +403,9 @@ export class ToolAwareSequentialThinkingServer {
 				validatedInput.total_thoughts = validatedInput.thought_number;
 			}
 
-			// Store the current step in thought history
-			if (validatedInput.current_step) {
-				if (!validatedInput.previous_steps) {
-					validatedInput.previous_steps = [];
-				}
-				validatedInput.previous_steps.push(validatedInput.current_step);
-			}
-
+			// Store the thought with current_step intact
+			// Note: current_step should remain in the current thought, not be moved to previous_steps
+			// Step progression is handled by the client (LLM) between calls
 			this.thought_history.push(validatedInput);
 
 		// Prevent memory leaks by limiting history size
@@ -393,9 +418,16 @@ export class ToolAwareSequentialThinkingServer {
 				validatedInput.branch_from_thought &&
 				validatedInput.branch_id
 			) {
+				// Enforce branch count limit
+				this.cleanupBranches();
+
 				if (!this.branches[validatedInput.branch_id]) {
 					this.branches[validatedInput.branch_id] = [];
 				}
+
+				// Enforce per-branch size limit
+				this.trimBranchSize(validatedInput.branch_id);
+
 				this.branches[validatedInput.branch_id].push(validatedInput);
 			}
 
