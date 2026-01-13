@@ -219,7 +219,7 @@ Expected Outcome: ${step.expected_outcome}${
 								thought_number: validatedInput.thought_number,
 								total_thoughts: validatedInput.total_thoughts,
 								next_thought_needed:
-									validatedInput.next_thought_needed,
+									validatedInput.next_thought_needed ?? true,
 								branches: Object.keys(this.branches),
 								thought_history_length: this.thought_history.length,
 								available_mcp_tools: validatedInput.available_mcp_tools,

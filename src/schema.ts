@@ -131,10 +131,10 @@ export const SequentialThinkingSchema = v.object({
 		v.string(),
 		v.description('Your current thinking step')
 	),
-	next_thought_needed: v.pipe(
+	next_thought_needed: v.optional(v.pipe(
 		v.boolean(),
-		v.description('Whether another thought step is needed')
-	),
+		v.description('Whether another thought step is needed (defaults to true if not provided)')
+	)),
 	thought_number: v.pipe(
 		v.number(),
 		v.minValue(1),
