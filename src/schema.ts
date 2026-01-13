@@ -231,5 +231,5 @@ export const SequentialThinkingSchema = v.object({
 export const SEQUENTIAL_THINKING_TOOL: Tool = {
 	name: 'sequentialthinking_tools',
 	description: TOOL_DESCRIPTION,
-	inputSchema: {} // This will be handled by tmcp with the schema above
+	inputSchema: {} // Schema is handled by tmcp when registering the tool
 };

@@ -1,0 +1,72 @@
+import { describe, it, expect } from 'vitest';
+import {
+	SequentialThinkingError,
+	ToolNotFoundError,
+	SkillNotFoundError,
+	InvalidThoughtError,
+	SkillDiscoveryError,
+	HistoryLimitExceededError,
+} from '../errors.js';
+
+describe('Custom Error Types', () => {
+	describe('SequentialThinkingError', () => {
+		it('should create base error with code', () => {
+			const error = new SequentialThinkingError('Test error', 'TEST_CODE');
+			expect(error.message).toBe('Test error');
+			expect(error.code).toBe('TEST_CODE');
+			expect(error.name).toBe('SequentialThinkingError');
+		});
+
+		it('should capture stack trace', () => {
+			const error = new SequentialThinkingError('Test', 'CODE');
+			expect(error.stack).toBeDefined();
+		});
+	});
+
+	describe('ToolNotFoundError', () => {
+		it('should create tool not found error', () => {
+			const error = new ToolNotFoundError('test-tool');
+			expect(error.message).toBe("Tool 'test-tool' not found");
+			expect(error.code).toBe('TOOL_NOT_FOUND');
+			expect(error.name).toBe('ToolNotFoundError');
+		});
+	});
+
+	describe('SkillNotFoundError', () => {
+		it('should create skill not found error', () => {
+			const error = new SkillNotFoundError('test-skill');
+			expect(error.message).toBe("Skill 'test-skill' not found");
+			expect(error.code).toBe('SKILL_NOT_FOUND');
+			expect(error.name).toBe('SkillNotFoundError');
+		});
+	});
+
+	describe('InvalidThoughtError', () => {
+		it('should create invalid thought error', () => {
+			const error = new InvalidThoughtError(5, 'Missing required field');
+			expect(error.message).toBe('Invalid thought 5: Missing required field');
+			expect(error.code).toBe('INVALID_THOUGHT');
+			expect(error.name).toBe('InvalidThoughtError');
+		});
+	});
+
+	describe('SkillDiscoveryError', () => {
+		it('should create skill discovery error with cause', () => {
+			const cause = new Error('Directory not found');
+			const error = new SkillDiscoveryError('/test/dir', cause);
+			expect(error.message).toBe('Failed to discover skills in /test/dir: Directory not found');
+			expect(error.code).toBe('SKILL_DISCOVERY_FAILED');
+			expect(error.name).toBe('SkillDiscoveryError');
+			expect(error.cause).toBe(cause);
+		});
+	});
+
+	describe('HistoryLimitExceededError', () => {
+		it('should create history limit error', () => {
+			const error = new HistoryLimitExceededError(1500, 1000);
+			expect(error.message).toBe('History size 1500 exceeds limit 1000');
+			expect(error.code).toBe('HISTORY_LIMIT_EXCEEDED');
+			expect(error.name).toBe('HistoryLimitExceededError');
+		});
+	});
+});
