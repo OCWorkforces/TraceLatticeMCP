@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SequentialThinkingSchema, SEQUENTIAL_THINKING_TOOL } from './schema.js';
-import { ThoughtData, ToolRecommendation, StepRecommendation, Tool } from './types.js';
+import { ThoughtData, ToolRecommendation, SkillRecommendation, StepRecommendation, Tool, Skill } from './types.js';
 
 // Get version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -40,6 +40,7 @@ const server = new McpServer(
 
 interface ServerOptions {
 	available_tools?: Tool[];
+	available_skills?: Skill[];
 	maxHistorySize?: number;
 }
 
@@ -47,10 +48,15 @@ class ToolAwareSequentialThinkingServer {
 	private thought_history: ThoughtData[] = [];
 	private branches: Record<string, ThoughtData[]> = {};
 	private available_tools: Map<string, Tool> = new Map();
+	private available_skills: Map<string, Skill> = new Map();
 	private maxHistorySize: number;
 
 	public getAvailableTools(): Tool[] {
 		return Array.from(this.available_tools.values());
+	}
+
+	public getAvailableSkills(): Skill[] {
+		return Array.from(this.available_skills.values());
 	}
 
 	constructor(options: ServerOptions = {}) {
@@ -73,9 +79,25 @@ class ToolAwareSequentialThinkingServer {
 			this.available_tools.set(tool.name, tool);
 		});
 
+		// Initialize with provided skills
+		const skills = options.available_skills || [];
+		skills.forEach((skill) => {
+			if (this.available_skills.has(skill.name)) {
+				console.error(
+					`Warning: Duplicate skill name '${skill.name}' - using first occurrence`,
+				);
+				return;
+			}
+			this.available_skills.set(skill.name, skill);
+		});
+
 		console.error(
 			'Available tools:',
 			Array.from(this.available_tools.keys()),
+		);
+		console.error(
+			'Available skills:',
+			Array.from(this.available_skills.keys()),
 		);
 	}
 
@@ -94,10 +116,27 @@ class ToolAwareSequentialThinkingServer {
 		console.error(`Added tool: ${tool.name}`);
 	}
 
+	public addSkill(skill: Skill): void {
+		if (this.available_skills.has(skill.name)) {
+			console.error(`Warning: Skill '${skill.name}' already exists`);
+			return;
+		}
+		this.available_skills.set(skill.name, skill);
+		console.error(`Added skill: ${skill.name}`);
+	}
+
 	public discoverTools(): void {
 		// In a real implementation, this would scan the environment
 		// for available MCP tools and add them to available_tools
 		console.error('Tool discovery not implemented - manually add tools via addTool()');
+	}
+
+	public discoverSkills(): void {
+		// In a real implementation, this would scan:
+		// - ~/.claude/skills/
+		// - .claude/skills/
+		// - skills/ directories in plugins
+		console.error('Skill discovery not implemented - manually add skills via addSkill()');
 	}
 
 	private formatRecommendation(step: StepRecommendation): string {
@@ -114,14 +153,38 @@ class ToolAwareSequentialThinkingServer {
 			})
 			.join('\n');
 
-		return `Step: ${step.step_description}
-Recommended Tools:
-${tools}
-Expected Outcome: ${step.expected_outcome}${
+		const skills = step.recommended_skills?.length
+			? step.recommended_skills
+				.map((skill) => {
+					const alternatives = skill.alternatives?.length
+						? ` (alternatives: ${skill.alternatives.join(', ')})`
+						: '';
+					const toolsInfo = skill.allowed_tools?.length
+						? `\n    Allowed tools: ${skill.allowed_tools.join(', ')}`
+						: '';
+					return `  - ${skill.skill_name} (priority: ${skill.priority})${alternatives}
+    Rationale: ${skill.rationale}${toolsInfo}`;
+				})
+				.join('\n')
+			: '';
+
+		let output = `Step: ${step.step_description}`;
+
+		if (step.recommended_tools?.length) {
+			output += `\nRecommended Tools:\n${tools}`;
+		}
+
+		if (skills) {
+			output += `\nRecommended Skills:\n${skills}`;
+		}
+
+		output += `\nExpected Outcome: ${step.expected_outcome}${
 			step.next_step_conditions
 				? `\nConditions for next step:\n  - ${step.next_step_conditions.join('\n  - ')}`
 				: ''
 		}`;
+
+		return output;
 	}
 
 	private formatThought(thoughtData: ThoughtData): string {
@@ -223,6 +286,7 @@ Expected Outcome: ${step.expected_outcome}${
 								branches: Object.keys(this.branches),
 								thought_history_length: this.thought_history.length,
 								available_mcp_tools: validatedInput.available_mcp_tools,
+								available_skills: validatedInput.available_skills,
 								current_step: validatedInput.current_step,
 								previous_steps: validatedInput.previous_steps,
 								remaining_steps: validatedInput.remaining_steps,

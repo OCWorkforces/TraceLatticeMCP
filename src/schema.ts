@@ -5,7 +5,7 @@ const TOOL_DESCRIPTION = `A detailed tool for dynamic and reflective problem-sol
 This tool helps analyze problems through a flexible thinking process that can adapt and evolve.
 Each thought can build on, question, or revise previous insights as understanding deepens.
 
-IMPORTANT: This server facilitates sequential thinking with MCP tool coordination. The LLM analyzes available tools and their descriptions to make intelligent recommendations, which are then tracked and organized by this server.
+IMPORTANT: This server facilitates sequential thinking with MCP tool coordination and skill recommendations. The LLM analyzes available tools and skills to make intelligent recommendations, which are then tracked and organized by this server.
 
 When to use this tool:
 - Breaking down complex problems into steps
@@ -16,6 +16,7 @@ When to use this tool:
 - Tasks that need to maintain context over multiple steps
 - Situations where irrelevant information needs to be filtered out
 - When you need guidance on which tools to use and in what order
+- When you need guidance on which skills to invoke for specific workflows
 
 Key features:
 - You can adjust total_thoughts up or down as you progress
@@ -26,12 +27,14 @@ Key features:
 - Generates a solution hypothesis
 - Verifies the hypothesis based on the Chain of Thought steps
 - Recommends appropriate tools for each step
+- Recommends appropriate skills alongside tools
 - Provides rationale for tool recommendations
 - Suggests tool execution order and parameters
 - Tracks previous recommendations and remaining steps
 
 Parameters explained:
 - available_mcp_tools: Array of MCP tool names that are available for use (e.g., ["mcp-omnisearch", "mcp-turso-cloud"])
+- available_skills: Array of skill names that are available for use (e.g., ["commit", "review-pr", "pdf"])
 - thought: Your current thinking step, which can include:
 * Regular analytical steps
 * Revisions of previous thoughts
@@ -52,6 +55,7 @@ Parameters explained:
 - current_step: Current step recommendation, including:
 * step_description: What needs to be done
 * recommended_tools: Tools recommended for this step
+* recommended_skills: Skills recommended for this step (optional)
 * expected_outcome: What to expect from this step
 * next_step_conditions: Conditions to consider for the next step
 - previous_steps: Steps already recommended
@@ -71,8 +75,10 @@ You should:
 11. Suggest specific tool parameters when appropriate
 12. Consider alternative tools for each step
 13. Track progress through the recommended steps
-14. Provide a single, ideally correct answer as the final output
-15. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`;
+14. Consider available skills that provide workflows for complex tasks
+15. Coordinate skill invocation with tool recommendations (skills may call tools)
+16. Provide a single, ideally correct answer as the final output
+17. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`;
 
 export const ToolRecommendationSchema = v.object({
 	tool_name: v.pipe(
@@ -103,6 +109,39 @@ export const ToolRecommendationSchema = v.object({
 	))
 });
 
+export const SkillRecommendationSchema = v.object({
+	skill_name: v.pipe(
+		v.string(),
+		v.description('Name of the skill being recommended')
+	),
+	confidence: v.pipe(
+		v.number(),
+		v.minValue(0),
+		v.maxValue(1),
+		v.description('0-1 indicating confidence in recommendation')
+	),
+	rationale: v.pipe(
+		v.string(),
+		v.description('Why this skill is recommended')
+	),
+	priority: v.pipe(
+		v.number(),
+		v.description('Order in the recommendation sequence')
+	),
+	alternatives: v.optional(v.pipe(
+		v.array(v.string()),
+		v.description('Alternative skills that could be used')
+	)),
+	allowed_tools: v.optional(v.pipe(
+		v.array(v.string()),
+		v.description('Tools this skill is allowed to use (from skill frontmatter)')
+	)),
+	user_invocable: v.optional(v.pipe(
+		v.boolean(),
+		v.description('Whether this skill can be user-invoked')
+	))
+});
+
 export const StepRecommendationSchema = v.object({
 	step_description: v.pipe(
 		v.string(),
@@ -112,6 +151,10 @@ export const StepRecommendationSchema = v.object({
 		v.array(ToolRecommendationSchema),
 		v.description('Tools recommended for this step')
 	),
+	recommended_skills: v.optional(v.pipe(
+		v.array(SkillRecommendationSchema),
+		v.description('Skills recommended for this step')
+	)),
 	expected_outcome: v.pipe(
 		v.string(),
 		v.description('What to expect from this step')
@@ -126,6 +169,10 @@ export const SequentialThinkingSchema = v.object({
 	available_mcp_tools: v.pipe(
 		v.array(v.string()),
 		v.description('Array of MCP tool names available for use (e.g., ["mcp-omnisearch", "mcp-turso-cloud"])')
+	),
+	available_skills: v.pipe(
+		v.array(v.string()),
+		v.description('Array of skill names available for use (e.g., ["commit", "review-pr", "pdf"])')
 	),
 	thought: v.pipe(
 		v.string(),

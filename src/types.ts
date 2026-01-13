@@ -8,15 +8,27 @@ export interface ToolRecommendation {
 	alternatives?: string[];  // Alternative tools that could be used
 }
 
+export interface SkillRecommendation {
+	skill_name: string;              // Name of the skill being recommended
+	confidence: number;              // 0-1 indicating confidence in recommendation
+	rationale: string;              // Why this skill is recommended
+	priority: number;               // Order in the recommendation sequence
+	alternatives?: string[];        // Alternative skills that could be used
+	allowed_tools?: string[];       // Tools this skill is allowed to use
+	user_invocable?: boolean;       // Whether this skill can be user-invoked
+}
+
 export interface StepRecommendation {
 	step_description: string;  // What needs to be done
 	recommended_tools: ToolRecommendation[];  // Tools recommended for this step
+	recommended_skills?: SkillRecommendation[];  // Skills recommended for this step
 	expected_outcome: string;  // What to expect from this step
 	next_step_conditions?: string[];  // Conditions to consider for the next step
 }
 
 export interface ThoughtData {
 	available_mcp_tools: string[];  // Array of MCP tool names available for use
+	available_skills: string[];  // Array of skill names available for use
 	thought: string;
 	thought_number: number;
 	total_thoughts: number;
@@ -39,7 +51,15 @@ export interface Tool {
 	inputSchema: Record<string, unknown>;
 }
 
+export interface Skill {
+	name: string;
+	description: string;
+	user_invocable?: boolean;
+	allowed_tools?: string[];
+}
+
 export interface ServerConfig {
 	available_tools: Map<string, Tool>;
+	available_skills: Map<string, Skill>;
 }
 
