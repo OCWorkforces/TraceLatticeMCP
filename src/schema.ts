@@ -33,8 +33,8 @@ Key features:
 - Tracks previous recommendations and remaining steps
 
 Parameters explained:
-- available_mcp_tools: Array of MCP tool names that are available for use (e.g., ["mcp-omnisearch", "mcp-turso-cloud"])
-- available_skills: Array of skill names that are available for use (e.g., ["commit", "review-pr", "pdf"])
+- available_mcp_tools: (Optional) Array of MCP tool names that are available for use (e.g., ["mcp-omnisearch", "mcp-turso-cloud"])
+- available_skills: (Optional) Array of skill names that are available for use (e.g., ["commit", "review-pr", "pdf"])
 - thought: Your current thinking step, which can include:
 * Regular analytical steps
 * Revisions of previous thoughts
@@ -166,14 +166,14 @@ export const StepRecommendationSchema = v.object({
 });
 
 export const SequentialThinkingSchema = v.object({
-	available_mcp_tools: v.pipe(
+	available_mcp_tools: v.optional(v.pipe(
 		v.array(v.string()),
 		v.description('Array of MCP tool names available for use (e.g., ["mcp-omnisearch", "mcp-turso-cloud"])')
-	),
-	available_skills: v.pipe(
+	)),
+	available_skills: v.optional(v.pipe(
 		v.array(v.string()),
 		v.description('Array of skill names available for use (e.g., ["commit", "review-pr", "pdf"])')
-	),
+	)),
 	thought: v.pipe(
 		v.string(),
 		v.description('Your current thinking step')

@@ -27,8 +27,8 @@ export interface StepRecommendation {
 }
 
 export interface ThoughtData {
-	available_mcp_tools: string[];  // Array of MCP tool names available for use
-	available_skills: string[];  // Array of skill names available for use
+	available_mcp_tools?: string[];  // Array of MCP tool names available for use
+	available_skills?: string[];  // Array of skill names available for use
 	thought: string;
 	thought_number: number;
 	total_thoughts: number;
