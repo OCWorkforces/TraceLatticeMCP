@@ -8,12 +8,13 @@ import { ValibotJsonSchemaAdapter } from '@tmcp/adapter-valibot';
 import { StdioTransport } from '@tmcp/transport-stdio';
 import * as v from 'valibot';
 import chalk from 'chalk';
+import { parse as parseYaml } from 'yaml';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { SequentialThinkingSchema, SEQUENTIAL_THINKING_TOOL } from './schema.js';
-import { ThoughtData, ToolRecommendation, SkillRecommendation, StepRecommendation, Tool, Skill } from './types.js';
+import { ThoughtData, StepRecommendation, Tool, Skill } from './types.js';
 
 // Get version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -43,7 +44,7 @@ interface ServerOptions {
 	maxHistorySize?: number;
 }
 
-class ToolAwareSequentialThinkingServer {
+export class ToolAwareSequentialThinkingServer {
 	private thought_history: ThoughtData[] = [];
 	private branches: Record<string, ThoughtData[]> = {};
 	private available_tools: Map<string, Tool> = new Map();
@@ -65,51 +66,88 @@ class ToolAwareSequentialThinkingServer {
 		this.addTool(SEQUENTIAL_THINKING_TOOL);
 	}
 
+	// Generic CRUD helpers to eliminate duplication
+	private addEntity<T extends { name: string }>(
+		collection: Map<string, T>,
+		entity: T,
+		collectionName: string,
+	): void {
+		if (collection.has(entity.name)) {
+			console.error(`Warning: ${collectionName} '${entity.name}' already exists`);
+			return;
+		}
+		collection.set(entity.name, entity);
+		console.error(`Added ${collectionName}: ${entity.name}`);
+	}
+
+	private removeEntity<T>(
+		collection: Map<string, T>,
+		name: string,
+		collectionName: string,
+	): boolean {
+		if (!collection.has(name)) {
+			console.error(`Warning: ${collectionName} '${name}' not found, cannot remove`);
+			return false;
+		}
+		collection.delete(name);
+		console.error(`Removed ${collectionName}: ${name}`);
+		return true;
+	}
+
+	private updateEntity<T>(
+		collection: Map<string, T>,
+		name: string,
+		updates: Partial<T>,
+		collectionName: string,
+	): boolean {
+		if (!collection.has(name)) {
+			console.error(`Warning: ${collectionName} '${name}' not found, cannot update`);
+			return false;
+		}
+		const existing = collection.get(name)!;
+		const updated = { ...existing, ...updates };
+		collection.set(name, updated);
+		console.error(`Updated ${collectionName}: ${name}`);
+		return true;
+	}
+
+	private hasEntity<T>(collection: Map<string, T>, name: string): boolean {
+		return collection.has(name);
+	}
+
+	private getEntity<T>(collection: Map<string, T>, name: string): T | undefined {
+		return collection.get(name);
+	}
+
 	public clearHistory(): void {
 		this.thought_history = [];
 		this.branches = {};
 		console.error('History cleared');
 	}
 
+	// Tool CRUD methods - using generic helpers
 	public addTool(tool: Tool): void {
-		if (this.available_tools.has(tool.name)) {
-			console.error(`Warning: Tool '${tool.name}' already exists`);
-			return;
-		}
-		this.available_tools.set(tool.name, tool);
-		console.error(`Added tool: ${tool.name}`);
+		this.addEntity(this.available_tools, tool, 'tool');
 	}
 
 	public addSkill(skill: Skill): void {
-		if (this.available_skills.has(skill.name)) {
-			console.error(`Warning: Skill '${skill.name}' already exists`);
-			return;
-		}
-		this.available_skills.set(skill.name, skill);
-		console.error(`Added skill: ${skill.name}`);
+		this.addEntity(this.available_skills, skill, 'skill');
 	}
 
-	// Tool CRUD methods
 	public removeTool(name: string): boolean {
-		if (!this.available_tools.has(name)) {
-			console.error(`Warning: Tool '${name}' not found, cannot remove`);
-			return false;
-		}
-		this.available_tools.delete(name);
-		console.error(`Removed tool: ${name}`);
-		return true;
+		return this.removeEntity(this.available_tools, name, 'tool');
+	}
+
+	public removeSkill(name: string): boolean {
+		return this.removeEntity(this.available_skills, name, 'skill');
 	}
 
 	public updateTool(name: string, updates: Partial<Tool>): boolean {
-		if (!this.available_tools.has(name)) {
-			console.error(`Warning: Tool '${name}' not found, cannot update`);
-			return false;
-		}
-		const existing = this.available_tools.get(name)!;
-		const updated = { ...existing, ...updates };
-		this.available_tools.set(name, updated);
-		console.error(`Updated tool: ${name}`);
-		return true;
+		return this.updateEntity(this.available_tools, name, updates, 'tool');
+	}
+
+	public updateSkill(name: string, updates: Partial<Skill>): boolean {
+		return this.updateEntity(this.available_skills, name, updates, 'skill');
 	}
 
 	public clearTools(): void {
@@ -117,48 +155,25 @@ class ToolAwareSequentialThinkingServer {
 		console.error('Cleared all tools');
 	}
 
-	public hasTool(name: string): boolean {
-		return this.available_tools.has(name);
-	}
-
-	public getTool(name: string): Tool | undefined {
-		return this.available_tools.get(name);
-	}
-
-	// Skill CRUD methods
-	public removeSkill(name: string): boolean {
-		if (!this.available_skills.has(name)) {
-			console.error(`Warning: Skill '${name}' not found, cannot remove`);
-			return false;
-		}
-		this.available_skills.delete(name);
-		console.error(`Removed skill: ${name}`);
-		return true;
-	}
-
-	public updateSkill(name: string, updates: Partial<Skill>): boolean {
-		if (!this.available_skills.has(name)) {
-			console.error(`Warning: Skill '${name}' not found, cannot update`);
-			return false;
-		}
-		const existing = this.available_skills.get(name)!;
-		const updated = { ...existing, ...updates };
-		this.available_skills.set(name, updated);
-		console.error(`Updated skill: ${name}`);
-		return true;
-	}
-
 	public clearSkills(): void {
 		this.available_skills.clear();
 		console.error('Cleared all skills');
 	}
 
+	public hasTool(name: string): boolean {
+		return this.hasEntity(this.available_tools, name);
+	}
+
 	public hasSkill(name: string): boolean {
-		return this.available_skills.has(name);
+		return this.hasEntity(this.available_skills, name);
+	}
+
+	public getTool(name: string): Tool | undefined {
+		return this.getEntity(this.available_tools, name);
 	}
 
 	public getSkill(name: string): Skill | undefined {
-		return this.available_skills.get(name);
+		return this.getEntity(this.available_skills, name);
 	}
 
 	public discoverTools(): void {
@@ -194,13 +209,16 @@ class ToolAwareSequentialThinkingServer {
 					}
 
 					const skillPath = join(dir, entry.name);
-					const skillFile = join(skillPath, 'skill.md');
+					// Try SKILL.md first (uppercase), then fall back to skill.md (lowercase)
+					const skillFileUpper = join(skillPath, 'SKILL.md');
+					const skillFileLower = join(skillPath, 'skill.md');
+					const skillFile = existsSync(skillFileUpper) ? skillFileUpper : skillFileLower;
 
 					if (!existsSync(skillFile)) {
 						continue;
 					}
 
-					// Read and parse skill.md
+					// Read and parse skill file (SKILL.md or skill.md)
 					const content = readFileSync(skillFile, 'utf-8');
 					const skillData = this.parseSkillFrontmatter(content);
 
@@ -226,28 +244,28 @@ class ToolAwareSequentialThinkingServer {
 	}
 
 	private parseSkillFrontmatter(content: string): Partial<Skill> {
-		// Parse YAML frontmatter from skill.md
+		// Parse YAML frontmatter from skill file (SKILL.md or skill.md)
 		const match = content.match(/^---\n([\s\S]+?)\n---/);
 		if (!match) {
-			console.error('Warning: No frontmatter found in skill.md');
+			console.error('Warning: No frontmatter found in skill file');
 			return {};
 		}
 
-		// Simple YAML parsing for basic fields
-		const frontmatter = match[1];
-		const result: Partial<Skill> = {};
+		try {
+			const frontmatter = parseYaml(match[1]) as Record<string, unknown>;
 
-		const nameMatch = frontmatter.match(/name:\s*(.+)/);
-		const descMatch = frontmatter.match(/description:\s*(.+)/);
-		const invocableMatch = frontmatter.match(/user-invocable:\s*(.+)/);
-		const toolsMatch = frontmatter.match(/allowed-tools:\s*\[(.+)\]/);
-
-		if (nameMatch) result.name = nameMatch[1].trim();
-		if (descMatch) result.description = descMatch[1].trim();
-		if (invocableMatch) result.user_invocable = invocableMatch[1].trim() === 'true';
-		if (toolsMatch) result.allowed_tools = toolsMatch[1].split(',').map(s => s.trim());
-
-		return result;
+			return {
+				name: typeof frontmatter.name === 'string' ? frontmatter.name : undefined,
+				description: typeof frontmatter.description === 'string' ? frontmatter.description : '',
+				user_invocable: frontmatter['user-invocable'] === true,
+				allowed_tools: Array.isArray(frontmatter['allowed-tools'])
+					? frontmatter['allowed-tools'].map(String)
+					: undefined,
+			};
+		} catch (error) {
+			console.error('Error parsing YAML frontmatter:', error instanceof Error ? error.message : String(error));
+			return {};
+		}
 	}
 
 	private formatRecommendation(step: StepRecommendation): string {
