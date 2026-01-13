@@ -8,9 +8,10 @@ import { ValibotJsonSchemaAdapter } from '@tmcp/adapter-valibot';
 import { StdioTransport } from '@tmcp/transport-stdio';
 import * as v from 'valibot';
 import chalk from 'chalk';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 import { SequentialThinkingSchema, SEQUENTIAL_THINKING_TOOL } from './schema.js';
 import { ThoughtData, ToolRecommendation, SkillRecommendation, StepRecommendation, Tool, Skill } from './types.js';
 
@@ -39,8 +40,6 @@ const server = new McpServer(
 );
 
 interface ServerOptions {
-	available_tools?: Tool[];
-	available_skills?: Skill[];
 	maxHistorySize?: number;
 }
 
@@ -63,42 +62,7 @@ class ToolAwareSequentialThinkingServer {
 		this.maxHistorySize = options.maxHistorySize || 1000;
 
 		// Always include the sequential thinking tool
-		const tools = [
-			SEQUENTIAL_THINKING_TOOL,
-			...(options.available_tools || []),
-		];
-
-		// Initialize with provided tools
-		tools.forEach((tool) => {
-			if (this.available_tools.has(tool.name)) {
-				console.error(
-					`Warning: Duplicate tool name '${tool.name}' - using first occurrence`,
-				);
-				return;
-			}
-			this.available_tools.set(tool.name, tool);
-		});
-
-		// Initialize with provided skills
-		const skills = options.available_skills || [];
-		skills.forEach((skill) => {
-			if (this.available_skills.has(skill.name)) {
-				console.error(
-					`Warning: Duplicate skill name '${skill.name}' - using first occurrence`,
-				);
-				return;
-			}
-			this.available_skills.set(skill.name, skill);
-		});
-
-		console.error(
-			'Available tools:',
-			Array.from(this.available_tools.keys()),
-		);
-		console.error(
-			'Available skills:',
-			Array.from(this.available_skills.keys()),
-		);
+		this.addTool(SEQUENTIAL_THINKING_TOOL);
 	}
 
 	public clearHistory(): void {
@@ -125,18 +89,165 @@ class ToolAwareSequentialThinkingServer {
 		console.error(`Added skill: ${skill.name}`);
 	}
 
-	public discoverTools(): void {
-		// In a real implementation, this would scan the environment
-		// for available MCP tools and add them to available_tools
-		console.error('Tool discovery not implemented - manually add tools via addTool()');
+	// Tool CRUD methods
+	public removeTool(name: string): boolean {
+		if (!this.available_tools.has(name)) {
+			console.error(`Warning: Tool '${name}' not found, cannot remove`);
+			return false;
+		}
+		this.available_tools.delete(name);
+		console.error(`Removed tool: ${name}`);
+		return true;
 	}
 
-	public discoverSkills(): void {
-		// In a real implementation, this would scan:
-		// - ~/.claude/skills/
-		// - .claude/skills/
-		// - skills/ directories in plugins
-		console.error('Skill discovery not implemented - manually add skills via addSkill()');
+	public updateTool(name: string, updates: Partial<Tool>): boolean {
+		if (!this.available_tools.has(name)) {
+			console.error(`Warning: Tool '${name}' not found, cannot update`);
+			return false;
+		}
+		const existing = this.available_tools.get(name)!;
+		const updated = { ...existing, ...updates };
+		this.available_tools.set(name, updated);
+		console.error(`Updated tool: ${name}`);
+		return true;
+	}
+
+	public clearTools(): void {
+		this.available_tools.clear();
+		console.error('Cleared all tools');
+	}
+
+	public hasTool(name: string): boolean {
+		return this.available_tools.has(name);
+	}
+
+	public getTool(name: string): Tool | undefined {
+		return this.available_tools.get(name);
+	}
+
+	// Skill CRUD methods
+	public removeSkill(name: string): boolean {
+		if (!this.available_skills.has(name)) {
+			console.error(`Warning: Skill '${name}' not found, cannot remove`);
+			return false;
+		}
+		this.available_skills.delete(name);
+		console.error(`Removed skill: ${name}`);
+		return true;
+	}
+
+	public updateSkill(name: string, updates: Partial<Skill>): boolean {
+		if (!this.available_skills.has(name)) {
+			console.error(`Warning: Skill '${name}' not found, cannot update`);
+			return false;
+		}
+		const existing = this.available_skills.get(name)!;
+		const updated = { ...existing, ...updates };
+		this.available_skills.set(name, updated);
+		console.error(`Updated skill: ${name}`);
+		return true;
+	}
+
+	public clearSkills(): void {
+		this.available_skills.clear();
+		console.error('Cleared all skills');
+	}
+
+	public hasSkill(name: string): boolean {
+		return this.available_skills.has(name);
+	}
+
+	public getSkill(name: string): Skill | undefined {
+		return this.available_skills.get(name);
+	}
+
+	public discoverTools(): void {
+		// MCP tools are provided by the LLM in each call via available_mcp_tools parameter
+		// This server tracks them but doesn't discover them from the environment
+		console.error('Tool discovery: Tools are provided by LLM per call, not discovered');
+	}
+
+	public discoverSkills(): number {
+		let discovered = 0;
+		let scannedDirs = 0;
+
+		// Directories to scan (in priority order - project overrides user)
+		const skillDirs = [
+			'.claude/skills',    // Project-local (highest priority)
+			join(homedir(), '.claude/skills'),  // User-global
+		];
+
+		for (const dir of skillDirs) {
+			if (!existsSync(dir)) {
+				continue;
+			}
+
+			scannedDirs++;
+			console.error(`Scanning skills directory: ${dir}`);
+
+			try {
+				const entries = readdirSync(dir, { withFileTypes: true });
+
+				for (const entry of entries) {
+					if (!entry.isDirectory()) {
+						continue;
+					}
+
+					const skillPath = join(dir, entry.name);
+					const skillFile = join(skillPath, 'skill.md');
+
+					if (!existsSync(skillFile)) {
+						continue;
+					}
+
+					// Read and parse skill.md
+					const content = readFileSync(skillFile, 'utf-8');
+					const skillData = this.parseSkillFrontmatter(content);
+
+					if (skillData.name) {
+						// Ensure we have a complete Skill object before adding
+						const skill: Skill = {
+							name: skillData.name,
+							description: skillData.description || '',
+							user_invocable: skillData.user_invocable,
+							allowed_tools: skillData.allowed_tools,
+						};
+						this.addSkill(skill);
+						discovered++;
+					}
+				}
+			} catch (error) {
+				console.error(`Error scanning ${dir}:`, error instanceof Error ? error.message : String(error));
+			}
+		}
+
+		console.error(`Discovered ${discovered} skills from ${scannedDirs} directories`);
+		return discovered;
+	}
+
+	private parseSkillFrontmatter(content: string): Partial<Skill> {
+		// Parse YAML frontmatter from skill.md
+		const match = content.match(/^---\n([\s\S]+?)\n---/);
+		if (!match) {
+			console.error('Warning: No frontmatter found in skill.md');
+			return {};
+		}
+
+		// Simple YAML parsing for basic fields
+		const frontmatter = match[1];
+		const result: Partial<Skill> = {};
+
+		const nameMatch = frontmatter.match(/name:\s*(.+)/);
+		const descMatch = frontmatter.match(/description:\s*(.+)/);
+		const invocableMatch = frontmatter.match(/user-invocable:\s*(.+)/);
+		const toolsMatch = frontmatter.match(/allowed-tools:\s*\[(.+)\]/);
+
+		if (nameMatch) result.name = nameMatch[1].trim();
+		if (descMatch) result.description = descMatch[1].trim();
+		if (invocableMatch) result.user_invocable = invocableMatch[1].trim() === 'true';
+		if (toolsMatch) result.allowed_tools = toolsMatch[1].split(',').map(s => s.trim());
+
+		return result;
 	}
 
 	private formatRecommendation(step: StepRecommendation): string {
@@ -328,9 +439,11 @@ class ToolAwareSequentialThinkingServer {
 const maxHistorySize = parseInt(process.env.MAX_HISTORY_SIZE || '1000');
 
 const thinkingServer = new ToolAwareSequentialThinkingServer({
-	available_tools: [], // TODO: Add tool discovery mechanism
 	maxHistorySize,
 });
+
+// Discover skills at startup
+thinkingServer.discoverSkills();
 
 // Register the sequential thinking tool
 server.tool(
