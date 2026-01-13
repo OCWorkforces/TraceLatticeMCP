@@ -15,7 +15,15 @@ readonly NC='\033[0m' # No Color
 
 # Package info
 readonly PACKAGE_NAME="mcp-sequentialthinking-tools"
-readonly PACKAGE_VERSION="0.0.1"
+
+# Read version from package.json
+_package_version=$(node -p "require('./package.json').version" 2>/dev/null)
+
+# Fallback version if package.json is not available
+if [ -z "$_package_version" ] || [ "$_package_version" = "undefined" ]; then
+    _package_version="0.0.0"
+fi
+readonly PACKAGE_VERSION="$_package_version"
 
 # Functions
 log_info() {
