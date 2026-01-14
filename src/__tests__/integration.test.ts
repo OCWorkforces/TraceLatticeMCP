@@ -15,7 +15,7 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 			total_thoughts: 3,
 			next_thought_needed: true,
 			available_mcp_tools: ['test-tool'],
-		});
+		}) as { content: Array<{ type: string; text: string }> };
 
 		expect(result.content[0].type).toBe('text');
 		const response = JSON.parse(result.content[0].text);
@@ -40,7 +40,8 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 			branch_id: 'branch-a',
 		});
 
-		expect(server['branches']['branch-a']).toHaveLength(1);
+		const branches = server.getBranches();
+		expect(branches['branch-a']).toHaveLength(1);
 	});
 
 	it('should handle thought revisions', async () => {
@@ -58,7 +59,7 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 			next_thought_needed: false,
 			is_revision: true,
 			revises_thought: 1,
-		});
+		}) as { content: Array<{ type: string; text: string }> };
 
 		const response = JSON.parse(result.content[0].text);
 		expect(response.thought_number).toBe(2);
@@ -82,7 +83,7 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 				],
 				expected_outcome: 'List of matching files',
 			},
-		});
+		}) as { content: Array<{ type: string; text: string }> };
 
 		const response = JSON.parse(result.content[0].text);
 		expect(response.current_step).toBeDefined();
@@ -103,7 +104,7 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 		}
 
 		// History should be trimmed to maxHistorySize
-		expect(smallServer['thought_history'].length).toBeLessThanOrEqual(3);
+		expect(smallServer.getHistory().length).toBeLessThanOrEqual(3);
 	});
 
 	it('should handle errors gracefully', async () => {
@@ -112,7 +113,7 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 			thought_number: 1,
 			total_thoughts: 1,
 			next_thought_needed: false,
-		});
+		}) as { content: Array<{ type: string; text: string }> };
 
 		// Should not throw, should return valid response
 		expect(result).toBeDefined();

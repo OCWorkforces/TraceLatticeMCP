@@ -110,12 +110,23 @@ describe('CRUD Operations', () => {
 	});
 
 	describe('History Management', () => {
-		it('should clear history', () => {
-			server['thought_history'] = [
-				{ thought: 'test', thought_number: 1, total_thoughts: 1, next_thought_needed: false },
-			] as ThoughtData[];
+		it('should clear history', async () => {
+			// Add a thought to history
+			await server.processThought({
+				thought: 'test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+			} as ThoughtData);
+
+			// Verify history is not empty
+			expect(server.getHistory().length).toBeGreaterThan(0);
+
+			// Clear history
 			server.clearHistory();
-			expect(server['thought_history']).toHaveLength(0);
+
+			// Verify history is empty
+			expect(server.getHistory()).toHaveLength(0);
 		});
 	});
 });

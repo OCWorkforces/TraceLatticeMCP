@@ -54,7 +54,7 @@ This should be discovered when both files exist.`;
 	it('should discover skill from SKILL.md (uppercase)', () => {
 		// Create a skill directory with SKILL.md
 		const skillPath = join(testSkillDir, 'uppercase-skill');
-		mkdirSync(skillPath);
+		mkdirSync(skillPath, { recursive: true });
 		writeFileSync(join(skillPath, 'SKILL.md'), SKILL_UPPERCASE);
 
 		// Test that the uppercase file exists and is readable
@@ -64,11 +64,14 @@ This should be discovered when both files exist.`;
 		expect(content).toContain('uppercase filename');
 	});
 
-	it('should discover skill from skill.md (lowercase)', () => {
+	it('should discover skill from skill.md (lowercase)', async () => {
 		// Create a skill directory with skill.md
 		const skillPath = join(testSkillDir, 'lowercase-skill');
-		mkdirSync(skillPath);
+		mkdirSync(skillPath, { recursive: true });
 		writeFileSync(join(skillPath, 'skill.md'), SKILL_LOWERCASE);
+
+		// Wait for filesystem to flush
+		await new Promise(resolve => setTimeout(resolve, 10));
 
 		// Test that lowercase file is readable
 		expect(existsSync(join(skillPath, 'skill.md'))).toBe(true);
@@ -77,12 +80,15 @@ This should be discovered when both files exist.`;
 		expect(content).toContain('lowercase filename');
 	});
 
-	it('should prefer SKILL.md over skill.md when both exist', () => {
+	it('should prefer SKILL.md over skill.md when both exist', async () => {
 		// Create a skill directory with both files
 		const skillPath = join(testSkillDir, 'both-priority');
-		mkdirSync(skillPath);
+		mkdirSync(skillPath, { recursive: true });
 		writeFileSync(join(skillPath, 'SKILL.md'), SKILL_BOTH_PRIORITY);
 		writeFileSync(join(skillPath, 'skill.md'), SKILL_LOWERCASE);
+
+		// Wait for filesystem to flush
+		await new Promise(resolve => setTimeout(resolve, 10));
 
 		// Test the priority logic
 		const skillFileUpper = join(skillPath, 'SKILL.md');
@@ -96,7 +102,7 @@ This should be discovered when both files exist.`;
 	it('should handle neither file existing', () => {
 		// Create an empty skill directory
 		const skillPath = join(testSkillDir, 'no-file');
-		mkdirSync(skillPath);
+		mkdirSync(skillPath, { recursive: true });
 
 		const skillFileUpper = join(skillPath, 'SKILL.md');
 		const skillFileLower = join(skillPath, 'skill.md');
