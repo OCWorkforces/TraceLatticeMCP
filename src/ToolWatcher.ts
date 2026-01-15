@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import type { ToolRegistry } from './registry/ToolRegistry.js';
 
 export class ToolWatcher {
-	private watcher: FSWatcher | null = null;
+	private _watcher: FSWatcher | null = null;
 
 	constructor(private toolRegistry: ToolRegistry) {
 		this.setupWatcher();
@@ -13,22 +13,22 @@ export class ToolWatcher {
 	private setupWatcher(): void {
 		const toolDirs = ['.claude/tools', join(homedir(), '.claude/tools')];
 
-		this.watcher = watch(toolDirs, {
+		this._watcher = watch(toolDirs, {
 			ignored: /node_modules/,
 			persistent: true,
 		});
 
-		this.watcher.on('add', async (path) => {
+		this._watcher.on('add', async (path) => {
 			console.error(`Tool file added: ${path}`);
 			await this.handleToolFileChange(path);
 		});
 
-		this.watcher.on('change', async (path) => {
+		this._watcher.on('change', async (path) => {
 			console.error(`Tool file modified: ${path}`);
 			await this.handleToolFileChange(path);
 		});
 
-		this.watcher.on('unlink', async (path) => {
+		this._watcher.on('unlink', async (path) => {
 			console.error(`Tool file removed: ${path}`);
 			this.handleToolRemoval(path);
 		});
@@ -81,9 +81,9 @@ export class ToolWatcher {
 	}
 
 	public stop(): void {
-		if (this.watcher) {
-			this.watcher.close();
-			this.watcher = null;
+		if (this._watcher) {
+			this._watcher.close();
+			this._watcher = null;
 		}
 	}
 }

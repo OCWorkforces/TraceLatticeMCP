@@ -67,11 +67,11 @@ interface ServerOptions {
 
 export class ToolAwareSequentialThinkingServer {
 	// Component instances (private)
-	private logger: StructuredLogger;
-	private historyManager: HistoryManager;
-	private thoughtProcessor: ThoughtProcessor;
-	private skillWatcher: SkillWatcher | null = null;
-	private toolWatcher: ToolWatcher | null = null;
+	private _logger: StructuredLogger;
+	private _historyManager: HistoryManager;
+	private _thoughtProcessor: ThoughtProcessor;
+	private _skillWatcher: SkillWatcher | null = null;
+	private _toolWatcher: ToolWatcher | null = null;
 
 	constructor(options: ServerOptions = {}) {
 		// Load config from file first
@@ -86,26 +86,26 @@ export class ToolAwareSequentialThinkingServer {
 		});
 
 		// Initialize logger
-		this.logger = options.logger ?? new StructuredLogger({
+		this._logger = options.logger ?? new StructuredLogger({
 			level: fileConfig?.logLevel ?? 'info',
 			context: 'SequentialThinking',
 			pretty: fileConfig?.prettyLog ?? true,
 		});
 
 		// Initialize history manager with logger
-		this.historyManager = new HistoryManager({
+		this._historyManager = new HistoryManager({
 			maxHistorySize: config.maxHistorySize,
 			maxBranches: config.maxBranches,
 			maxBranchSize: config.maxBranchSize,
-			logger: this.logger,
+			logger: this._logger,
 		});
 
 		// Initialize formatter and processor
 		const thoughtFormatter = new ThoughtFormatter();
-		this.thoughtProcessor = new ThoughtProcessor(
-			this.historyManager,
+		this._thoughtProcessor = new ThoughtProcessor(
+			this._historyManager,
 			thoughtFormatter,
-			this.logger,
+			this._logger,
 		);
 
 		// Always include the sequential thinking tool
@@ -116,99 +116,99 @@ export class ToolAwareSequentialThinkingServer {
 
 		// Initialize watchers if enabled
 		if (options.enableWatcher) {
-			this.skillWatcher = new SkillWatcher(this.historyManager.skills);
-			this.toolWatcher = new ToolWatcher(this.historyManager.tools);
+			this._skillWatcher = new SkillWatcher(this._historyManager.skills);
+			this._toolWatcher = new ToolWatcher(this._historyManager.tools);
 		}
 	}
 
 	// ========== PUBLIC API (Backward Compatible) ==========
 
 	public getAvailableTools(): Tool[] {
-		return this.historyManager.tools.getAll();
+		return this._historyManager.tools.getAll();
 	}
 
 	public getAvailableSkills(): Skill[] {
-		return this.historyManager.skills.getAll();
+		return this._historyManager.skills.getAll();
 	}
 
 	// Tool CRUD methods - delegate to ToolRegistry
 	public addTool(tool: Tool): void {
-		this.historyManager.tools.addTool(tool);
+		this._historyManager.tools.addTool(tool);
 	}
 
 	public removeTool(name: string): void {
-		this.historyManager.tools.removeTool(name);
+		this._historyManager.tools.removeTool(name);
 	}
 
 	public updateTool(name: string, updates: Partial<Tool>): void {
-		this.historyManager.tools.updateTool(name, updates);
+		this._historyManager.tools.updateTool(name, updates);
 	}
 
 	public clearTools(): void {
-		this.historyManager.tools.clear();
+		this._historyManager.tools.clear();
 	}
 
 	public hasTool(name: string): boolean {
-		return this.historyManager.tools.hasTool(name);
+		return this._historyManager.tools.hasTool(name);
 	}
 
 	public getTool(name: string): Tool | undefined {
-		return this.historyManager.tools.getTool(name);
+		return this._historyManager.tools.getTool(name);
 	}
 
 	// Skill CRUD methods - delegate to SkillRegistry
 	public addSkill(skill: Skill): void {
-		this.historyManager.skills.addSkill(skill);
+		this._historyManager.skills.addSkill(skill);
 	}
 
 	public removeSkill(name: string): void {
-		this.historyManager.skills.removeSkillByName(name);
+		this._historyManager.skills.removeSkillByName(name);
 	}
 
 	public updateSkill(name: string, updates: Partial<Skill>): void {
-		this.historyManager.skills.updateSkill(name, updates);
+		this._historyManager.skills.updateSkill(name, updates);
 	}
 
 	public clearSkills(): void {
-		this.historyManager.skills.clear();
+		this._historyManager.skills.clear();
 	}
 
 	public hasSkill(name: string): boolean {
-		return this.historyManager.skills.hasSkill(name);
+		return this._historyManager.skills.hasSkill(name);
 	}
 
 	public getSkill(name: string): Skill | undefined {
-		return this.historyManager.skills.getSkill(name);
+		return this._historyManager.skills.getSkill(name);
 	}
 
 	// History management - delegate to HistoryManager
 	public getHistory(): ThoughtData[] {
-		return this.historyManager.getHistory();
+		return this._historyManager.getHistory();
 	}
 
 	public getBranches(): Record<string, ThoughtData[]> {
-		return this.historyManager.getBranches();
+		return this._historyManager.getBranches();
 	}
 
 	public clearHistory(): void {
-		this.historyManager.clear();
+		this._historyManager.clear();
 	}
 
 	// Discovery methods
 	public discoverTools(): number {
-		const tools = this.historyManager.tools.getNames();
-		this.logger.info(`Discovered ${tools.length} tools`, { toolCount: tools.length });
+		const tools = this._historyManager.tools.getNames();
+		this._logger.info(`Discovered ${tools.length} tools`, { toolCount: tools.length });
 		return tools.length;
 	}
 
 	public discoverSkills(): number {
-		const discovered = this.historyManager.skills.discover();
+		const discovered = this._historyManager.skills.discover();
 		return discovered;
 	}
 
 	// Main processing method - delegate to ThoughtProcessor
 	public async processThought(input: v.InferInput<typeof SequentialThinkingSchema>) {
-		const result = await this.thoughtProcessor.process(input as ThoughtData);
+		const result = await this._thoughtProcessor.process(input as ThoughtData);
 		return result;
 	}
 
@@ -216,9 +216,9 @@ export class ToolAwareSequentialThinkingServer {
 	 * Stop the server and clean up watchers
 	 */
 	public stop(): void {
-		this.skillWatcher?.stop();
-		this.toolWatcher?.stop();
-		this.logger.info('Server stopped, watchers cleaned up');
+		this._skillWatcher?.stop();
+		this._toolWatcher?.stop();
+		this._logger.info('Server stopped, watchers cleaned up');
 	}
 }
 

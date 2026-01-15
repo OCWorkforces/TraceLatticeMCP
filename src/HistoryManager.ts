@@ -15,38 +15,38 @@ export interface HistoryManagerConfig {
  * Handles automatic trimming to prevent memory leaks.
  */
 export class HistoryManager {
-	private thought_history: ThoughtData[] = [];
-	private branches: Record<string, ThoughtData[]> = {};
-	private maxHistorySize: number;
-	private maxBranches: number;
-	private maxBranchSize: number;
-	private logger: StructuredLogger | null;
+	private _thought_history: ThoughtData[] = [];
+	private _branches: Record<string, ThoughtData[]> = {};
+	private _maxHistorySize: number;
+	private _maxBranches: number;
+	private _maxBranchSize: number;
+	private _logger: StructuredLogger | null;
 	public tools: ToolRegistry;
 	public skills: SkillRegistry;
 
 	constructor(config: HistoryManagerConfig = {}) {
-		this.maxHistorySize = config.maxHistorySize || 1000;
-		this.maxBranches = config.maxBranches || 50;
-		this.maxBranchSize = config.maxBranchSize || 100;
-		this.logger = config.logger || null;
+		this._maxHistorySize = config.maxHistorySize || 1000;
+		this._maxBranches = config.maxBranches || 50;
+		this._maxBranchSize = config.maxBranchSize || 100;
+		this._logger = config.logger || null;
 		this.tools = new ToolRegistry(config.logger);
 		this.skills = new SkillRegistry(config.logger);
 	}
 
 	private log(message: string, meta?: Record<string, unknown>): void {
-		if (this.logger) {
-			this.logger.info(message, meta);
+		if (this._logger) {
+			this._logger.info(message, meta);
 		} else {
 			console.error(message); // Fallback for backward compatibility
 		}
 	}
 
 	public addThought(thought: ThoughtData): void {
-		this.thought_history.push(thought);
+		this._thought_history.push(thought);
 
-		if (this.thought_history.length > this.maxHistorySize) {
-			this.thought_history = this.thought_history.slice(-this.maxHistorySize);
-			this.log(`History trimmed to ${this.maxHistorySize} items`, { maxSize: this.maxHistorySize });
+		if (this._thought_history.length > this._maxHistorySize) {
+			this._thought_history = this._thought_history.slice(-this._maxHistorySize);
+			this.log(`History trimmed to ${this._maxHistorySize} items`, { maxSize: this._maxHistorySize });
 		}
 
 		if (thought.branch_from_thought && thought.branch_id) {
@@ -55,60 +55,60 @@ export class HistoryManager {
 	}
 
 	private addToBranch(branchId: string, thought: ThoughtData): void {
-		if (!this.branches[branchId]) {
-			this.branches[branchId] = [];
+		if (!this._branches[branchId]) {
+			this._branches[branchId] = [];
 		}
 
 		this.trimBranchSize(branchId);
-		this.branches[branchId].push(thought);
+		this._branches[branchId].push(thought);
 
-		if (Object.keys(this.branches).length > this.maxBranches) {
+		if (Object.keys(this._branches).length > this._maxBranches) {
 			this.cleanupBranches();
 		}
 	}
 
 	private cleanupBranches(): void {
-		const branchCount = Object.keys(this.branches).length;
-		if (branchCount > this.maxBranches) {
-			const branchesToRemove = Object.keys(this.branches).slice(0, branchCount - this.maxBranches);
+		const branchCount = Object.keys(this._branches).length;
+		if (branchCount > this._maxBranches) {
+			const branchesToRemove = Object.keys(this._branches).slice(0, branchCount - this._maxBranches);
 			for (const branchId of branchesToRemove) {
-				delete this.branches[branchId];
+				delete this._branches[branchId];
 				this.log(`Removed old branch: ${branchId}`, { branchId });
 			}
 		}
 	}
 
 	private trimBranchSize(branchId: string): void {
-		if (this.branches[branchId].length > this.maxBranchSize) {
-			const removed = this.branches[branchId].length - this.maxBranchSize;
-			this.branches[branchId] = this.branches[branchId].slice(-this.maxBranchSize);
+		if (this._branches[branchId].length > this._maxBranchSize) {
+			const removed = this._branches[branchId].length - this._maxBranchSize;
+			this._branches[branchId] = this._branches[branchId].slice(-this._maxBranchSize);
 			this.log(`Trimmed branch '${branchId}': removed ${removed} old thoughts`, { branchId, removed });
 		}
 	}
 
 	public getHistory(): ThoughtData[] {
-		return this.thought_history;
+		return this._thought_history;
 	}
 
 	public getHistoryLength(): number {
-		return this.thought_history.length;
+		return this._thought_history.length;
 	}
 
 	public getBranches(): Record<string, ThoughtData[]> {
-		return this.branches;
+		return this._branches;
 	}
 
 	public getBranchIds(): string[] {
-		return Object.keys(this.branches);
+		return Object.keys(this._branches);
 	}
 
 	public getBranch(branchId: string): ThoughtData[] | undefined {
-		return this.branches[branchId];
+		return this._branches[branchId];
 	}
 
 	public clear(): void {
-		this.thought_history = [];
-		this.branches = {};
+		this._thought_history = [];
+		this._branches = {};
 		this.log('History cleared');
 	}
 }
