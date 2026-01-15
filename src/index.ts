@@ -32,6 +32,15 @@ const package_json = JSON.parse(
 );
 const { name, version } = package_json;
 
+// Handle CLI arguments
+const args = process.argv.slice(2);
+const shouldShowVersion = args.includes('--version') || args.includes('-v');
+
+if (shouldShowVersion) {
+	console.log(`${name} v${version}`);
+	process.exit(0);
+}
+
 // Create MCP server with tmcp
 const adapter = new ValibotJsonSchemaAdapter();
 const server = new McpServer(
