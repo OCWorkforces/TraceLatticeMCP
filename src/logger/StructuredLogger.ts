@@ -19,9 +19,9 @@ export interface LoggerOptions {
 }
 
 export class StructuredLogger {
-	private level: LogLevel;
-	private context: string;
-	private pretty: boolean;
+	private _level: LogLevel;
+	private _context: string;
+	private _pretty: boolean;
 
 	// Log level priority order
 	private static readonly LEVEL_PRIORITY: Record<LogLevel, number> = {
@@ -32,17 +32,17 @@ export class StructuredLogger {
 	};
 
 	constructor(options: LoggerOptions = {}) {
-		this.level = options.level ?? 'info';
-		this.context = options.context ?? 'SequentialThinking';
-		this.pretty = options.pretty ?? true;
+		this._level = options.level ?? 'info';
+		this._context = options.context ?? 'SequentialThinking';
+		this._pretty = options.pretty ?? true;
 	}
 
 	private shouldLog(level: LogLevel): boolean {
-		return StructuredLogger.LEVEL_PRIORITY[level] >= StructuredLogger.LEVEL_PRIORITY[this.level];
+		return StructuredLogger.LEVEL_PRIORITY[level] >= StructuredLogger.LEVEL_PRIORITY[this._level];
 	}
 
 	private format(entry: LogEntry): string {
-		if (this.pretty) {
+		if (this._pretty) {
 			const metaStr = entry.meta ? ` ${JSON.stringify(entry.meta)}` : '';
 			return `[${entry.timestamp}] [${entry.level.toUpperCase()}]${entry.context ? ` [${entry.context}]` : ''} ${entry.message}${metaStr}`;
 		}
@@ -56,7 +56,7 @@ export class StructuredLogger {
 			level,
 			message,
 			timestamp: new Date().toISOString(),
-			context: this.context,
+			context: this._context,
 			meta,
 		};
 
@@ -99,9 +99,9 @@ export class StructuredLogger {
 	 */
 	createChild(context: string): StructuredLogger {
 		return new StructuredLogger({
-			level: this.level,
-			context: `${this.context}:${context}`,
-			pretty: this.pretty,
+			level: this._level,
+			context: `${this._context}:${context}`,
+			pretty: this._pretty,
 		});
 	}
 
@@ -109,13 +109,13 @@ export class StructuredLogger {
 	 * Set the log level.
 	 */
 	setLevel(level: LogLevel): void {
-		this.level = level;
+		this._level = level;
 	}
 
 	/**
 	 * Get the current log level.
 	 */
 	getLevel(): LogLevel {
-		return this.level;
+		return this._level;
 	}
 }

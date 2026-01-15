@@ -17,10 +17,10 @@ export interface ConfigFileOptions {
 }
 
 export class ConfigLoader {
-	private configPaths: string[];
+	private _configPaths: string[];
 
 	constructor(customPath?: string) {
-		this.configPaths = customPath
+		this._configPaths = customPath
 			? [customPath]
 			: [
 					'.claude/config.json',
@@ -37,7 +37,7 @@ export class ConfigLoader {
 	 * Returns null if no config file is found.
 	 */
 	load(): ConfigFileOptions | null {
-		for (const configPath of this.configPaths) {
+		for (const configPath of this._configPaths) {
 			if (existsSync(configPath)) {
 				try {
 					return this.parseConfig(configPath);

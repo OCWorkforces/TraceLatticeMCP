@@ -7,20 +7,20 @@ import { DiscoveryCache } from '../cache/DiscoveryCache.js';
  * Provides a clean abstraction for tool management separate from business logic.
  */
 export class ToolRegistry {
-	private tools: Map<string, Tool>;
-	private logger: StructuredLogger | null;
-	private cache: DiscoveryCache<Tool>;
+	private _tools: Map<string, Tool>;
+	private _logger: StructuredLogger | null;
+	private _cache: DiscoveryCache<Tool>;
 
 	constructor(logger?: StructuredLogger, cache?: DiscoveryCache<Tool>) {
-		this.tools = new Map();
-		this.logger = logger || null;
+		this._tools = new Map();
+		this._logger = logger || null;
 		// Create cache internally if not provided
-		this.cache = cache || new DiscoveryCache<Tool>({ maxSize: 50, ttl: 300000 });
+		this._cache = cache || new DiscoveryCache<Tool>({ maxSize: 50, ttl: 300000 });
 	}
 
 	private log(message: string, meta?: Record<string, unknown>): void {
-		if (this.logger) {
-			this.logger.info(message, meta);
+		if (this._logger) {
+			this._logger.info(message, meta);
 		} else {
 			console.error(message); // Fallback for backward compatibility
 		}
@@ -34,13 +34,13 @@ export class ToolRegistry {
 		if (!tool.name) {
 			throw new Error('Tool must have a valid name');
 		}
-		if (this.tools.has(tool.name)) {
+		if (this._tools.has(tool.name)) {
 			throw new Error(`tool '${tool.name}' already exists`);
 		}
-		this.tools.set(tool.name, tool);
+		this._tools.set(tool.name, tool);
 		this.log(`Added tool: ${tool.name}`, { toolName: tool.name });
 		// Invalidate cache when adding a new tool
-		this.cache?.invalidate('all');
+		this._cache?.invalidate('all');
 	}
 
 	/**
@@ -48,14 +48,14 @@ export class ToolRegistry {
 	 * @throws Error if tool not found
 	 */
 	public removeTool(name: string): void {
-		if (!this.tools.has(name)) {
+		if (!this._tools.has(name)) {
 			throw new Error(`tool '${name}' not found, cannot remove`);
 		}
-		this.tools.delete(name);
+		this._tools.delete(name);
 		this.log(`Removed tool: ${name}`, { toolName: name });
 		// Invalidate cache when removing a tool
-		this.cache?.invalidate('all');
-		this.cache?.invalidate(name);
+		this._cache?.invalidate('all');
+		this._cache?.invalidate(name);
 	}
 
 	/**
@@ -63,23 +63,23 @@ export class ToolRegistry {
 	 * @throws Error if tool not found
 	 */
 	public updateTool(name: string, updates: Partial<Tool>): void {
-		if (!this.tools.has(name)) {
+		if (!this._tools.has(name)) {
 			throw new Error(`tool '${name}' not found, cannot update`);
 		}
-		const existing = this.tools.get(name)!;
+		const existing = this._tools.get(name)!;
 		const updated = { ...existing, ...updates };
-		this.tools.set(name, updated);
+		this._tools.set(name, updated);
 		this.log(`Updated tool: ${name}`, { toolName: name });
 		// Invalidate cache when updating a tool
-		this.cache?.invalidate('all');
-		this.cache?.invalidate(name);
+		this._cache?.invalidate('all');
+		this._cache?.invalidate(name);
 	}
 
 	/**
 	 * Check if a tool exists
 	 */
 	public hasTool(name: string): boolean {
-		return this.tools.has(name);
+		return this._tools.has(name);
 	}
 
 	/**
@@ -88,14 +88,14 @@ export class ToolRegistry {
 	 */
 	public getTool(name: string): Tool | undefined {
 		// Check cache first
-		if (this.cache) {
-			const cached = this.cache.get(`tool:${name}`);
+		if (this._cache) {
+			const cached = this._cache.get(`tool:${name}`);
 			if (cached && cached.length > 0) {
 				return cached[0];
 			}
 		}
 		// Return from storage
-		return this.tools.get(name);
+		return this._tools.get(name);
 	}
 
 	/**
@@ -104,16 +104,16 @@ export class ToolRegistry {
 	 */
 	public getAll(): Tool[] {
 		// Check cache first
-		if (this.cache) {
-			const cached = this.cache.get('all');
+		if (this._cache) {
+			const cached = this._cache.get('all');
 			if (cached) {
 				return cached;
 			}
 		}
 		// Get from storage
-		const tools = Array.from(this.tools.values());
+		const tools = Array.from(this._tools.values());
 		// Cache the result
-		this.cache?.set('all', tools);
+		this._cache?.set('all', tools);
 		return tools;
 	}
 
@@ -121,24 +121,24 @@ export class ToolRegistry {
 	 * Get tool names as an array
 	 */
 	public getNames(): string[] {
-		return Array.from(this.tools.keys());
+		return Array.from(this._tools.keys());
 	}
 
 	/**
 	 * Clear all tools from the registry
 	 */
 	public clear(): void {
-		this.tools.clear();
+		this._tools.clear();
 		this.log('Cleared all tools');
 		// Invalidate cache when clearing all tools
-		this.cache?.clear();
+		this._cache?.clear();
 	}
 
 	/**
 	 * Get the number of tools in the registry
 	 */
 	public size(): number {
-		return this.tools.size;
+		return this._tools.size;
 	}
 
 	/**

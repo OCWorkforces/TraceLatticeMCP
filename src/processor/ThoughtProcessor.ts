@@ -19,19 +19,19 @@ export interface CallToolResult {
  * Coordinates between history management and formatting.
  */
 export class ThoughtProcessor {
-	private logger: StructuredLogger | null;
+	private _logger: StructuredLogger | null;
 
 	constructor(
 		private historyManager: HistoryManager,
 		private thoughtFormatter: ThoughtFormatter,
 		logger?: StructuredLogger
 	) {
-		this.logger = logger || null;
+		this._logger = logger || null;
 	}
 
 	private log(message: string, meta?: Record<string, unknown>): void {
-		if (this.logger) {
-			this.logger.info(message, meta);
+		if (this._logger) {
+			this._logger.info(message, meta);
 		} else {
 			console.error(message); // Fallback for backward compatibility
 		}

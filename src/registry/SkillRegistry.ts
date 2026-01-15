@@ -7,20 +7,20 @@ import { homedir } from 'node:os';
 import { parse as parseYaml } from 'yaml';
 
 export class SkillRegistry {
-	private skills: Map<string, Skill>;
-	private logger: StructuredLogger | null;
+	private _skills: Map<string, Skill>;
+	private _logger: StructuredLogger | null;
 	private _cache: DiscoveryCache<Skill>;
 
 	constructor(logger?: StructuredLogger, cache?: DiscoveryCache<Skill>) {
-		this.skills = new Map();
-		this.logger = logger || null;
+		this._skills = new Map();
+		this._logger = logger || null;
 		// Create cache internally if not provided
 		this._cache = cache || new DiscoveryCache<Skill>({ maxSize: 50, ttl: 300000 });
 	}
 
 	private log(message: string, meta?: Record<string, unknown>): void {
-		if (this.logger) {
-			this.logger.info(message, meta);
+		if (this._logger) {
+			this._logger.info(message, meta);
 		} else {
 			console.error(message); // Fallback for backward compatibility
 		}
@@ -30,20 +30,20 @@ export class SkillRegistry {
 		if (!skill.name) {
 			throw new Error('Skill must have a valid name');
 		}
-		if (this.skills.has(skill.name)) {
+		if (this._skills.has(skill.name)) {
 			throw new Error(`skill '${skill.name}' already exists`);
 		}
-		this.skills.set(skill.name, skill);
+		this._skills.set(skill.name, skill);
 		this.log(`Added skill: ${skill.name}`, { skillName: skill.name });
 		// Invalidate cache when adding a new skill
 		this._cache?.invalidate('all');
 	}
 
 	public removeSkillByName(name: string): void {
-		if (!this.skills.has(name)) {
+		if (!this._skills.has(name)) {
 			throw new Error(`skill '${name}' not found, cannot remove`);
 		}
-		this.skills.delete(name);
+		this._skills.delete(name);
 		this.log(`Removed skill: ${name}`, { skillName: name });
 		// Invalidate cache when removing a skill
 		this._cache?.invalidate('all');
@@ -51,12 +51,12 @@ export class SkillRegistry {
 	}
 
 	public updateSkill(name: string, updates: Partial<Skill>): void {
-		if (!this.skills.has(name)) {
+		if (!this._skills.has(name)) {
 			throw new Error(`skill '${name}' not found, cannot update`);
 		}
-		const existing = this.skills.get(name)!;
+		const existing = this._skills.get(name)!;
 		const updated = { ...existing, ...updates };
-		this.skills.set(name, updated);
+		this._skills.set(name, updated);
 		this.log(`Updated skill: ${name}`, { skillName: name });
 		// Invalidate cache when updating a skill
 		this._cache?.invalidate('all');
@@ -64,11 +64,11 @@ export class SkillRegistry {
 	}
 
 	public hasSkill(name: string): boolean {
-		return this.skills.has(name);
+		return this._skills.has(name);
 	}
 
 	public getSkill(name: string): Skill | undefined {
-		return this.skills.get(name);
+		return this._skills.get(name);
 	}
 
 	public getAll(): Skill[] {
@@ -80,25 +80,25 @@ export class SkillRegistry {
 			}
 		}
 		// Get from storage
-		const skills = Array.from(this.skills.values());
+		const skills = Array.from(this._skills.values());
 		// Cache the result
 		this._cache?.set('all', skills);
 		return skills;
 	}
 
 	public getNames(): string[] {
-		return Array.from(this.skills.keys());
+		return Array.from(this._skills.keys());
 	}
 
 	public clear(): void {
-		this.skills.clear();
+		this._skills.clear();
 		this.log('Cleared all skills');
 		// Invalidate cache when clearing all skills
 		this._cache?.clear();
 	}
 
 	public size(): number {
-		return this.skills.size;
+		return this._skills.size;
 	}
 
 	public setSkills(skills: Skill[]): void {
@@ -178,8 +178,8 @@ export class SkillRegistry {
 							allowed_tools: skillData.allowed_tools,
 						};
 						// Check if skill already exists before adding
-						if (!this.skills.has(skill.name)) {
-							this.skills.set(skill.name, skill);
+						if (!this._skills.has(skill.name)) {
+							this._skills.set(skill.name, skill);
 							this.log(`Added skill: ${skill.name}`, { skillName: skill.name });
 							discovered++;
 						}
