@@ -1,11 +1,8 @@
-/**
- * Configuration file loader supporting JSON and YAML formats.
- * Searches for config files in project-local and user-global directories.
- */
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { parse as parseYaml } from 'yaml';
+import type { PersistenceConfig } from '../persistence/PersistenceBackend.js';
 
 export interface ConfigFileOptions {
 	maxHistorySize?: number;
@@ -14,6 +11,11 @@ export interface ConfigFileOptions {
 	logLevel?: 'debug' | 'info' | 'warn' | 'error';
 	prettyLog?: boolean;
 	skillDirs?: string[];
+	discoveryCache?: {
+		ttl?: number;
+		maxSize?: number;
+	};
+	persistence?: PersistenceConfig;
 }
 
 export class ConfigLoader {
@@ -29,29 +31,67 @@ export class ConfigLoader {
 					join(homedir(), '.claude/config.json'),
 					join(homedir(), '.claude/config.yaml'),
 					join(homedir(), '.claude/config.yml'),
-			  ];
+				];
 	}
 
-	/**
-	 * Load configuration from the first available config file.
-	 * Returns null if no config file is found.
-	 */
 	load(): ConfigFileOptions | null {
+		let config: ConfigFileOptions | null = null;
+
 		for (const configPath of this._configPaths) {
 			if (existsSync(configPath)) {
 				try {
-					return this.parseConfig(configPath);
+					config = this.parseConfig(configPath);
+					break;
 				} catch (error) {
-					console.error(`Failed to load config from ${configPath}:`, error instanceof Error ? error.message : String(error));
+					console.error(
+						`Failed to load config from ${configPath}:`,
+						error instanceof Error ? error.message : String(error)
+					);
 				}
 			}
 		}
-		return null; // No config file found
+
+		return this.applyEnvironmentOverrides(config || {});
 	}
 
-	/**
-	 * Parse configuration file based on its extension.
-	 */
+	private applyEnvironmentOverrides(config: ConfigFileOptions): ConfigFileOptions {
+		const result: ConfigFileOptions = { ...config };
+
+		if (process.env.MAX_HISTORY_SIZE) {
+			result.maxHistorySize = parseInt(process.env.MAX_HISTORY_SIZE, 10);
+		}
+		if (process.env.MAX_BRANCHES) {
+			result.maxBranches = parseInt(process.env.MAX_BRANCHES, 10);
+		}
+		if (process.env.MAX_BRANCH_SIZE) {
+			result.maxBranchSize = parseInt(process.env.MAX_BRANCH_SIZE, 10);
+		}
+		if (
+			process.env.LOG_LEVEL &&
+			['debug', 'info', 'warn', 'error'].includes(process.env.LOG_LEVEL)
+		) {
+			result.logLevel = process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error';
+		}
+		if (process.env.PRETTY_LOG === 'false') {
+			result.prettyLog = false;
+		}
+		if (process.env.SKILL_DIRS) {
+			result.skillDirs = process.env.SKILL_DIRS.split(':');
+		}
+		if (process.env.DISCOVERY_CACHE_TTL) {
+			const ttl = parseInt(process.env.DISCOVERY_CACHE_TTL, 10) * 1000;
+			result.discoveryCache = result.discoveryCache || {};
+			result.discoveryCache.ttl = ttl;
+		}
+		if (process.env.DISCOVERY_CACHE_MAX_SIZE) {
+			const maxSize = parseInt(process.env.DISCOVERY_CACHE_MAX_SIZE, 10);
+			result.discoveryCache = result.discoveryCache || {};
+			result.discoveryCache.maxSize = maxSize;
+		}
+
+		return result;
+	}
+
 	private parseConfig(filePath: string): ConfigFileOptions {
 		const content = readFileSync(filePath, 'utf-8');
 		const ext = filePath.split('.').pop()?.toLowerCase();
@@ -60,14 +100,14 @@ export class ConfigLoader {
 			return parseYaml(content) as ConfigFileOptions;
 		}
 
-		// Default to JSON
 		return JSON.parse(content) as ConfigFileOptions;
 	}
 
-	/**
-	 * Convert config file options to ServerConfig options format.
-	 */
-	toServerConfigOptions(config: ConfigFileOptions): { maxHistorySize?: number; maxBranches?: number; maxBranchSize?: number } {
+	toServerConfigOptions(config: ConfigFileOptions): {
+		maxHistorySize?: number;
+		maxBranches?: number;
+		maxBranchSize?: number;
+	} {
 		return {
 			maxHistorySize: config.maxHistorySize,
 			maxBranches: config.maxBranches,

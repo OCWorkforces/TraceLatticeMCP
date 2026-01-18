@@ -1,0 +1,266 @@
+/**
+ * Lightweight dependency injection container for managing service dependencies.
+ *
+ * This container supports:
+ * - Instance registration (singleton-like behavior)
+ * - Factory registration (lazy instantiation with caching)
+ * - Transient factory registration (new instance each time)
+ *
+ * @example
+ * ```typescript
+ * const container = new Container();
+ *
+ * // Register a singleton instance
+ * container.registerInstance('Logger', new StructuredLogger());
+ *
+ * // Register a factory with caching (singleton per container)
+ * container.register('HistoryManager', () =>
+ *   new HistoryManager({ logger: container.resolve('Logger') })
+ * );
+ *
+ * // Register a transient factory (new instance each time)
+ * container.registerFactory('RequestContext', () =>
+ *   new RequestContext()
+ * );
+ *
+ * // Resolve a service
+ * const history = container.resolve<HistoryManager>('HistoryManager');
+ * ```
+ */
+export class Container {
+	private _services: Map<string, unknown> = new Map();
+	private _factories: Map<string, () => unknown> = new Map();
+	private _transientFactories: Map<string, () => unknown> = new Map();
+
+	/**
+	 * Register a singleton instance that will be returned for all resolutions.
+	 *
+	 * @param name - The unique name/identifier for the service
+	 * @param instance - The instance to register
+	 *
+	 * @example
+	 * ```typescript
+	 * container.registerInstance('Config', new ServerConfig({ ... }));
+	 * ```
+	 */
+	registerInstance<T>(name: string, instance: T): void {
+		if (this._services.has(name) || this._factories.has(name) || this._transientFactories.has(name)) {
+			throw new Error(`Service '${name}' is already registered`);
+		}
+		this._services.set(name, instance);
+	}
+
+	/**
+	 * Register a factory function that will be called once and cached.
+	 * The first call to `resolve` will invoke the factory and cache the result.
+	 * Subsequent calls will return the cached instance (singleton behavior).
+	 *
+	 * @param name - The unique name/identifier for the service
+	 * @param factory - A factory function that creates the service
+	 *
+	 * @example
+	 * ```typescript
+	 * container.register('HistoryManager', () =>
+	 *   new HistoryManager({ logger: container.resolve('Logger') })
+	 * );
+	 * ```
+	 */
+	register<T>(name: string, factory: () => T): void {
+		if (this._services.has(name) || this._factories.has(name) || this._transientFactories.has(name)) {
+			throw new Error(`Service '${name}' is already registered`);
+		}
+		this._factories.set(name, factory);
+	}
+
+	/**
+	 * Register a transient factory function that will be called on every resolution.
+	 * Each call to `resolve` will invoke the factory and return a new instance.
+	 *
+	 * @param name - The unique name/identifier for the service
+	 * @param factory - A factory function that creates the service
+	 *
+	 * @example
+	 * ```typescript
+	 * container.registerFactory('RequestContext', () =>
+	 *   new RequestContext()
+	 * );
+	 * ```
+	 */
+	registerFactory<T>(name: string, factory: () => T): void {
+		if (this._services.has(name) || this._factories.has(name) || this._transientFactories.has(name)) {
+			throw new Error(`Service '${name}' is already registered`);
+		}
+		this._transientFactories.set(name, factory);
+	}
+
+	/**
+	 * Resolve a service by name.
+	 *
+	 * Resolution order:
+	 * 1. If a registered instance exists, return it
+	 * 2. If a cached factory exists, return it
+	 * 3. If a factory exists, invoke it, cache the result, and return it
+	 * 4. If a transient factory exists, invoke it and return a new instance
+	 * 5. Throw an error if the service is not found
+	 *
+	 * @param name - The name/identifier of the service to resolve
+	 * @returns The resolved service instance
+	 * @throws {Error} If the service is not registered
+	 *
+	 * @example
+	 * ```typescript
+	 * const history = container.resolve<HistoryManager>('HistoryManager');
+	 * const logger = container.resolve<StructuredLogger>('Logger');
+	 * ```
+	 */
+	resolve<T>(name: string): T {
+		// Check for registered instance first
+		if (this._services.has(name)) {
+			return this._services.get(name) as T;
+		}
+
+		// Check for cached factory result
+		if (this._factories.has(name)) {
+			const factory = this._factories.get(name)!;
+			const instance = factory() as T;
+			// Cache the result for future calls (singleton behavior)
+			this._services.set(name, instance);
+			this._factories.delete(name);
+			return instance;
+		}
+
+		// Check for transient factory (call every time)
+		if (this._transientFactories.has(name)) {
+			const factory = this._transientFactories.get(name)!;
+			return factory() as T;
+		}
+
+		throw new Error(`Service not found: ${name}. Did you forget to register it?`);
+	}
+
+	/**
+	 * Check if a service is registered (either as instance or factory).
+	 *
+	 * @param name - The name/identifier of the service to check
+	 * @returns `true` if the service is registered, `false` otherwise
+	 *
+	 * @example
+	 * ```typescript
+	 * if (!container.has('Logger')) {
+	 *   container.registerInstance('Logger', new StructuredLogger());
+	 * }
+	 * ```
+	 */
+	has(name: string): boolean {
+		return (
+			this._services.has(name) ||
+			this._factories.has(name) ||
+			this._transientFactories.has(name)
+		);
+	}
+
+	/**
+	 * Remove a registered service from the container.
+	 *
+	 * @param name - The name/identifier of the service to unregister
+	 * @returns `true` if the service was found and removed, `false` otherwise
+	 *
+	 * @example
+	 * ```typescript
+	 * container.unregister('HistoryManager');
+	 * ```
+	 */
+	unregister(name: string): boolean {
+		const hadInstance = this._services.delete(name);
+		const hadFactory = this._factories.delete(name);
+		const hadTransient = this._transientFactories.delete(name);
+		return hadInstance || hadFactory || hadTransient;
+	}
+
+	/**
+	 * Clear all registered services and factories from the container.
+	 *
+	 * @example
+	 * ```typescript
+	 * container.clear();
+	 * ```
+	 */
+	clear(): void {
+		this._services.clear();
+		this._factories.clear();
+		this._transientFactories.clear();
+	}
+
+	/**
+	 * Get the number of registered services (including instances, factories, and transient factories).
+	 *
+	 * @returns The total count of registered services
+	 *
+	 * @example
+	 * ```typescript
+	 * console.log(`Registered services: ${container.size}`);
+	 * ```
+	 */
+	get size(): number {
+		return this._services.size + this._factories.size + this._transientFactories.size;
+	}
+
+	/**
+	 * Get an array of all registered service names.
+	 *
+	 * @returns An array of service names
+	 *
+	 * @example
+	 * ```typescript
+	 * const names = container.registeredServices();
+	 * console.log('Registered:', names.join(', '));
+	 * ```
+	 */
+	registeredServices(): string[] {
+		const names = new Set<string>();
+		for (const name of this._services.keys()) names.add(name);
+		for (const name of this._factories.keys()) names.add(name);
+		for (const name of this._transientFactories.keys()) names.add(name);
+		return Array.from(names);
+	}
+}
+
+/**
+ * Create a pre-configured container with all default services registered.
+ *
+ * This factory function creates a container with all standard services
+ * for the ToolAwareSequentialThinkingServer.
+ *
+ * @param options - Configuration options for the container
+ * @returns A configured container ready to use
+ *
+ * @example
+ * ```typescript
+ * const container = createDefaultContainer({
+ *   logger: customLogger,
+ *   config: customConfig
+ * });
+ * const server = new ToolAwareSequentialThinkingServer({ container });
+ * ```
+ */
+export interface CreateContainerOptions {
+	logger?: unknown;
+	config?: unknown;
+	fileConfig?: Record<string, unknown>;
+}
+
+export function createDefaultContainer(options: CreateContainerOptions = {}): Container {
+	const container = new Container();
+
+	// Register logger if provided
+	if (options.logger) {
+		container.registerInstance('Logger', options.logger);
+	}
+
+	// Register config if provided
+	if (options.config) {
+		container.registerInstance('Config', options.config);
+	}
+
+	return container;
+}

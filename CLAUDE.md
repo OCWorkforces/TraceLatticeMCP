@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an MCP (Model Context Protocol) server that provides sequential thinking capabilities with tool and skill recommendations for AI assistants. It is adapted from the official MCP sequential thinking server (https://github.com/modelcontextprotocol/servers/blob/main/src/sequentialthinking/index.ts) with enhancements for MCP tool coordination and Claude Code skills support.
+This is an MCP (Model Context Protocol) server that provides sequential thinking capabilities with tool and skill recommendations for AI assistants. It features a modular architecture with dependency injection, persistence, multi-transport support, and optional multi-user scaling.
 
-The server runs on stdio and uses the `tmcp` framework with Valibot for schema validation.
+The server supports both stdio (single-user) and SSE (multi-user) transports, uses the `tmcp` framework with Valibot for schema validation, and includes comprehensive test coverage.
 
 ## Commands
 
@@ -19,98 +19,244 @@ npm run start
 
 # Development mode with MCP inspector
 npm run dev
+
+# Run tests
+npm test
+npm run test:watch
+npm run test:coverage
+
+# Type checking
+npm run type-check
 ```
 
 ## Project Structure
 
 ```
 ./
-├── .env.cc              # Environment config for start-cc.sh (contains API keys - not in git)
-├── .gitignore           # Standard ignores (Python + node_modules/)
-├── start-cc.sh          # Shell script wrapper for running Claude Code with custom config
 ├── package.json         # Dependencies and npm scripts
 ├── tsconfig.json        # TypeScript config (extends @tsconfig/node24)
+├── vitest.config.ts     # Vitest test configuration
 ├── CLAUDE.md            # This file
 ├── LICENSE              # MIT License
-├── README.md            # Minimal project header
+├── README.md            # Project documentation
 └── src/                 # Source code
-    ├── index.ts         # Main server: ToolAwareSequentialThinkingServer class
-    ├── schema.ts        # Valibot validation schemas + SEQUENTIAL_THINKING_TOOL definition
-    └── types.ts         # TypeScript interfaces (ThoughtData, ToolRecommendation, etc.)
+    ├── index.ts              # Main server entry point
+    ├── schema.ts             # Valibot validation schemas
+    ├── types.ts              # TypeScript interfaces
+    ├── di/                   # Dependency injection
+    │   └── Container.ts      # DI container implementation
+    ├── config/               # Configuration
+    │   └── ConfigLoader.ts   # File-based config loading
+    ├── logger/               # Logging
+    │   └── StructuredLogger.ts
+    ├── persistence/          # State persistence
+    │   ├── PersistenceBackend.ts
+    │   ├── FilePersistence.ts
+    │   ├── SqlitePersistence.ts
+    │   └── MemoryPersistence.ts
+    ├── transport/            # MCP transports
+    │   └── SseTransport.ts    # Server-Sent Events transport
+    ├── cluster/              # Multi-process architecture
+    │   ├── WorkerManager.ts
+    │   └── worker.ts
+    ├── pool/                 # Connection pooling
+    │   └── ConnectionPool.ts
+    ├── registry/             # Tool and skill registries
+    │   ├── ToolRegistry.ts
+    │   └── SkillRegistry.ts
+    ├── processor/            # Thought processing
+    │   └── ThoughtProcessor.ts
+    ├── formatter/            # Response formatting
+    │   └── ThoughtFormatter.ts
+    ├── HistoryManager.ts     # History and branch management
+    ├── ServerConfig.ts       # Server configuration
+    ├── SkillWatcher.ts      # File watcher for skills
+    ├── ToolWatcher.ts       # File watcher for tools
+    └── __tests__/            # Test files
 ```
 
 ## Architecture
 
+### Core Design Principles
+
+1. **Dependency Injection**: All components are managed through a DI container for testability
+2. **Manager Properties**: Direct access via `server.history`, `server.tools`, `server.skills`, `server.config`
+3. **Async-First**: Skill discovery and server creation are async operations
+4. **Transport Flexibility**: Supports stdio (default) and SSE transports
+5. **Persistence**: Optional state persistence with multiple backends
+
+### Recommended API Usage
+
+```typescript
+// Create server (recommended way with async initialization)
+const server = await ToolAwareSequentialThinkingServer.create({
+    autoDiscover: true,
+    loadFromPersistence: true
+});
+
+// Access managers directly (recommended)
+server.history.getHistory();
+server.tools.addTool(tool);
+server.skills.discoverAsync();
+server.config.maxHistorySize;
+```
+
 ### Core Components
 
-- **`ToolAwareSequentialThinkingServer`** (src/index.ts:47-325): Main server class that manages thought history, branches, and recommendations
-  - Maintains `thought_history` array (capped by `maxHistorySize`)
-  - Tracks `branches` for alternative thought paths
-  - Stores `available_tools` Map for tool discovery
-  - Stores `available_skills` Map for skill tracking
-  - Methods: `addTool()`, `addSkill()`, `getAvailableTools()`, `getAvailableSkills()`, `discoverTools()`, `discoverSkills()`
+- **`ToolAwareSequentialThinkingServer`** (src/index.ts): Main server class
+  - Exposes managers as public properties: `history`, `tools`, `skills`, `config`
+  - Factory method `create()` for async initialization
+  - Deprecated delegation methods still work but emit warnings
 
-- **`SequentialThinkingSchema`** (src/schema.ts:125-182): Valibot schema defining the input structure for the sequential thinking tool
+- **`Container`** (src/di/Container.ts): Dependency injection container
+  - Supports instance registration (singletons)
+  - Supports factory registration (lazy instantiation with caching)
+  - Supports transient factory registration (new instance each time)
 
-- **`sequentialthinking_tools`**: The single MCP tool exposed by the server, accepting:
-  - `available_mcp_tools`: Array of available MCP tool names
-  - `available_skills`: Array of available Claude Code skill names
-  - `thought`: Current thinking step
-  - `thought_number`, `total_thoughts`: Sequence tracking
-  - `current_step`: Tool and skill recommendations with rationale
-  - `previous_steps`, `remaining_steps`: Step tracking
-  - Optional: `is_revision`, `revises_thought`, `branch_from_thought`, `branch_id`
+- **`HistoryManager`** (src/HistoryManager.ts): Manages thought history and branches
+  - `getHistory()`, `clear()`, `getBranches()`, tools/skills registries
+  - Optional persistence backend integration
+
+- **`ToolRegistry`** / **`SkillRegistry`** (src/registry/): Tool and skill management
+  - CRUD operations for tools and skills
+  - Async discovery methods
+  - Environment variable overrides
+
+- **`SseTransport`** (src/transport/SseTransport.ts): Server-Sent Events transport
+  - Multi-user support over HTTP
+  - CORS support
+  - Health check endpoint
+
+- **`WorkerManager`** (src/cluster/WorkerManager.ts): Multi-process architecture
+  - Worker pool for parallel processing
+  - Health monitoring and auto-restart
+
+- **`ConnectionPool`** (src/pool/ConnectionPool.ts): Session management
+  - Isolated sessions per user
+  - Session timeout and cleanup
 
 ### Data Flow
 
-1. LLM calls `sequentialthinking_tools` with thought data, available tool list, and available skill list
-2. Server validates input using Valibot (via tmcp adapter)
-3. Server stores thought in history, handles branching/revisions
-4. Server formats and returns thought with tool and skill recommendations
-5. Tool and skill execution is handled by the MCP client, not this server
-
-### Key Files
-
-- `src/index.ts`: Main server implementation, `ToolAwareSequentialThinkingServer` class
-- `src/types.ts`: TypeScript interfaces for `ThoughtData`, `ToolRecommendation`, `SkillRecommendation`, `StepRecommendation`, `Tool`, `Skill`
-- `src/schema.ts`: Valibot validation schemas (`ToolRecommendationSchema`, `SkillRecommendationSchema`, `StepRecommendationSchema`, `SequentialThinkingSchema`) and the `SEQUENTIAL_THINKING_TOOL` definition
+1. Server created via `ToolAwareSequentialThinkingServer.create()`
+2. DI container initialized with all dependencies
+3. History loaded from persistence (if enabled)
+4. Skills discovered asynchronously (if enabled)
+5. LLM calls `sequentialthinking_tools` with thought data
+6. ThoughtProcessor validates and processes the thought
+7. Response formatted with tool/skill recommendations
+8. Result returned via configured transport (stdio or SSE)
 
 ## Configuration
 
 ### Environment Variables
 
-- `MAX_HISTORY_SIZE`: Controls thought history limit (default: 1000)
-- Loaded via `.env.cc` for the `start-cc.sh` wrapper script
+All environment variables override file-based configuration:
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `MAX_HISTORY_SIZE` | Max thoughts in history | 1000 |
+| `MAX_BRANCHES` | Max number of branches | 100 |
+| `LOG_LEVEL` | Logging level (debug/info/warn/error) | info |
+| `PRETTY_LOG` | Enable pretty logging | true |
+| `SKILL_DIRS` | Colon-separated skill directories | `.claude/skills:~/.claude/skills` |
+| `DISCOVERY_CACHE_TTL` | Discovery cache TTL (seconds) | 300 |
+| `DISCOVERY_CACHE_MAX_SIZE` | Discovery cache max entries | 100 |
+| `TRANSPORT_TYPE` | Transport type (`stdio` or `sse`) | stdio |
+| `SSE_PORT` | SSE transport port | 3000 |
+| `SSE_HOST` | SSE transport host | localhost |
+| `CORS_ORIGIN` | CORS origin for SSE | * |
 
 ### Server Configuration
 
-Tool and skill discovery are TODOs - currently tools/skills must be added manually via `addTool()` and `addSkill()`
+```typescript
+const server = await ToolAwareSequentialThinkingServer.create({
+    maxHistorySize: 500,
+    maxBranches: 50,
+    autoDiscover: false,
+    lazyDiscovery: true,
+    loadFromPersistence: false
+});
 
-### Adding Skills Dynamically
+// Access configuration
+console.log(server.config.maxHistorySize);
+```
+
+## Persistence
+
+The server supports optional persistence with multiple backends:
 
 ```typescript
-// Get the server instance and add a skill
-thinkingServer.addSkill({
-    name: 'commit',
-    description: 'Handles git commit workflow',
-    user_invocable: true,
-    allowed_tools: ['git']
+// Via environment variable or config file
+const server = await ToolAwareSequentialThinkingServer.create({
+    // Persistence is loaded from config by default
 });
 
-// Or initialize with skills
+// Or configure in code
 const server = new ToolAwareSequentialThinkingServer({
-    available_skills: [
-        { name: 'review-pr', description: 'Reviews pull requests', user_invocable: true },
-        { name: 'pdf', description: 'Converts documents to PDF' }
-    ],
-    maxHistorySize: 1000
+    config: {
+        persistence: {
+            enabled: true,
+            backend: 'file',  // or 'sqlite', 'memory'
+            options: {
+                dataDir: './data',
+                maxHistorySize: 10000
+            }
+        }
+    }
 });
+```
+
+## Testing
+
+```bash
+# Run all tests
+npm test
+
+# Watch mode
+npm run test:watch
+
+# Coverage report
+npm run test:coverage
+
+# Run a specific test file
+npm test -- src/__tests__/integration.test.ts
+
+# Run tests matching a pattern
+npm test -- --grep "container"
+```
+
+Test files are located in `src/__tests__/`:
+- `container.test.ts` - DI container tests (48 tests)
+- `persistence.test.ts` - Persistence backend tests (42 tests)
+- `sse-transport.test.ts` - SSE transport tests (33 tests, 1 skipped)
+- `worker-manager.test.ts` - Worker pool tests (33 tests)
+- `connection-pool.test.ts` - Connection pool tests (39 tests)
+- `sequentialthinking-tools.test.ts` - MCP tool comprehensive tests (35 tests)
+- Plus other integration and unit tests
+
+Total: 287+ tests passing
+
+## Transport Options
+
+### Stdio (default, single-user)
+
+```bash
+npm start
+```
+
+### SSE (multi-user)
+
+```bash
+TRANSPORT_TYPE=sse SSE_PORT=3000 npm start
 ```
 
 ## Dependencies
 
 - `tmcp`: MCP server framework
-- `@tmcp/adapter-valibot`: Valibot schema adapter for MCP
-- `@tmcp/transport-stdio`: Stdio transport for MCP communication
+- `@tmcp/adapter-valibot`: Valibot schema adapter
+- `@tmcp/transport-stdio`: Stdio transport
 - `valibot`: Schema validation
-- `chalk`: Terminal styling (for debug output to stderr)
+- `chalk`: Terminal styling
+- `chokidar`: File watching
+- `yaml`: Config file parsing
+- `vitest`: Testing framework

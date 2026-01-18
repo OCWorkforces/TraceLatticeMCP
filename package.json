@@ -1,6 +1,6 @@
 {
 	"name": "mcp-sequentialthinking-tools",
-	"version": "0.0.8",
+	"version": "0.0.9",
 	"description": "MCP Server For Sequential Thinking Tools",
 	"type": "module",
 	"main": "dist/index.js",
@@ -68,8 +68,8 @@
 	},
 	"devDependencies": {
 		"@changesets/cli": "^2.29.8",
-		"@tsconfig/node24": "^24.0.3",
-		"@types/node": "^24.10.8",
+		"@tsconfig/node24": "^24.0.4",
+		"@types/node": "^24.10.9",
 		"@typescript-eslint/eslint-plugin": "^8.53.0",
 		"@typescript-eslint/parser": "^8.53.0",
 		"@vitest/coverage-v8": "^4.0.17",

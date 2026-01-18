@@ -20,12 +20,12 @@ export class SkillWatcher {
 
 		this._watcher.on('add', async (path) => {
 			console.error(`Skill added: ${path}`);
-			await this.skillRegistry.discover();
+			await this.skillRegistry.discoverAsync();
 		});
 
 		this._watcher.on('change', async (path) => {
 			console.error(`Skill modified: ${path}`);
-			await this.skillRegistry.discover();
+			await this.skillRegistry.discoverAsync();
 		});
 
 		this._watcher.on('unlink', async (path) => {

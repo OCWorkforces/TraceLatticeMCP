@@ -40,7 +40,7 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 			branch_id: 'branch-a',
 		});
 
-		const branches = server.getBranches();
+		const branches = server.history.getBranches();
 		expect(branches['branch-a']).toHaveLength(1);
 	});
 
@@ -104,7 +104,7 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 		}
 
 		// History should be trimmed to maxHistorySize
-		expect(smallServer.getHistory().length).toBeLessThanOrEqual(3);
+		expect(smallServer.history.getHistory().length).toBeLessThanOrEqual(3);
 	});
 
 	it('should handle errors gracefully', async () => {
