@@ -1,6 +1,43 @@
-import * as v from 'valibot';
-import { Tool } from './types.js';
+/**
+ * Valibot validation schemas for the sequential thinking MCP tool.
+ *
+ * This module defines the validation schemas used for the sequential thinking tool,
+ * including schemas for tool recommendations, skill recommendations, step recommendations,
+ * and the main sequential thinking input. All schemas use Valibot for runtime validation
+ * and provide detailed descriptions for MCP protocol compatibility.
+ *
+ * @remarks
+ * **Schema Overview:**
+ * - `ToolRecommendationSchema` - Validates tool recommendation objects with confidence scores
+ * - `SkillRecommendationSchema` - Validates skill recommendation objects
+ * - `StepRecommendationSchema` - Validates step coordination structures
+ * - `SequentialThinkingSchema` - Main schema for thought input validation
+ *
+ * @example
+ * ```typescript
+ * import { SequentialThinkingSchema } from './schema.js';
+ * import { safeParse } from 'valibot';
+ *
+ * const result = safeParse(SequentialThinkingSchema, inputData);
+ * if (result.success) {
+ *   const thought = result.output;
+ *   // Process the valid thought
+ * } else {
+ *   console.error('Validation failed:', result.issues);
+ * }
+ * ```
+ * @module schema
+ */
 
+import * as v from 'valibot';
+import type { Tool } from './types.js';
+
+/**
+ * Detailed description for the sequential thinking tool.
+ *
+ * This description is shown to LLMs when they consider using this tool.
+ * It explains when to use the tool, its features, parameters, and best practices.
+ */
 const TOOL_DESCRIPTION = `A detailed tool for dynamic and reflective problem-solving through thoughts.
 This tool helps analyze problems through a flexible thinking process that can adapt and evolve.
 Each thought can build on, question, or revise previous insights as understanding deepens.
@@ -80,6 +117,30 @@ You should:
 16. Provide a single, ideally correct answer as the final output
 17. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`;
 
+/**
+ * Valibot schema for validating tool recommendation objects.
+ *
+ * Validates that a tool recommendation has:
+ * - A tool name (string)
+ * - A confidence score between 0 and 1
+ * - A rationale explaining the recommendation
+ * - A priority number for ordering
+ * - Optional suggested input parameters
+ * - Optional alternative tools
+ *
+ * @example
+ * ```typescript
+ * import { safeParse } from 'valibot';
+ * import { ToolRecommendationSchema } from './schema.js';
+ *
+ * const result = safeParse(ToolRecommendationSchema, {
+ *   tool_name: 'mcp__tavily-mcp__tavily-search',
+ *   confidence: 0.9,
+ *   rationale: 'Best for web search',
+ *   priority: 1
+ * });
+ * ```
+ */
 export const ToolRecommendationSchema = v.object({
 	tool_name: v.pipe(
 		v.string(),
@@ -109,6 +170,32 @@ export const ToolRecommendationSchema = v.object({
 	))
 });
 
+/**
+ * Valibot schema for validating skill recommendation objects.
+ *
+ * Validates that a skill recommendation has:
+ * - A skill name (string)
+ * - A confidence score between 0 and 1
+ * - A rationale explaining the recommendation
+ * - A priority number for ordering
+ * - Optional alternative skills
+ * - Optional allowed tools list
+ * - Optional user invocable flag
+ *
+ * @example
+ * ```typescript
+ * import { safeParse } from 'valibot';
+ * import { SkillRecommendationSchema } from './schema.js';
+ *
+ * const result = safeParse(SkillRecommendationSchema, {
+ *   skill_name: 'commit',
+ *   confidence: 0.95,
+ *   rationale: 'Handles git commit workflow',
+ *   priority: 1,
+ *   user_invocable: true
+ * });
+ * ```
+ */
 export const SkillRecommendationSchema = v.object({
 	skill_name: v.pipe(
 		v.string(),
@@ -142,6 +229,28 @@ export const SkillRecommendationSchema = v.object({
 	))
 });
 
+/**
+ * Valibot schema for validating step recommendation objects.
+ *
+ * Validates that a step recommendation has:
+ * - A step description
+ * - An array of recommended tools
+ * - An optional array of recommended skills
+ * - An expected outcome
+ * - Optional conditions for the next step
+ *
+ * @example
+ * ```typescript
+ * import { safeParse } from 'valibot';
+ * import { StepRecommendationSchema } from './schema.js';
+ *
+ * const result = safeParse(StepRecommendationSchema, {
+ *   step_description: 'Search for TypeScript files',
+ *   recommended_tools: [{ ... }],
+ *   expected_outcome: 'List of all TypeScript files'
+ * });
+ * ```
+ */
 export const StepRecommendationSchema = v.object({
 	step_description: v.pipe(
 		v.string(),
@@ -165,6 +274,44 @@ export const StepRecommendationSchema = v.object({
 	))
 });
 
+/**
+ * Main Valibot schema for validating sequential thinking tool input.
+ *
+ * This is the primary schema used for the sequential thinking MCP tool.
+ * It validates all thought data including:
+ * - Optional available tools and skills arrays
+ * - The thought content (required)
+ * - Thought numbering (thought_number, total_thoughts)
+ * - Revision and branching metadata
+ * - Current, previous, and remaining step recommendations
+ *
+ * @remarks
+ * **Validation Rules:**
+ * - `thought_number` must be >= 1
+ * - `total_thoughts` must be >= 1
+ * - `branch_id` must be 1-50 characters, alphanumeric/hyphens/underscores only
+ * - `confidence` values must be between 0 and 1
+ *
+ * @example
+ * ```typescript
+ * import { safeParse } from 'valibot';
+ * import { SequentialThinkingSchema } from './schema.js';
+ *
+ * const result = safeParse(SequentialThinkingSchema, {
+ *   thought: 'I need to analyze the problem',
+ *   thought_number: 1,
+ *   total_thoughts: 5,
+ *   next_thought_needed: true,
+ *   available_mcp_tools: ['Read', 'Write', 'Grep']
+ * });
+ *
+ * if (result.success) {
+ *   console.log('Valid thought:', result.output);
+ * } else {
+ *   console.error('Validation errors:', result.issues);
+ * }
+ * ```
+ */
 export const SequentialThinkingSchema = v.object({
 	available_mcp_tools: v.optional(v.pipe(
 		v.array(v.string()),
@@ -231,6 +378,26 @@ export const SequentialThinkingSchema = v.object({
 	))
 });
 
+/**
+ * The sequential thinking tool definition for MCP registration.
+ *
+ * This object defines the tool that is registered with the MCP server.
+ * The inputSchema is left empty as the schema is handled by tmcp
+ * when registering the tool using the Valibot adapter.
+ *
+ * @example
+ * ```typescript
+ * import { SEQUENTIAL_THINKING_TOOL } from './schema.js';
+ * import { McpServer } from 'tmcp';
+ *
+ * const server = new McpServer({ name: 'my-server', version: '1.0.0' });
+ * server.tool({
+ *   name: SEQUENTIAL_THINKING_TOOL.name,
+ *   description: SEQUENTIAL_THINKING_TOOL.description,
+ *   schema: SequentialThinkingSchema
+ * }, handler);
+ * ```
+ */
 export const SEQUENTIAL_THINKING_TOOL: Tool = {
 	name: 'sequentialthinking_tools',
 	description: TOOL_DESCRIPTION,
