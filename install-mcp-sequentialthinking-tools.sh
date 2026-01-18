@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# install-mcp-sequentialthinking-tools.sh
-# Installation script for mcp-sequentialthinking-tools as a global npm module
+# install-sequentialthinking-tools.sh
+# Installation script for sequentialthinking-tools as a global npm module
 #
 
 set -e  # Exit on error
@@ -14,7 +14,7 @@ readonly BLUE='\033[0;34m'
 readonly NC='\033[0m' # No Color
 
 # Package info
-readonly PACKAGE_NAME="mcp-sequentialthinking-tools"
+readonly PACKAGE_NAME="sequentialthinking-tools"
 
 # Read version from package.json
 _package_version=$(node -p "require('./package.json').version" 2>/dev/null)

@@ -1,12 +1,12 @@
 {
-	"name": "mcp-sequentialthinking-tools",
-	"version": "0.0.9",
+	"name": "sequentialthinking-tools",
+	"version": "0.0.10",
 	"description": "MCP Server For Sequential Thinking Tools",
 	"type": "module",
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"bin": {
-		"mcp-sequentialthinking-tools": "./dist/index.js"
+		"sequentialthinking-tools": "./dist/index.js"
 	},
 	"files": [
 		"dist",

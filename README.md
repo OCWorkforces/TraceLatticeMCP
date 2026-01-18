@@ -14,14 +14,14 @@ An MCP (Model Context Protocol) server that provides sequential thinking capabil
 ## Installation
 
 ```bash
-npm install mcp-sequentialthinking-tools
+npm install sequentialthinking-tools
 ```
 
 ## Quick Start
 
 ```typescript
 import { McpServer } from 'tmcp';
-import { ToolAwareSequentialThinkingServer } from 'mcp-sequentialthinking-tools';
+import { ToolAwareSequentialThinkingServer } from 'sequentialthinking-tools';
 
 const thinkingServer = new ToolAwareSequentialThinkingServer({
 	maxHistorySize: 1000
