@@ -139,6 +139,16 @@ export class SqlitePersistence implements PersistenceBackend {
 		}
 	}
 
+	public async listBranches(): Promise<string[]> {
+		if (!this._persistBranches) {
+			return [];
+		}
+
+		const stmt = this._db.prepare('SELECT branch_id FROM branches ORDER BY branch_id ASC');
+		const rows = stmt.all() as { branch_id: string }[];
+		return rows.map((row) => row.branch_id);
+	}
+
 	public async clear(): Promise<void> {
 		this._db.exec('DELETE FROM thoughts');
 		if (this._persistBranches) {

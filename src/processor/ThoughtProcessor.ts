@@ -10,7 +10,7 @@
 
 import type { ThoughtData } from '../types.js';
 import type { StructuredLogger } from '../logger/StructuredLogger.js';
-import { HistoryManager } from '../HistoryManager.js';
+import type { IHistoryManager } from '../IHistoryManager.js';
 import { ThoughtFormatter } from '../formatter/ThoughtFormatter.js';
 
 /**
@@ -109,7 +109,7 @@ export class ThoughtProcessor {
 	 * ```
 	 */
 	constructor(
-		private historyManager: HistoryManager,
+		private historyManager: IHistoryManager,
 		private thoughtFormatter: ThoughtFormatter,
 		logger?: StructuredLogger
 	) {

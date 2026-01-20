@@ -39,6 +39,13 @@ export interface PersistenceBackend {
 	loadBranch(branchId: string): Promise<ThoughtData[] | undefined>;
 
 	/**
+	 * List all branch IDs that are persisted.
+	 *
+	 * @returns Array of branch identifiers
+	 */
+	listBranches(): Promise<string[]>;
+
+	/**
 	 * Clear all persisted data (history and branches).
 	 * Use with caution - this cannot be undone.
 	 */
