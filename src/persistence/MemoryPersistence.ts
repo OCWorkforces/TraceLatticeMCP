@@ -35,6 +35,10 @@ export class MemoryPersistence implements PersistenceBackend {
 		return branch ? [...branch] : undefined;
 	}
 
+	public async listBranches(): Promise<string[]> {
+		return this.getBranchIds();
+	}
+
 	public async clear(): Promise<void> {
 		this._history = [];
 		this._branches.clear();

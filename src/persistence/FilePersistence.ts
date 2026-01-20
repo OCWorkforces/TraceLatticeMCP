@@ -115,6 +115,10 @@ export class FilePersistence implements PersistenceBackend {
 		}
 	}
 
+	public async listBranches(): Promise<string[]> {
+		return this.getBranchIds();
+	}
+
 	public async clear(): Promise<void> {
 		try {
 			// Clear history

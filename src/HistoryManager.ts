@@ -11,6 +11,7 @@ import type { ThoughtData } from './types.js';
 import type { StructuredLogger } from './logger/StructuredLogger.js';
 import type { DiscoveryCacheOptions } from './cache/DiscoveryCache.js';
 import type { PersistenceBackend } from './persistence/PersistenceBackend.js';
+import type { IHistoryManager } from './IHistoryManager.js';
 import { ToolRegistry } from './registry/ToolRegistry.js';
 import { SkillRegistry } from './registry/SkillRegistry.js';
 import { DiscoveryCache } from './cache/DiscoveryCache.js';
@@ -122,7 +123,7 @@ export interface HistoryManagerConfig {
  * manager.clear();
  * ```
  */
-export class HistoryManager {
+export class HistoryManager implements IHistoryManager {
 	/** Linear history of all thoughts. */
 	private _thought_history: ThoughtData[] = [];
 
@@ -175,10 +176,10 @@ export class HistoryManager {
 		this._logger = config.logger || null;
 		this._persistence = config.persistence ?? null;
 		this._persistenceEnabled = this._persistence !== null;
-		this.tools = new ToolRegistry(
-			config.logger,
-			config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined
-		);
+		this.tools = new ToolRegistry({
+			logger: config.logger,
+			cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
+		});
 		this.skills = new SkillRegistry({
 			logger: config.logger,
 			cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
@@ -463,8 +464,15 @@ export class HistoryManager {
 				this.log(`Loaded ${this._thought_history.length} thoughts from persistence`);
 			}
 
-			// TODO: Load branches if needed
-			// This would require tracking branch IDs separately or listing them
+			// Load branches
+			const branchIds = await this._persistence.listBranches();
+			for (const branchId of branchIds) {
+				const branchData = await this._persistence.loadBranch(branchId);
+				if (branchData) {
+					this._branches[branchId] = branchData.slice(-this._maxBranchSize);
+				}
+			}
+			this.log(`Loaded ${Object.keys(this._branches).length} branches from persistence`);
 		} catch (error) {
 			this.log('Failed to load from persistence', {
 				error: error instanceof Error ? error.message : String(error),

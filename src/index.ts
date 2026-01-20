@@ -208,7 +208,7 @@ export class ToolAwareSequentialThinkingServer {
 		// Initialize watchers if enabled
 		if (options.enableWatcher) {
 			this._skillWatcher = new SkillWatcher(this._historyManager.skills);
-			this._toolWatcher = new ToolWatcher();
+			this._toolWatcher = new ToolWatcher(this._historyManager.tools);
 		}
 	}
 

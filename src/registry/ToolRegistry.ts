@@ -3,7 +3,7 @@
  *
  * This module provides the `ToolRegistry` class which manages the registration,
  * retrieval, update, and removal of MCP tools. It supports optional caching
- * for improved performance and integrates with the logging system.
+ * for improved performance, filesystem discovery, and integrates with the logging system.
  *
  * @module registry
  */
@@ -11,6 +11,44 @@
 import type { Tool } from '../types.js';
 import type { StructuredLogger } from '../logger/StructuredLogger.js';
 import { DiscoveryCache } from '../cache/DiscoveryCache.js';
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { homedir } from 'node:os';
+import { existsSync } from 'node:fs';
+import { parse as parseYaml } from 'yaml';
+
+/**
+ * Configuration options for creating a `ToolRegistry` instance.
+ *
+ * @example
+ * ```typescript
+ * const options: ToolRegistryOptions = {
+ *   logger: new StructuredLogger({ context: 'ToolRegistry' }),
+ *   cache: new DiscoveryCache({ ttl: 300000, maxSize: 100 }),
+ *   toolDirs: ['./custom-tools', '~/.claude/tools'],
+ *   lazyDiscovery: true
+ * };
+ * ```
+ */
+export interface ToolRegistryOptions {
+	/** Optional logger for diagnostics. */
+	logger?: StructuredLogger;
+
+	/** Optional cache for tool lookups. */
+	cache?: DiscoveryCache<Tool>;
+
+	/**
+	 * Directory paths to search for tools.
+	 * @default ['.claude/tools', '~/.claude/tools']
+	 */
+	toolDirs?: string[];
+
+	/**
+	 * Enable lazy discovery (discover on first access instead of startup).
+	 * @default false
+	 */
+	lazyDiscovery?: boolean;
+}
 
 /**
  * Registry for managing MCP tool operations.
@@ -20,6 +58,26 @@ import { DiscoveryCache } from '../cache/DiscoveryCache.js';
  * for improved performance on frequently accessed tools.
  *
  * @remarks
+ * **Tool Discovery:**
+ * - Tools are discovered from directories in priority order
+ * - Tool files must have `.tool.md` extensions
+ * - Tools are defined with YAML frontmatter containing metadata
+ * - Discovery is async and can be awaited via `discoverAsync()`
+ *
+ * **Tool File Format:**
+ * ```yaml
+ * ---
+ * name: my-custom-tool
+ * description: Searches for files by pattern
+ * inputSchema:
+ *   type: object
+ *   properties:
+ *     pattern:
+ *       type: string
+ *   required: [pattern]
+ * ---
+ * ```
+ *
  * **Cache Behavior:**
  * - Cache is checked before accessing tool storage
  * - Cache is invalidated on add, update, and remove operations
@@ -36,7 +94,10 @@ import { DiscoveryCache } from '../cache/DiscoveryCache.js';
  * import { StructuredLogger } from './logger/StructuredLogger.js';
  *
  * const logger = new StructuredLogger({ context: 'ToolRegistry' });
- * const registry = new ToolRegistry(logger);
+ * const registry = new ToolRegistry({ logger });
+ *
+ * // Discover tools from filesystem
+ * const count = await registry.discoverAsync();
  *
  * // Add a tool
  * registry.addTool({
@@ -69,27 +130,38 @@ export class ToolRegistry {
 	/** Optional cache for tool lookups. */
 	private _cache: DiscoveryCache<Tool>;
 
+	/** Directory paths to search for tools. */
+	private _toolDirs: string[];
+
+	/** Whether discovery has been performed. */
+	private _discovered: boolean = false;
+
+	/** Promise for in-progress discovery (null if not in progress). */
+	private _discoveryPromise: Promise<number> | null = null;
+
 	/**
 	 * Creates a new ToolRegistry instance.
 	 *
-	 * @param logger - Optional logger for diagnostics
-	 * @param cache - Optional cache for tool lookups (created internally if not provided)
+	 * @param options - Configuration options for the registry
 	 *
 	 * @example
 	 * ```typescript
 	 * const registry1 = new ToolRegistry();
 	 *
-	 * const registry2 = new ToolRegistry(
-	 *   new StructuredLogger({ context: 'Tools' }),
-	 *   new DiscoveryCache({ ttl: 300000, maxSize: 50 })
-	 * );
+	 * const registry2 = new ToolRegistry({
+	 *   logger: new StructuredLogger({ context: 'Tools' }),
+	 *   cache: new DiscoveryCache({ ttl: 300000, maxSize: 50 }),
+	 *   toolDirs: ['./my-tools'],
+	 *   lazyDiscovery: true
+	 * });
 	 * ```
 	 */
-	constructor(logger?: StructuredLogger, cache?: DiscoveryCache<Tool>) {
+	constructor(options: ToolRegistryOptions = {}) {
 		this._tools = new Map();
-		this._logger = logger || null;
+		this._logger = options.logger || null;
 		// Create cache internally if not provided
-		this._cache = cache || new DiscoveryCache<Tool>({ maxSize: 50, ttl: 300000 });
+		this._cache = options.cache || new DiscoveryCache<Tool>({ maxSize: 50, ttl: 300000 });
+		this._toolDirs = options.toolDirs || ['.claude/tools', join(homedir(), '.claude/tools')];
 	}
 
 	/**
@@ -312,6 +384,171 @@ export class ToolRegistry {
 	 */
 	public size(): number {
 		return this._tools.size;
+	}
+
+	/**
+	 * Asynchronously discovers tools from the configured directories.
+	 *
+	 * This method scans all configured tool directories for markdown files
+	 * with YAML frontmatter, parses them, and adds valid tools to the registry.
+	 * Multiple concurrent calls share the same discovery promise.
+	 *
+	 * @remarks
+	 * **Supported File Extensions:** `.tool.md`
+	 *
+	 * **Frontmatter Format:**
+	 * ```yaml
+	 * ---
+	 * name: tool-name
+	 * description: Tool description
+	 * inputSchema:
+	 *   type: object
+	 *   properties:
+	 *     param:
+	 *       type: string
+	 *   required: [param]
+	 * ---
+	 * ```
+	 *
+	 * Subsequent calls return cached results if discovery has already completed.
+	 * If discovery is in progress, the same promise is returned to all callers.
+	 *
+	 * @returns A Promise resolving to the number of tools discovered
+	 *
+	 * @example
+	 * ```typescript
+	 * // Perform initial discovery
+	 * const count = await registry.discoverAsync();
+	 * console.log(`Discovered ${count} tools`);
+	 *
+	 * // Subsequent calls return cached results
+	 * const cachedCount = await registry.discoverAsync();
+	 * console.log(`Cached count: ${cachedCount}`);
+	 * ```
+	 */
+	public async discoverAsync(): Promise<number> {
+		// Return existing promise if discovery is in progress
+		if (this._discoveryPromise) {
+			return this._discoveryPromise;
+		}
+
+		// Use cached results if already discovered
+		if (this._discovered) {
+			const cached = this._cache.get('all');
+			return cached?.length ?? 0;
+		}
+
+		// Create discovery promise
+		this._discoveryPromise = this._performDiscovery();
+
+		try {
+			const count = await this._discoveryPromise;
+			return count;
+		} finally {
+			this._discoveryPromise = null;
+		}
+	}
+
+	/**
+	 * Performs the actual tool discovery operation.
+	 *
+	 * Scans configured directories for tool files, parses their frontmatter,
+	 * and adds valid tools to the registry.
+	 *
+	 * @returns A Promise resolving to the number of tools discovered
+	 * @private
+	 */
+	private async _performDiscovery(): Promise<number> {
+		let discoveredCount = 0;
+
+		for (const toolDir of this._toolDirs) {
+			try {
+				if (!existsSync(toolDir)) {
+					continue;
+				}
+
+				const entries = await readdir(toolDir, { withFileTypes: true });
+				for (const entry of entries) {
+					if (entry.isFile() && entry.name.endsWith('.tool.md')) {
+						const filePath = join(toolDir, entry.name);
+						try {
+							const content = await readFile(filePath, 'utf-8');
+							const parsed = this._parseToolFrontmatter(content);
+							if (parsed._error) {
+								this.log(`Skipped ${entry.name}: ${parsed._error}`);
+								continue;
+							}
+							if (parsed.name && parsed.inputSchema) {
+								// Check if already exists before adding
+								if (!this._tools.has(parsed.name)) {
+									const tool: Tool = {
+										name: parsed.name,
+										description: parsed.description || '',
+										inputSchema: parsed.inputSchema,
+									};
+									this._tools.set(tool.name, tool);
+									discoveredCount++;
+								}
+							}
+						} catch (readError) {
+							this.log(`Failed to read tool file ${entry.name}`, {
+								error: readError instanceof Error ? readError.message : String(readError),
+							});
+						}
+					}
+				}
+			} catch (error) {
+				this.log(`Failed to scan tool directory: ${toolDir}`, {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+
+		this._discovered = true;
+		this._cache?.set('all', Array.from(this._tools.values()));
+		this.log(`Discovery complete: found ${discoveredCount} tools`, { discoveredCount });
+		return discoveredCount;
+	}
+
+	/**
+	 * Parses YAML frontmatter from a tool file content.
+	 *
+	 * Extracts tool metadata from the YAML frontmatter block between
+	 * the first set of `---` delimiters. Returns a partial tool object
+	 * or an error marker if parsing fails.
+	 *
+	 * @param content - The file content to parse
+	 * @returns A partial tool object, with an `_error` property if parsing failed
+	 * @private
+	 */
+	private _parseToolFrontmatter(content: string): Partial<Tool> & { _error?: string } {
+		// Parse YAML frontmatter from tool file
+		const match = content.match(/^---\n([\s\S]+?)\n---/);
+		if (!match) {
+			return { _error: 'No YAML frontmatter found' };
+		}
+
+		try {
+			const frontmatter = parseYaml(match[1]) as Record<string, unknown>;
+
+			const result: Partial<Tool> = {
+				name: typeof frontmatter.name === 'string' ? frontmatter.name : undefined,
+				description: typeof frontmatter.description === 'string' ? frontmatter.description : '',
+				inputSchema: frontmatter.inputSchema as Tool['inputSchema'],
+			};
+
+			// Validate required fields
+			if (!result.name) {
+				return { _error: 'Missing required field: name' };
+			}
+			if (!result.inputSchema) {
+				return { _error: 'Missing required field: inputSchema' };
+			}
+
+			return result;
+		} catch (error) {
+			return { _error: 'YAML parse error' };
+		}
 	}
 
 	/**
