@@ -91,11 +91,11 @@ Parameters explained:
 - needs_more_thoughts: If reaching end but realizing more thoughts needed
 - current_step: Current step recommendation, including:
 * step_description: What needs to be done
-* recommended_tools: Tools recommended for this step
-* recommended_skills: Skills recommended for this step (optional)
+* recommended_tools: (CRITICAL: PLURAL - "recommended_tools" with an 's') Tools recommended for this step - MUST be an array.
+* recommended_skills: (CRITICAL: PLURAL - "recommended_skills" with an 's') Skills recommended for this step (optional) - MUST be an array.
 * expected_outcome: What to expect from this step
 * next_step_conditions: Conditions to consider for the next step
-- previous_steps: Steps already recommended
+- previous_steps: Steps already recommended (each step MUST use "recommended_tools" PLURAL)
 - remaining_steps: High-level descriptions of upcoming steps
 
 You should:
