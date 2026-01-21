@@ -66,3 +66,14 @@ console.log(formatted);
 - **Confidence Scores**: Visual indication of recommendation confidence
 - **Alternatives**: Shows alternative tools/skills when available
 - **Metadata**: Displays branch/revision information when present
+
+## Metadata Display
+
+The formatter includes thought metadata in the output when available:
+
+| Metadata | Display Format |
+|----------|---------------|
+| `is_revision` | `🔄 Revision of thought N` |
+| `branch_id` | `🌿 Branch: branch-name` |
+| `branch_from_thought` | `🌿 Branched from thought N` |
+| `revises_thought` | `🔄 Revises thought N` |

@@ -19,8 +19,10 @@ The `Container` class provides a lightweight dependency injection system for man
 ### Usage
 
 ```typescript
-import { Container } from './di/Container.js';
+import { Container, createDefaultContainer } from './di/index.js';
+import type { CreateContainerOptions } from './di/index.js';
 
+// Direct instantiation
 const container = new Container();
 
 // Register a singleton instance
@@ -37,6 +39,24 @@ container.registerFactory('ThoughtFormatter', () => new ThoughtFormatter());
 
 // Resolve dependencies
 const history = container.resolve<HistoryManager>('HistoryManager');
+```
+
+### Factory Function
+
+The `createDefaultContainer()` function creates a container with optional custom services:
+
+```typescript
+import { createDefaultContainer } from './di/index.js';
+import type { CreateContainerOptions } from './di/index.js';
+
+const options: CreateContainerOptions = {
+    logger: customLogger,
+    config: customConfig,
+    fileConfig: { /* ... */ }
+};
+
+const container = createDefaultContainer(options);
+// Pre-configured with custom logger and config if provided
 ```
 
 ## Registered Services

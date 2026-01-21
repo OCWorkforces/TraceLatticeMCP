@@ -46,5 +46,26 @@ The cache is used by:
 - `SkillRegistry` - for caching skill discovery results
 
 Cache configuration is passed through environment variables:
-- `DISCOVERY_CACHE_TTL` - TTL in seconds (default: 300)
+- `DISCOVERY_CACHE_TTL` - TTL in milliseconds (default: 300000)
 - `DISCOVERY_CACHE_MAX_SIZE` - Max entries (default: 100)
+
+## CacheEntry Type
+
+```typescript
+interface CacheEntry<T> {
+    value: T;
+    expiresAt: number;  // Unix timestamp
+}
+```
+
+## TTL Behavior
+
+- Cache entries expire after `ttl` milliseconds
+- Expired entries are removed on next access
+- Setting an existing key updates the expiry time
+
+## Eviction Strategy
+
+When `maxSize` is exceeded:
+- Oldest entries (by insertion time) are evicted first
+- Entire cache can be cleared with `clear()` method

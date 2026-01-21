@@ -43,6 +43,9 @@ npm run type-check
     ├── index.ts              # Main server entry point
     ├── schema.ts             # Valibot validation schemas
     ├── types.ts              # TypeScript interfaces
+    ├── errors.ts             # Custom error classes
+    ├── ServerConfig.ts       # Server configuration
+    ├── HistoryManager.ts     # History and branch management
     ├── di/                   # Dependency injection
     │   └── Container.ts      # DI container implementation
     ├── config/               # Configuration
@@ -64,14 +67,14 @@ npm run type-check
     ├── registry/             # Tool and skill registries
     │   ├── ToolRegistry.ts
     │   └── SkillRegistry.ts
+    ├── watchers/             # File system watchers
+    │   ├── SkillWatcher.ts   # Skill file watcher
+    │   └── ToolWatcher.ts    # Tool file watcher
     ├── processor/            # Thought processing
-    │   └── ThoughtProcessor.ts
+    │   ├── ThoughtProcessor.ts
+    │   └── InputNormalizer.ts # Input normalization
     ├── formatter/            # Response formatting
     │   └── ThoughtFormatter.ts
-    ├── HistoryManager.ts     # History and branch management
-    ├── ServerConfig.ts       # Server configuration
-    ├── SkillWatcher.ts      # File watcher for skills
-    ├── ToolWatcher.ts       # File watcher for tools
     └── __tests__/            # Test files
 ```
 
@@ -146,6 +149,212 @@ server.config.maxHistorySize;
 7. Response formatted with tool/skill recommendations
 8. Result returned via configured transport (stdio or SSE)
 
+## Error Handling
+
+The server uses a hierarchical error system for programmatic error handling.
+
+### Error Class Hierarchy
+
+```
+SequentialThinkingError (base)
+├── ToolNotFoundError
+├── SkillNotFoundError
+├── InvalidThoughtError
+├── SkillDiscoveryError
+└── HistoryLimitExceededError
+```
+
+### Error Types
+
+| Error Class | Code | When Thrown | Properties |
+|-------------|------|-------------|------------|
+| `SequentialThinkingError` | (varies) | Base class for all errors | `code: string` |
+| `ToolNotFoundError` | `TOOL_NOT_FOUND` | Requested tool doesn't exist | - |
+| `SkillNotFoundError` | `SKILL_NOT_FOUND` | Requested skill doesn't exist | - |
+| `InvalidThoughtError` | `INVALID_THOUGHT` | Thought validation fails | - |
+| `SkillDiscoveryError` | `SKILL_DISCOVERY_FAILED` | Skill discovery fails | `cause: Error` |
+| `HistoryLimitExceededError` | `HISTORY_LIMIT_EXCEEDED` | History size exceeds limit | - |
+
+### Error Handling Example
+
+```typescript
+import {
+    SequentialThinkingError,
+    ToolNotFoundError,
+    SkillDiscoveryError
+} from './errors.js';
+
+try {
+    await server.processThought(thought);
+} catch (error) {
+    if (error instanceof SequentialThinkingError) {
+        console.error(`Error [${error.code}]: ${error.message}`);
+
+        // Handle specific error types
+        if (error instanceof ToolNotFoundError) {
+            // Tool not found - register it or use alternative
+        } else if (error instanceof SkillDiscoveryError) {
+            // Discovery failed - check directory or permissions
+            console.error('Caused by:', error.cause);
+        }
+    }
+}
+```
+
+## Factory Functions
+
+The server provides several factory functions for convenient component creation.
+
+### DI Container Factory
+
+```typescript
+import { createDefaultContainer } from './di/index.js';
+
+const container = createDefaultContainer({
+    logger: myLogger,
+    config: myConfig
+});
+// Pre-configured with Logger, Config, HistoryManager, etc.
+```
+
+### Persistence Backend Factory
+
+```typescript
+import { createPersistenceBackend } from './persistence/index.js';
+
+const backend = await createPersistenceBackend({
+    enabled: true,
+    backend: 'sqlite',  // 'file', 'sqlite', or 'memory'
+    options: {
+        dbPath: './data/thoughts.db'
+    }
+});
+```
+
+### Worker Manager Factory
+
+```typescript
+import { createWorkerManager } from './cluster/index.js';
+
+const manager = createWorkerManager({
+    maxWorkers: 4,
+    restartThreshold: 3
+});
+```
+
+### Connection Pool Factory
+
+```typescript
+import { createConnectionPool } from './pool/index.js';
+
+const pool = createConnectionPool({
+    maxSessions: 100,
+    sessionTimeout: 1800000  // 30 minutes
+});
+```
+
+### SSE Transport Factory
+
+```typescript
+import { createSseTransport } from './transport/index.js';
+
+const transport = createSseTransport({
+    port: 3000,
+    host: 'localhost',
+    corsOrigin: '*'
+});
+```
+
+## File Watchers
+
+The server includes file system watchers for dynamic tool and skill discovery.
+
+### SkillWatcher
+
+Monitors skill directories for changes and automatically updates the registry.
+
+**Watched Directories:**
+- `.claude/skills/` (project-local)
+- `~/.claude/skills/` (user-global)
+
+**Watched Events:**
+| Event | Behavior |
+|-------|----------|
+| `add` | Triggers full skill re-discovery |
+| `change` | Triggers full skill re-discovery |
+| `unlink` | Removes specific skill from registry |
+
+**File Types:** `.md`, `.yml`, `.yaml`
+
+### ToolWatcher
+
+Monitors tool directories for changes and automatically updates the registry.
+
+**Watched Directories:**
+- `.claude/tools/` (project-local)
+- `~/.claude/tools/` (user-global)
+
+**Watched Events:**
+| Event | Behavior |
+|-------|----------|
+| `add` | Triggers tool rediscovery (`.tool.md` files only) |
+| `unlink` | Removes tool from registry |
+
+**File Types:** `.tool.md` only
+
+### Enabling Watchers
+
+```typescript
+const server = await ToolAwareSequentialThinkingServer.create({
+    enableWatcher: true  // Enable both SkillWatcher and ToolWatcher (default: true)
+});
+```
+
+Watchers are most useful during development. Consider disabling in production for better performance.
+
+## Input Normalization
+
+The server includes automatic input normalization to handle common LLM field name mistakes.
+
+### Normalization Rules
+
+| Singular (Wrong) | Plural (Correct) | Applied To |
+|-----------------|------------------|------------|
+| `recommended_tool` | `recommended_tools` | `current_step`, `previous_steps` |
+| `recommended_skill` | `recommended_skills` | `current_step`, `previous_steps` |
+
+### How It Works
+
+1. Normalization happens **before** Valibot schema validation
+2. Allows strict schema validation while being tolerant of LLM mistakes
+3. Only transforms if plural field doesn't already exist
+4. Handles both `current_step` and all items in `previous_steps`
+
+### Example
+
+```typescript
+// LLM might generate this (with singular field names)
+const input = {
+    thought: 'I need to search the codebase',
+    thought_number: 1,
+    total_thoughts: 3,
+    next_thought_needed: true,
+    current_step: {
+        step_description: 'Search for files',
+        recommended_tool: [{  // Singular (wrong)
+            tool_name: 'Grep',
+            confidence: 0.9,
+            rationale: 'Best for code search',
+            priority: 1
+        }],
+        expected_outcome: 'List of matching files'
+    }
+};
+
+// InputNormalizer automatically transforms to:
+// current_step.recommended_tools (plural form)
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -155,30 +364,60 @@ All environment variables override file-based configuration:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `MAX_HISTORY_SIZE` | Max thoughts in history | 1000 |
-| `MAX_BRANCHES` | Max number of branches | 100 |
+| `MAX_BRANCHES` | Max number of branches | 50 |
+| `MAX_BRANCH_SIZE` | Max size of each branch | 100 |
 | `LOG_LEVEL` | Logging level (debug/info/warn/error) | info |
 | `PRETTY_LOG` | Enable pretty logging | true |
 | `SKILL_DIRS` | Colon-separated skill directories | `.claude/skills:~/.claude/skills` |
-| `DISCOVERY_CACHE_TTL` | Discovery cache TTL (seconds) | 300 |
+| `DISCOVERY_CACHE_TTL` | Discovery cache TTL (milliseconds) | 300000 |
 | `DISCOVERY_CACHE_MAX_SIZE` | Discovery cache max entries | 100 |
 | `TRANSPORT_TYPE` | Transport type (`stdio` or `sse`) | stdio |
 | `SSE_PORT` | SSE transport port | 3000 |
 | `SSE_HOST` | SSE transport host | localhost |
 | `CORS_ORIGIN` | CORS origin for SSE | * |
 
-### Server Configuration
+### Server Configuration Options
 
 ```typescript
 const server = await ToolAwareSequentialThinkingServer.create({
-    maxHistorySize: 500,
-    maxBranches: 50,
-    autoDiscover: false,
-    lazyDiscovery: true,
-    loadFromPersistence: false
+    // History limits
+    maxHistorySize: 500,      // Max thoughts in history (default: 1000)
+    maxBranches: 50,          // Max number of branches (default: 50)
+    maxBranchSize: 100,       // Max size of each branch (default: 100)
+
+    // Skill discovery
+    autoDiscover: true,       // Auto-discover skills on startup (default: true)
+    lazyDiscovery: false,     // Defer discovery until first access (default: false)
+    enableWatcher: true,      // Enable file watchers for skills/tools (default: true)
+
+    // Persistence
+    loadFromPersistence: true, // Load history from persistence (default: true)
+
+    // Transport
+    transport: 'stdio',        // 'stdio' or 'sse' (default: 'stdio')
+
+    // Logger
+    logger: customLogger,      // Optional custom logger instance
 });
 
 // Access configuration
 console.log(server.config.maxHistorySize);
+console.log(server.config.discoveryCache.ttl);
+```
+
+### Discovery Cache Configuration
+
+Controls caching of skill/tool discovery results to reduce filesystem operations:
+
+```typescript
+const server = await ToolAwareSequentialThinkingServer.create({
+    config: {
+        discoveryCache: {
+            ttl: 300000,      // Cache TTL in milliseconds (default: 5 minutes)
+            maxSize: 100      // Max cache entries (default: 100)
+        }
+    }
+});
 ```
 
 ## Persistence

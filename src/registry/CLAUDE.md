@@ -120,6 +120,48 @@ Both registries support optional caching to avoid repeated discovery operations:
 ```typescript
 import { DiscoveryCache } from './cache/DiscoveryCache.js';
 
-const cache = new DiscoveryCache({ ttl: 300, maxSize: 100 });
+const cache = new DiscoveryCache({ ttl: 300000, maxSize: 100 });
 const registry = new SkillRegistry({ cache });
 ```
+
+### Cache Configuration
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `ttl` | number (ms) | 300000 (5 min) | Time-to-live for cache entries |
+| `maxSize` | number | 100 | Maximum cache entries |
+
+## Lazy Discovery
+
+The `lazyDiscovery` option defers skill discovery until first access:
+
+```typescript
+const registry = new SkillRegistry({
+    lazyDiscovery: true  // Defer discovery until first getSkill/listSkills call
+});
+```
+
+**Benefits:**
+- Faster server startup
+- Discovery only runs when skills are actually needed
+- Useful for servers that may not use all features
+
+## Watcher Integration
+
+Both registries integrate with file watchers for automatic updates:
+
+```typescript
+import { SkillWatcher, ToolWatcher } from './watchers/index.js';
+
+const skillRegistry = new SkillRegistry();
+const toolRegistry = new ToolRegistry();
+
+// Watchers automatically update registries on file changes
+const skillWatcher = new SkillWatcher(skillRegistry);
+const toolWatcher = new ToolWatcher(toolRegistry);
+```
+
+**Watcher Behavior:**
+- Triggers full re-discovery on file add/change
+- Removes specific items on file delete
+- Uses cache to reduce filesystem overhead

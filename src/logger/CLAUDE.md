@@ -65,3 +65,15 @@ The logger is configured via:
 | `info` | General informational messages |
 | `warn` | Warning messages for potential issues |
 | `error` | Error messages for failures |
+
+## LogEntry Type
+
+```typescript
+interface LogEntry {
+    timestamp: string;    // ISO 8601 timestamp
+    level: LogLevel;      // debug, info, warn, error
+    context: string;      // Module/context name
+    message: string;      // Log message
+    data?: Record<string, unknown>;  // Additional data
+}
+```
