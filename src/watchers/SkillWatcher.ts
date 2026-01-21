@@ -11,7 +11,7 @@
 import { watch, type FSWatcher } from 'chokidar';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
-import type { SkillRegistry } from './registry/SkillRegistry.js';
+import type { SkillRegistry } from '../registry/SkillRegistry.js';
 
 /**
  * File system watcher for skill directories with registry integration.

@@ -24,15 +24,45 @@ interface WorkerManagerOptions {
 ### Usage
 
 ```typescript
-import { WorkerManager } from './cluster/WorkerManager.js';
+import { WorkerManager, createWorkerManager } from './cluster/index.js';
 
+// Direct instantiation
 const manager = new WorkerManager({ maxWorkers: 4 });
+
+// Using factory function
+const manager2 = createWorkerManager({
+    maxWorkers: 4,
+    restartThreshold: 3
+});
 
 // Process thought in worker pool
 const result = await manager.process(thought);
 
 // Shutdown
 await manager.shutdown();
+```
+
+### WorkerManagerOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxWorkers` | number | CPU count | Maximum number of worker processes |
+| `restartThreshold` | number | 3 | Max restarts before giving up |
+| `restartDelay` | number | 1000 | Delay between restarts (ms) |
+
+### Worker Message Types
+
+```typescript
+interface WorkerMessage {
+    type: 'process';
+    thought: ThoughtData;
+}
+
+interface WorkerResponse {
+    success: boolean;
+    result?: unknown;
+    error?: string;
+}
 ```
 
 ## Architecture

@@ -18,6 +18,22 @@ This directory contains all test files for the MCP Sequential Thinking Server.
 | `tool-registry.test.ts` | Tool registry tests | 10 |
 | `errors.test.ts` | Error handling tests | 6 |
 | `skill-discovery.test.ts` | Skill discovery tests | 15 |
+| `thought-processor.test.ts` | Thought processor tests | - |
+| `input-normalizer.test.ts` | Input normalizer tests | - |
+
+## Vitest Configuration
+
+The test suite uses Vitest with the following configuration:
+
+```typescript
+{
+  globals: true,              // Global describe/it/expect available
+  coverage: {
+    provider: 'v8',
+    reporter: ['text', 'json', 'html']
+  }
+}
+```
 
 ## Test Patterns
 

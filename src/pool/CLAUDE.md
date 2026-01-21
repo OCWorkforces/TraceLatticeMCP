@@ -30,12 +30,19 @@ interface ConnectionPoolOptions {
 ### Usage
 
 ```typescript
-import { ConnectionPool } from './pool/ConnectionPool.js';
+import { ConnectionPool, createConnectionPool } from './pool/index.js';
 
+// Direct instantiation
 const pool = new ConnectionPool({
   maxSessions: 100,
   sessionTimeout: 1800000, // 30 minutes
   cleanupInterval: 300000  // 5 minutes
+});
+
+// Using factory function
+const pool2 = createConnectionPool({
+  maxSessions: 50,
+  sessionTimeout: 3600000  // 1 hour
 });
 
 // Get or create a session for a user
@@ -49,6 +56,17 @@ pool.removeSession('user-id');
 
 // Cleanup expired sessions
 pool.cleanupExpiredSessions();
+```
+
+### SessionInfo Type
+
+```typescript
+interface SessionInfo {
+  userId: string;
+  createdAt: Date;
+  lastActivity: Date;
+  history: HistoryManager;
+}
 ```
 
 ## Architecture

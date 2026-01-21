@@ -103,3 +103,46 @@ const history = await backend.loadHistory();
 // Clear data
 await backend.clear();
 ```
+
+## Async Behavior
+
+All persistence operations are **fire-and-forget** by design:
+- Operations are not awaited in the main processing flow
+- Failures are logged but don't affect the main operation
+- This ensures persistence issues don't block the sequential thinking process
+
+```typescript
+// Example from HistoryManager
+this.persistence?.saveThought(thought);  // Not awaited
+```
+
+## Health Checks
+
+The `healthy()` method checks if the persistence backend is operational:
+
+```typescript
+const isHealthy = await backend.healthy();
+if (!isHealthy) {
+    console.warn('Persistence backend is unhealthy');
+}
+```
+
+**Health checks are performed:**
+- Before loading from persistence on server startup
+- Automatically in the HistoryManager when loading from persistence
+
+## Auto-Trimming
+
+When loading data from persistence, thoughts are automatically trimmed to configured limits:
+
+| Limit | Default | Description |
+|-------|---------|-------------|
+| `maxHistorySize` | 1000 | Maximum thoughts in main history |
+| `maxBranches` | 50 | Maximum number of branches |
+| `maxBranchSize` | 100 | Maximum thoughts per branch |
+
+**Eviction Strategy:** FIFO (First-In-First-Out) - oldest thoughts/branches are removed first
+
+## Thread Safety
+
+The persistence implementation is **not thread-safe** and assumes single-threaded execution. For concurrent access scenarios, use the SQLite backend which supports concurrent reads.

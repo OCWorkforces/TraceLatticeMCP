@@ -33,11 +33,12 @@ interface SseTransportOptions {
 ### Usage
 
 ```typescript
-import { SseTransport } from './transport/SseTransport.js';
+import { SseTransport, createSseTransport } from './transport/index.js';
 import { McpServer } from 'tmcp';
 
 const server = new McpServer({...});
 
+// Direct instantiation
 const sseTransport = new SseTransport({
   port: 3000,
   host: 'localhost',
@@ -45,11 +46,27 @@ const sseTransport = new SseTransport({
   enableCors: true
 });
 
+// Using factory function
+const sseTransport2 = createSseTransport({
+  port: 3001,
+  host: '0.0.0.0'
+});
+
 // Connect the transport
 await sseTransport.connect(server);
 
 // Server now listening on http://localhost:3000
 ```
+
+### Complete SseTransportOptions
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `port` | number | 3000 | Server port |
+| `host` | string | 'localhost' | Server host |
+| `corsOrigin` | string | '*' | CORS origin |
+| `enableCors` | boolean | true | Enable CORS |
+| `pool` | ConnectionPool | - | Optional connection pool |
 
 ### Endpoints
 

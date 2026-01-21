@@ -76,3 +76,19 @@ const config = loader.load();
 console.log(config.maxHistorySize);
 console.log(config.logLevel);
 ```
+
+## Error Handling
+
+The `ConfigLoader` handles errors gracefully:
+- Missing config files: Returns empty config (uses defaults)
+- Invalid YAML: Logs error and returns empty config
+- Permission errors: Logs error and continues
+
+## Configuration Merge Strategy
+
+Configuration values are merged in the following priority order (highest to lowest):
+
+1. **Environment Variables** - Always override file-based config
+2. **Project-local Config** - `.mcp-seq-thinking.yml` in current directory
+3. **User-global Config** - `~/.config/mcp-seq-thinking/config.yml`
+4. **Code Defaults** - Built-in default values
