@@ -12,6 +12,7 @@ import type { ThoughtData } from '../types.js';
 import type { StructuredLogger } from '../logger/StructuredLogger.js';
 import type { IHistoryManager } from '../IHistoryManager.js';
 import { ThoughtFormatter } from '../formatter/ThoughtFormatter.js';
+import { normalizeInput } from './InputNormalizer.js';
 
 /**
  * The return type expected by MCP tool invocations.
@@ -155,7 +156,9 @@ export class ThoughtProcessor {
 	 */
 	public async process(input: ThoughtData): Promise<CallToolResult> {
 		try {
-			const validatedInput = this.validateInput(input);
+			// Normalize input to handle common LLM field name mistakes
+			const normalizedInput = normalizeInput(input);
+			const validatedInput = this.validateInput(normalizedInput);
 
 			this.historyManager.addThought(validatedInput);
 
