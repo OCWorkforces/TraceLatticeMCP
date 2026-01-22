@@ -1,12 +1,12 @@
 /**
- * SSE (Server-Sent Events) Transport implementation.
+ * HTTP Transport implementation.
  *
- * This transport allows multiple concurrent connections over HTTP using Server-Sent Events,
- * enabling multi-user scenarios and horizontal scaling.
+ * This transport provides a stateless, REST-like API interface for MCP tool invocations
+ * using standard HTTP request-response patterns.
  *
  * @example
  * ```typescript
- * const transport = new SseTransport({
+ * const transport = new HttpTransport({
  *   port: 3000,
  *   host: 'localhost'
  * });
@@ -39,7 +39,17 @@ const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 const RATE_LIMIT_REQUESTS = 100;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 
-export interface SseTransportOptions {
+/**
+ * Default maximum body size (10MB).
+ */
+const DEFAULT_MAX_BODY_SIZE = 10 * 1024 * 1024;
+
+/**
+ * Default request timeout (30 seconds).
+ */
+const DEFAULT_REQUEST_TIMEOUT = 30000;
+
+export interface HttpTransportOptions {
 	/**
 	 * Port to listen on
 	 * @default 9108
@@ -65,8 +75,8 @@ export interface SseTransportOptions {
 	enableCors?: boolean;
 
 	/**
-	 * Path for the SSE endpoint
-	 * @default '/sse'
+	 * Path for the messages endpoint
+	 * @default '/mcp'
 	 */
 	path?: string;
 
@@ -81,13 +91,31 @@ export interface SseTransportOptions {
 	 * @default 100
 	 */
 	maxRequestsPerMinute?: number;
+
+	/**
+	 * Enable request body size limit
+	 * @default true
+	 */
+	enableBodySizeLimit?: boolean;
+
+	/**
+	 * Maximum request body size in bytes
+	 * @default 10485760 (10MB)
+	 */
+	maxBodySize?: number;
+
+	/**
+	 * Request timeout in milliseconds
+	 * @default 30000 (30 seconds)
+	 */
+	requestTimeout?: number;
 }
 
 /**
- * SSE Transport for MCP server over HTTP.
+ * HTTP Transport for MCP server.
  *
- * This transport uses Server-Sent Events (SSE) to communicate with clients,
- * allowing multiple concurrent connections and web-based clients.
+ * This transport uses standard HTTP request-response communication for MCP server
+ * interactions, providing a stateless REST-like API interface.
  *
  * @remarks
  * **Security Features:**
@@ -95,36 +123,56 @@ export interface SseTransportOptions {
  * - Query parameter sanitization (whitelist allowed keys)
  * - Rate limiting per IP (configurable, default 100 req/min)
  * - CORS origin validation
+ * - Request body size limits (configurable, default 10MB)
+ * - Request timeout (configurable, default 30s)
  *
  * **Rate Limiting:**
  * - Tracks requests per IP address within a time window
  * - Returns 429 Too Many Requests when limit exceeded
  * - Can be disabled via `enableRateLimit: false`
+ *
+ * **HTTP Status Code Mapping:**
+ * - 200: Success (JSON-RPC response)
+ * - 204: CORS Preflight (empty body)
+ * - 400: Bad Request
+ * - 403: Forbidden (invalid CORS)
+ * - 404: Not Found
+ * - 413: Payload Too Large
+ * - 429: Too Many Requests
+ * - 500: Internal Server Error
+ * - 503: Server Not Ready
  */
-export class SseTransport {
+export class HttpTransport {
 	private _server: ReturnType<typeof createServer>;
 	private _port: number;
 	private _host: string;
 	private _corsOrigin: string;
 	private _enableCors: boolean;
 	private _path: string;
-	private _clients: Set<ServerResponse> = new Set();
-	private _messageQueue: Map<string, any[]> = new Map();
+	private _requestCount: number = 0;
 	private _rateLimitEnabled: boolean;
 	private _maxRequestsPerMinute: number;
 	private _rateLimitMap: Map<string, { count: number; resetTime: number }> = new Map();
+	private _bodySizeLimitEnabled: boolean;
+	private _maxBodySize: number;
+	private _requestTimeout: number;
 
-	constructor(options: SseTransportOptions = {}) {
+	constructor(options: HttpTransportOptions = {}) {
 		this._port = options.port ?? 9108;
 		this._host = options.host ?? '127.0.0.1';
 		this._corsOrigin = options.corsOrigin ?? '*';
 		this._enableCors = options.enableCors ?? true;
-		this._path = options.path ?? '/sse';
+		this._path = options.path ?? '/mcp';
 		this._rateLimitEnabled = options.enableRateLimit ?? true;
 		this._maxRequestsPerMinute = options.maxRequestsPerMinute ?? RATE_LIMIT_REQUESTS;
+		this._bodySizeLimitEnabled = options.enableBodySizeLimit ?? true;
+		this._maxBodySize = options.maxBodySize ?? DEFAULT_MAX_BODY_SIZE;
+		this._requestTimeout = options.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT;
 
 		this._server = createServer((req, res) => this._handleRequest(req, res));
 	}
+
+	private _mcpServer: McpServer | null = null;
 
 	/**
 	 * Connect the MCP server to this transport.
@@ -134,15 +182,21 @@ export class SseTransport {
 	async connect(mcpServer: McpServer): Promise<void> {
 		this._mcpServer = mcpServer;
 
-		return new Promise((resolve) => {
+		return new Promise((resolve, reject) => {
 			this._server.listen(this._port, this._host, () => {
-				console.log(`SSE transport listening on http://${this._host}:${this._port}`);
+				console.log(`HTTP transport listening on http://${this._host}:${this._port}`);
 				resolve();
+			});
+
+			this._server.on('error', (error: NodeJS.ErrnoException) => {
+				if (error.code === 'EADDRINUSE') {
+					reject(new Error(`Port ${this._port} is already in use`));
+				} else {
+					reject(error);
+				}
 			});
 		});
 	}
-
-	private _mcpServer: McpServer | null = null;
 
 	/**
 	 * Validate session ID format.
@@ -259,9 +313,25 @@ export class SseTransport {
 	}
 
 	/**
+	 * Set CORS headers on response.
+	 *
+	 * @param res - The server response
+	 * @private
+	 */
+	private _setCorsHeaders(res: ServerResponse): void {
+		if (this._enableCors) {
+			res.setHeader('Access-Control-Allow-Origin', this._corsOrigin);
+			res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+			res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+		}
+	}
+
+	/**
 	 * Handle incoming HTTP requests
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+		this._requestCount++;
+
 		const url = new URL(req.url || '', `http://${req.headers.host}`);
 
 		// Check rate limit first
@@ -278,9 +348,12 @@ export class SseTransport {
 		// Validate CORS origin
 		if (!this._validateCorsOrigin(req)) {
 			res.writeHead(403, { 'Content-Type': 'application/json' });
-			res.end(JSON.stringify({ error: 'Forbidden - invalid origin' }));
+			res.end(JSON.stringify({ error: 'Forbidden' }));
 			return;
 		}
+
+		// Set CORS headers for all responses
+		this._setCorsHeaders(res);
 
 		// Sanitize query parameters
 		const sanitizedParams = this._sanitizeQueryParams(url);
@@ -297,34 +370,38 @@ export class SseTransport {
 
 		// Handle CORS preflight
 		if (this._enableCors && req.method === 'OPTIONS') {
-			res.writeHead(204, {
-				'Access-Control-Allow-Origin': this._corsOrigin,
-				'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-				'Access-Control-Allow-Headers': 'Content-Type',
-			});
+			res.writeHead(204);
 			res.end();
 			return;
 		}
 
-		// Handle SSE endpoint
-		if (url.pathname === this._path && req.method === 'GET') {
-			this._handleSseConnection(req, res);
-			return;
-		}
-
-		// Handle message endpoint (for receiving messages from clients)
-		if (url.pathname === `${this._path}/message` && req.method === 'POST') {
+		// Handle messages endpoint (JSON-RPC method calls)
+		if (url.pathname === this._path && req.method === 'POST') {
 			await this._handleMessage(req, res);
 			return;
 		}
 
 		// Handle health check
-		if (url.pathname === '/health') {
-			res.writeHead(200, {
-				'Access-Control-Allow-Origin': this._corsOrigin,
-				'Content-Type': 'application/json',
-			});
-			res.end(JSON.stringify({ status: 'healthy', clients: this._clients.size }));
+		if (url.pathname === '/health' && req.method === 'GET') {
+			res.writeHead(200, { 'Content-Type': 'application/json' });
+			res.end(JSON.stringify({ status: 'healthy', requests: this._requestCount }));
+			return;
+		}
+
+		// Handle root endpoint (server info)
+		if (url.pathname === '/' && req.method === 'GET') {
+			res.writeHead(200, { 'Content-Type': 'application/json' });
+			res.end(
+				JSON.stringify({
+					name: 'MCP HTTP Transport',
+					version: '1.0.0',
+					status: 'running',
+					endpoints: {
+						messages: this._path,
+						health: '/health',
+					},
+				})
+			);
 			return;
 		}
 
@@ -334,105 +411,110 @@ export class SseTransport {
 	}
 
 	/**
-	 * Handle new SSE connection
-	 */
-	private _handleSseConnection(req: IncomingMessage, res: ServerResponse): void {
-		// Set SSE headers
-		res.writeHead(200, {
-			'Content-Type': 'text/event-stream',
-			'Cache-Control': 'no-cache',
-			'Connection': 'keep-alive',
-			'Access-Control-Allow-Origin': this._corsOrigin,
-		});
-
-		// Send initial connection event
-		this._sendSseEvent(res, 'connected', { timestamp: Date.now() });
-
-		// Add to clients
-		this._clients.add(res);
-
-		// Handle client disconnect
-		req.on('close', () => {
-			this._clients.delete(res);
-		});
-
-		// Send any queued messages
-		const clientId = this._generateClientId();
-		const queued = this._messageQueue.get(clientId);
-		if (queued) {
-			for (const message of queued) {
-				this._sendSseEvent(res, 'message', message);
-			}
-			this._messageQueue.delete(clientId);
-		}
-	}
-
-	/**
-	 * Handle incoming message from client
+	 * Handle incoming message (JSON-RPC method call)
 	 */
 	private async _handleMessage(req: IncomingMessage, res: ServerResponse): Promise<void> {
-		let body = '';
-
-		for await (const chunk of req) {
-			body += chunk.toString();
-		}
+		// Set up request timeout
+		const timeout = setTimeout(() => {
+			res.writeHead(500, { 'Content-Type': 'application/json' });
+			res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32603, message: 'Request timeout' } }));
+		}, this._requestTimeout);
 
 		try {
-			JSON.parse(body); // Validate JSON
+			// Read request body with size limit
+			let body = '';
+			let bodySize = 0;
 
-			// Process the message through the MCP server
-			if (this._mcpServer) {
-				// This would normally call the MCP server's tool handler
-				// For now, we'll just acknowledge
-				res.writeHead(200, {
-					'Access-Control-Allow-Origin': this._corsOrigin,
-					'Content-Type': 'application/json',
-				});
-				res.end(JSON.stringify({ success: true }));
+			for await (const chunk of req) {
+				bodySize += chunk.length;
+
+				// Check body size limit
+				if (this._bodySizeLimitEnabled && bodySize > this._maxBodySize) {
+					clearTimeout(timeout);
+					res.writeHead(413, { 'Content-Type': 'application/json' });
+					res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Request body too large' } }));
+					return;
+				}
+
+				body += chunk.toString();
+			}
+
+			// Validate JSON
+			let jsonRpcRequest;
+			try {
+				jsonRpcRequest = JSON.parse(body);
+			} catch (error) {
+				clearTimeout(timeout);
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: null,
+						error: { code: -32700, message: 'Parse error' },
+					})
+				);
+				return;
+			}
+
+			// Check if MCP server is ready
+			if (!this._mcpServer) {
+				clearTimeout(timeout);
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: jsonRpcRequest?.id ?? null,
+						error: { code: -32603, message: 'Server not ready' },
+					})
+				);
+				return;
+			}
+
+			// Process the JSON-RPC request through the MCP server
+			// The server.receive() method is the public API for handling JSON-RPC requests
+			const response = await this._mcpServer.receive(jsonRpcRequest, {
+				sessionInfo: {},
+			});
+
+			clearTimeout(timeout);
+
+			if (response) {
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(JSON.stringify(response));
 			} else {
-				res.writeHead(503, { 'Content-Type': 'application/json' });
-				res.end(JSON.stringify({ error: 'Server not ready' }));
+				// No response (notification)
+				res.writeHead(204);
+				res.end();
 			}
 		} catch (error) {
-			res.writeHead(400, { 'Content-Type': 'application/json' });
-			res.end(JSON.stringify({ error: 'Invalid JSON' }));
+			clearTimeout(timeout);
+			res.writeHead(200, { 'Content-Type': 'application/json' });
+			res.end(
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: null,
+					error: {
+						code: -32603,
+						message: 'Internal error',
+						data: error instanceof Error ? error.message : String(error),
+					},
+				})
+			);
 		}
 	}
 
 	/**
-	 * Send an SSE event to a specific client
+	 * Get the number of requests handled
 	 */
-	private _sendSseEvent(res: ServerResponse, event: string, data: unknown): void {
-		try {
-			res.write(`event: ${event}\n`);
-			res.write(`data: ${JSON.stringify(data)}\n\n`);
-		} catch {
-			// Client disconnected
-			this._clients.delete(res);
-		}
+	get requestCount(): number {
+		return this._requestCount;
 	}
 
 	/**
-	 * Broadcast a message to all connected clients
+	 * Get the server URL
 	 */
-	broadcast(event: string, data: unknown): void {
-		for (const client of this._clients) {
-			this._sendSseEvent(client, event, data);
-		}
-	}
-
-	/**
-	 * Generate a unique client ID
-	 */
-	private _generateClientId(): string {
-		return `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-	}
-
-	/**
-	 * Get the number of connected clients
-	 */
-	get clientCount(): number {
-		return this._clients.size;
+	get serverUrl(): string {
+		return `http://${this._host}:${this._port}`;
 	}
 
 	/**
@@ -440,19 +522,9 @@ export class SseTransport {
 	 */
 	async stop(): Promise<void> {
 		return new Promise((resolve) => {
-			// Close all client connections
-			for (const client of this._clients) {
-				try {
-					client.end();
-				} catch {
-					// Ignore errors
-				}
-			}
-			this._clients.clear();
-
 			// Close the server
 			this._server.close(() => {
-				console.log('SSE transport stopped');
+				console.log('HTTP transport stopped');
 				resolve();
 			});
 		});
@@ -460,17 +532,17 @@ export class SseTransport {
 }
 
 /**
- * Create an SSE transport with the given options.
+ * Create an HTTP transport with the given options.
  *
  * @param options - Transport configuration
- * @returns A configured SSE transport
+ * @returns A configured HTTP transport
  *
  * @example
  * ```typescript
- * const transport = createSseTransport({ port: 3000 });
+ * const transport = createHttpTransport({ port: 3000 });
  * await transport.connect(mcpServer);
  * ```
  */
-export function createSseTransport(options: SseTransportOptions = {}): SseTransport {
-	return new SseTransport(options);
+export function createHttpTransport(options: HttpTransportOptions = {}): HttpTransport {
+	return new HttpTransport(options);
 }
