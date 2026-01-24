@@ -1,6 +1,6 @@
 {
 	"name": "sequentialthinking-tools",
-	"version": "0.0.15",
+	"version": "0.0.16",
 	"description": "MCP Server For Sequential Thinking Tools",
 	"type": "module",
 	"main": "dist/index.js",
