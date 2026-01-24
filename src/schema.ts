@@ -156,10 +156,10 @@ export const ToolRecommendationSchema = v.object({
 		v.string(),
 		v.description('Why this tool is recommended')
 	),
-	priority: v.pipe(
+	priority: v.optional(v.pipe(
 		v.number(),
-		v.description('Order in the recommendation sequence')
-	),
+		v.description('Order in the recommendation sequence (default: 999)')
+	)),
 	suggested_inputs: v.optional(v.pipe(
 		v.record(v.string(), v.unknown()),
 		v.description('Optional suggested parameters')
@@ -211,10 +211,10 @@ export const SkillRecommendationSchema = v.object({
 		v.string(),
 		v.description('Why this skill is recommended')
 	),
-	priority: v.pipe(
+	priority: v.optional(v.pipe(
 		v.number(),
-		v.description('Order in the recommendation sequence')
-	),
+		v.description('Order in the recommendation sequence (default: 999)')
+	)),
 	alternatives: v.optional(v.pipe(
 		v.array(v.string()),
 		v.description('Alternative skills that could be used')

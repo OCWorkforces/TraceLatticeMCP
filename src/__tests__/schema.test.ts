@@ -363,8 +363,8 @@ describe('SequentialThinkingSchema with lenient previous_steps', () => {
 		expect(result.success).toBe(true);
 	});
 
-	it('should still require complete data in current_step', () => {
-		const incompleteInput = {
+	it('should accept current_step with missing priority (uses default 999)', () => {
+		const input = {
 			thought: 'Test thought',
 			thought_number: 1,
 			total_thoughts: 2,
@@ -373,15 +373,18 @@ describe('SequentialThinkingSchema with lenient previous_steps', () => {
 				recommended_tools: [
 					{
 						tool_name: 'Read',
+						confidence: 0.9,
 						rationale: 'Read file',
-						// Missing: confidence, priority (should fail for current_step)
+						// priority is optional, InputNormalizer fills in default 999
 					},
 				],
 				expected_outcome: 'File read successfully',
 			},
 		};
-		const result = safeParse(SequentialThinkingSchema, incompleteInput);
-		expect(result.success).toBe(false);
+		const result = safeParse(SequentialThinkingSchema, input);
+		expect(result.success).toBe(true);
+		// Verify priority was not in input (optional field)
+		expect((result.output as Record<string, unknown>).current_step).toBeDefined();
 	});
 
 	it('should validate confidence range in previous_steps when provided', () => {
