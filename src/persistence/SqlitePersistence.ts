@@ -5,6 +5,28 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 
 /**
+ * Type definition for the better-sqlite3 Database interface.
+ * This allows us to use the library without importing it directly.
+ */
+interface Database {
+	exec(sql: string): void;
+	prepare(sql: string): Statement;
+	close(): void;
+	pragma(pragma: string): unknown;
+}
+
+interface Statement {
+	run(...params: unknown[]): RunResult;
+	get(...params: unknown[]): unknown;
+	all(...params: unknown[]): unknown[];
+}
+
+interface RunResult {
+	changes: number;
+	lastInsertRowid: number;
+}
+
+/**
  * SQLite-based persistence backend.
  *
  * Provides efficient, transactional persistence using SQLite.
@@ -12,42 +34,65 @@ import { homedir } from 'node:os';
  *
  * @example
  * ```typescript
- * const backend = new SqlitePersistence({
+ * const backend = await SqlitePersistence.create({
  *   dbPath: './data/history.db',
  *   enableWAL: true
  * });
  * ```
  */
 export class SqlitePersistence implements PersistenceBackend {
-	private _db: any; // Database instance (loaded dynamically)
-	private _dbPath: string;
+	private _db: Database;
 	private _maxHistorySize: number;
 	private _persistBranches: boolean;
 
-	constructor(options?: PersistenceConfig['options']) {
-		// Default to .claude/data in current directory or home directory
-		const defaultDataDir = existsSync('.claude/data') ? '.claude/data' : join(homedir(), '.claude/data');
-		this._dbPath = options?.dbPath ?? join(defaultDataDir, 'history.db');
+	private constructor(db: Database, options: PersistenceConfig['options']) {
+		this._db = db;
 		this._maxHistorySize = options?.maxHistorySize ?? 10000;
 		this._persistBranches = options?.persistBranches ?? true;
+		this._initializeSchema();
+	}
 
-		// Load better-sqlite3 dynamically
+	/**
+	 * Creates a new SqlitePersistence instance with dynamic import of better-sqlite3.
+	 *
+	 * @param options - Configuration options
+	 * @returns A Promise that resolves to a SqlitePersistence instance
+	 * @throws Error if better-sqlite3 is not installed
+	 *
+	 * @example
+	 * ```typescript
+	 * const backend = await SqlitePersistence.create({
+	 *   dbPath: './data/history.db',
+	 *   enableWAL: true
+	 * });
+	 * ```
+	 */
+	static async create(options?: PersistenceConfig['options']): Promise<SqlitePersistence> {
+		// Default to .claude/data in current directory or home directory
+		const defaultDataDir = existsSync('.claude/data') ? '.claude/data' : join(homedir(), '.claude/data');
+		const dbPath = options?.dbPath ?? join(defaultDataDir, 'history.db');
+
+		// Load better-sqlite3 dynamically (optional dependency)
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		let Database: any;
 		try {
-			// eslint-disable-next-line @typescript-eslint/no-var-requires
-			const Database = require('better-sqlite3');
-			this._db = new Database(this._dbPath);
-
-			// Enable WAL mode for better concurrency if specified
-			if (options?.enableWAL !== false) {
-				this._db.pragma('journal_mode = WAL');
-			}
-
-			this._initializeSchema();
-		} catch (error) {
+			// @ts-expect-error - better-sqlite3 is an optional dependency
+			const module = await import('better-sqlite3');
+			Database = module.default;
+		} catch {
 			throw new Error(
 				`SQLite persistence requires 'better-sqlite3' package. Install it with: npm install better-sqlite3`
 			);
 		}
+
+		const db = new Database(dbPath);
+
+		// Enable WAL mode for better concurrency if specified
+		if (options?.enableWAL !== false) {
+			db.pragma('journal_mode = WAL');
+		}
+
+		return new SqlitePersistence(db, options);
 	}
 
 	private _initializeSchema(): void {
@@ -171,10 +216,7 @@ export class SqlitePersistence implements PersistenceBackend {
 	 * Call this when shutting down the application.
 	 */
 	public close(): void {
-		if (this._db) {
-			this._db.close();
-			this._db = null;
-		}
+		this._db.close();
 	}
 
 	/**

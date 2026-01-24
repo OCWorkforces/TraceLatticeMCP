@@ -225,6 +225,178 @@ describe('InputNormalizer', () => {
 
 			expect(normalized.previous_steps).toBeUndefined();
 		});
+
+		it('should fill in default confidence (0.5) for missing tool confidence in previous_steps', () => {
+			const input = {
+				thought: 'Test thought',
+				thought_number: 2,
+				total_thoughts: 2,
+				next_thought_needed: false,
+				previous_steps: [
+					{
+						step_description: 'Previous step',
+						recommended_tools: [
+							{
+								tool_name: 'Grep',
+								rationale: 'Search code',
+								// Missing: confidence, priority
+							},
+						],
+					},
+				],
+			} as unknown;
+
+			const normalized = normalizeInput(input) as ThoughtData;
+
+			expect(normalized.previous_steps?.[0].recommended_tools?.[0].confidence).toBe(0.5);
+		});
+
+		it('should fill in default priority (999) for missing tool priority in previous_steps', () => {
+			const input = {
+				thought: 'Test thought',
+				thought_number: 2,
+				total_thoughts: 2,
+				next_thought_needed: false,
+				previous_steps: [
+					{
+						step_description: 'Previous step',
+						recommended_tools: [
+							{
+								tool_name: 'Read',
+								rationale: 'Read file',
+								// Missing: priority
+							},
+						],
+					},
+				],
+			} as unknown;
+
+			const normalized = normalizeInput(input) as ThoughtData;
+
+			expect(normalized.previous_steps?.[0].recommended_tools?.[0].priority).toBe(999);
+		});
+
+		it('should fill in default rationale (empty string) for missing tool rationale in previous_steps', () => {
+			const input = {
+				thought: 'Test thought',
+				thought_number: 2,
+				total_thoughts: 2,
+				next_thought_needed: false,
+				previous_steps: [
+					{
+						step_description: 'Previous step',
+						recommended_tools: [
+							{
+								tool_name: 'Task',
+								// Missing: rationale
+							},
+						],
+					},
+				],
+			} as unknown;
+
+			const normalized = normalizeInput(input) as ThoughtData;
+
+			expect(normalized.previous_steps?.[0].recommended_tools?.[0].rationale).toBe('');
+		});
+
+		it('should fill in default expected_outcome (empty string) for missing in previous_steps', () => {
+			const input = {
+				thought: 'Test thought',
+				thought_number: 2,
+				total_thoughts: 2,
+				next_thought_needed: false,
+				previous_steps: [
+					{
+						step_description: 'Previous step',
+						recommended_tools: [
+							{
+								tool_name: 'Grep',
+								rationale: 'Search code',
+							},
+						],
+						// Missing: expected_outcome
+					},
+				],
+			} as unknown;
+
+			const normalized = normalizeInput(input) as ThoughtData;
+
+			expect(normalized.previous_steps?.[0].expected_outcome).toBe('');
+		});
+
+		it('should preserve existing confidence and priority when present in previous_steps', () => {
+			const input = {
+				thought: 'Test thought',
+				thought_number: 2,
+				total_thoughts: 2,
+				next_thought_needed: false,
+				previous_steps: [
+					{
+						step_description: 'Previous step',
+						recommended_tools: [
+							{
+								tool_name: 'Grep',
+								rationale: 'Search code',
+								confidence: 0.8,
+								priority: 2,
+							},
+						],
+						expected_outcome: 'Files found',
+					},
+				],
+			} as unknown;
+
+			const normalized = normalizeInput(input) as ThoughtData;
+
+			expect(normalized.previous_steps?.[0].recommended_tools?.[0].confidence).toBe(0.8);
+			expect(normalized.previous_steps?.[0].recommended_tools?.[0].priority).toBe(2);
+			expect(normalized.previous_steps?.[0].expected_outcome).toBe('Files found');
+		});
+
+		it('should handle mixed complete and partial tool recommendations in previous_steps', () => {
+			const input = {
+				thought: 'Test thought',
+				thought_number: 2,
+				total_thoughts: 2,
+				next_thought_needed: false,
+				previous_steps: [
+					{
+						step_description: 'Step 1 - partial',
+						recommended_tools: [
+							{
+								tool_name: 'Read',
+								rationale: 'Read file',
+							},
+						],
+					},
+					{
+						step_description: 'Step 2 - complete',
+						recommended_tools: [
+							{
+								tool_name: 'Grep',
+								rationale: 'Search code',
+								confidence: 0.9,
+								priority: 1,
+							},
+						],
+						expected_outcome: 'Found matches',
+					},
+				],
+			} as unknown;
+
+			const normalized = normalizeInput(input) as ThoughtData;
+
+			// Step 1 should have defaults filled in
+			expect(normalized.previous_steps?.[0].recommended_tools?.[0].confidence).toBe(0.5);
+			expect(normalized.previous_steps?.[0].recommended_tools?.[0].priority).toBe(999);
+			expect(normalized.previous_steps?.[0].expected_outcome).toBe('');
+
+			// Step 2 should preserve original values
+			expect(normalized.previous_steps?.[1].recommended_tools?.[0].confidence).toBe(0.9);
+			expect(normalized.previous_steps?.[1].recommended_tools?.[0].priority).toBe(1);
+			expect(normalized.previous_steps?.[1].expected_outcome).toBe('Found matches');
+		});
 	});
 
 	describe('edge cases', () => {

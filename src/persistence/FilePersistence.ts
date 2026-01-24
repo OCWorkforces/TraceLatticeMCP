@@ -77,7 +77,7 @@ export class FilePersistence implements PersistenceBackend {
 
 			// Validate and filter
 			return Array.isArray(data) ? data : [];
-		} catch (error) {
+		} catch {
 			// If file is corrupted, start fresh
 			return [];
 		}
@@ -110,7 +110,7 @@ export class FilePersistence implements PersistenceBackend {
 			const data = JSON.parse(content) as ThoughtData[];
 
 			return Array.isArray(data) ? data : undefined;
-		} catch (error) {
+		} catch {
 			return undefined;
 		}
 	}
@@ -135,7 +135,7 @@ export class FilePersistence implements PersistenceBackend {
 					}
 				}
 			}
-		} catch (error) {
+		} catch {
 			// Ignore errors during clear
 		}
 	}

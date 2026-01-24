@@ -91,22 +91,31 @@ export class SkillWatcher {
 		const skillDirs = ['.claude/skills', join(homedir(), '.claude/skills')];
 
 		this._watcher = watch(skillDirs, {
-			ignored: /node_modules/,
+			ignored: [/node_modules/, /\.DS_Store$/],
 			persistent: true,
 		});
 
 		this._watcher.on('add', async (path) => {
-			console.error(`Skill added: ${path}`);
+			// Only log if not .DS_Store
+			if (!path.includes('.DS_Store')) {
+				this.log(`Skill added: ${path.split('/').pop()}`);
+			}
 			await this.skillRegistry.discoverAsync();
 		});
 
 		this._watcher.on('change', async (path) => {
-			console.error(`Skill modified: ${path}`);
+			// Only log if not .DS_Store
+			if (!path.includes('.DS_Store')) {
+				this.log(`Skill modified: ${path.split('/').pop()}`);
+			}
 			await this.skillRegistry.discoverAsync();
 		});
 
 		this._watcher.on('unlink', async (path) => {
-			console.error(`Skill removed: ${path}`);
+			// Only log if not .DS_Store
+			if (!path.includes('.DS_Store')) {
+				this.log(`Skill removed: ${path.split('/').pop()}`);
+			}
 			this.handleSkillRemoval(path);
 		});
 	}
@@ -140,6 +149,19 @@ export class SkillWatcher {
 				);
 			}
 		}
+	}
+
+	/**
+	 * Internal logging method.
+	 * @param message - The message to log
+	 * @private
+	 */
+	private log(message: string): void {
+		// Optional: check environment variable to disable watcher logs
+		if (process.env.WATCHER_VERBOSE !== 'true') {
+			return;
+		}
+		console.error(`[Watcher] ${message}`);
 	}
 
 	/**

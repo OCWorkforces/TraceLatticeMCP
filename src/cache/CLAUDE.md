@@ -4,17 +4,18 @@ This directory contains caching functionality for skill and tool discovery resul
 
 ## Files
 
-- `DiscoveryCache.ts` - Caching layer for discovery operations
+- `DiscoveryCache.ts` - LRU cache with TTL for discovery operations
+- `index.ts` - Module exports and factory function
 
 ## DiscoveryCache
 
-The `DiscoveryCache` class provides time-based caching for skill discovery results to avoid repeated filesystem operations.
+The `DiscoveryCache` class provides an LRU (Least Recently Used) cache with TTL (Time-To-Live) for caching skill and tool discovery results to avoid repeated filesystem operations.
 
 ### Configuration
 
 ```typescript
 interface DiscoveryCacheOptions {
-  ttl?: number;      // Time-to-live in seconds (default: 300)
+  ttl?: number;      // Time-to-live in milliseconds (default: 300000 = 5 min)
   maxSize?: number;  // Maximum cache entries (default: 100)
 }
 ```
@@ -46,7 +47,7 @@ The cache is used by:
 - `SkillRegistry` - for caching skill discovery results
 
 Cache configuration is passed through environment variables:
-- `DISCOVERY_CACHE_TTL` - TTL in milliseconds (default: 300000)
+- `DISCOVERY_CACHE_TTL` - TTL in milliseconds (default: 300000 = 5 min)
 - `DISCOVERY_CACHE_MAX_SIZE` - Max entries (default: 100)
 
 ## CacheEntry Type

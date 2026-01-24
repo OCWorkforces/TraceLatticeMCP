@@ -406,7 +406,7 @@ export class SkillRegistry {
 
 				const entries = await readdir(skillDir, { withFileTypes: true });
 				for (const entry of entries) {
-					if (entry.isFile() && (entry.name.endsWith('.md') || entry.name.endsWith('.yml') || entry.name.endsWith('.yaml'))) {
+					if (entry.isFile() && entry.name !== '.DS_Store' && (entry.name.endsWith('.md') || entry.name.endsWith('.yml') || entry.name.endsWith('.yaml'))) {
 						const filePath = join(skillDir, entry.name);
 						try {
 							const content = await readFile(filePath, 'utf-8');

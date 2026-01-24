@@ -5,6 +5,7 @@ This directory contains connection pooling components for multi-user sessions.
 ## Files
 
 - `ConnectionPool.ts` - Connection pool for managing isolated user sessions
+- `index.ts` - Module exports and factory function
 
 ## ConnectionPool
 
@@ -22,8 +23,8 @@ The `ConnectionPool` class manages isolated sessions for multiple users in SSE t
 ```typescript
 interface ConnectionPoolOptions {
   maxSessions?: number;      // Maximum concurrent sessions (default: 100)
-  sessionTimeout?: number;   // Session timeout in ms (default: 30 minutes)
-  cleanupInterval?: number;  // Cleanup interval in ms (default: 5 minutes)
+  sessionTimeout?: number;   // Session timeout in ms (default: 300000 = 5 minutes)
+  cleanupInterval?: number;  // Cleanup interval in ms (default: 60000 = 1 minute)
 }
 ```
 

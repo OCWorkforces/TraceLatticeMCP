@@ -9,6 +9,7 @@ This directory contains all test files for the MCP Sequential Thinking Server.
 | `container.test.ts` | DI container tests | 48 |
 | `persistence.test.ts` | Persistence backend tests | 42 |
 | `sse-transport.test.ts` | SSE transport tests | 33 |
+| `http-transport.test.ts` | HTTP transport tests | 27 |
 | `worker-manager.test.ts` | Worker pool tests | 33 |
 | `connection-pool.test.ts` | Connection pool tests | 39 |
 | `sequentialthinking-tools.test.ts` | MCP tool comprehensive tests | 35 |

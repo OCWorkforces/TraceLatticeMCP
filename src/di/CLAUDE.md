@@ -5,6 +5,7 @@ This directory contains the dependency injection (DI) container implementation.
 ## Files
 
 - `Container.ts` - DI container for managing dependencies
+- `index.ts` - Module exports
 
 ## Container
 
@@ -70,8 +71,11 @@ The following services are registered in the DI container:
 | `FileConfig` | Instance | File-based config |
 | `Persistence` | Instance | Persistence backend (may be null) |
 | `HistoryManager` | Factory | History and branch management |
-| `ThoughtFormatter` | Transient | Response formatting |
+| `ThoughtFormatter` | Factory | Response formatting |
 | `ThoughtProcessor` | Factory | Thought processing logic |
+| `ToolRegistry` | Factory | Tool registry |
+| `SkillRegistry` | Factory | Skill registry |
+| `DiscoveryCache` | Instance | Discovery cache |
 
 ## Benefits
 

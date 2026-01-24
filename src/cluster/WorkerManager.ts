@@ -21,6 +21,7 @@ import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
+import { cpus } from 'node:os';
 import type { ThoughtData } from '../types.js';
 
 export interface WorkerManagerOptions {
@@ -96,7 +97,7 @@ export class WorkerManager {
 	private _terminated = false;
 
 	constructor(options: WorkerManagerOptions = {}) {
-		this._maxWorkers = options.maxWorkers ?? require('node:os').cpus().length;
+		this._maxWorkers = options.maxWorkers ?? cpus().length;
 		this._workerScript = options.workerScript ?? join(dirname(fileURLToPath(import.meta.url)), 'worker.js');
 		this._workerTimeout = options.workerTimeout ?? 30000;
 		this._enableHealthCheck = options.enableHealthCheck ?? true;

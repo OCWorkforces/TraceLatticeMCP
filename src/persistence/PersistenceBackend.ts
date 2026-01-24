@@ -139,23 +139,20 @@ export async function createPersistenceBackend(
 	}
 
 	switch (config.backend) {
-		case 'file':
+		case 'file': {
 			const { FilePersistence } = await import('./FilePersistence.js');
 			return new FilePersistence(config.options);
+		}
 
-		case 'sqlite':
-			try {
-				const { SqlitePersistence } = await import('./SqlitePersistence.js');
-				return new SqlitePersistence(config.options);
-			} catch (error) {
-				throw new Error(
-					`SQLite persistence requires 'better-sqlite3' package. Install it with: npm install better-sqlite3`
-				);
-			}
+		case 'sqlite': {
+			const { SqlitePersistence } = await import('./SqlitePersistence.js');
+			return await SqlitePersistence.create(config.options);
+		}
 
-		case 'memory':
+		case 'memory': {
 			const { MemoryPersistence } = await import('./MemoryPersistence.js');
 			return new MemoryPersistence();
+		}
 
 		default:
 			throw new Error(`Unknown persistence backend: ${config.backend}`);
