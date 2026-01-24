@@ -443,7 +443,7 @@ export class HttpTransport {
 			let jsonRpcRequest;
 			try {
 				jsonRpcRequest = JSON.parse(body);
-			} catch (error) {
+			} catch {
 				clearTimeout(timeout);
 				res.writeHead(200, { 'Content-Type': 'application/json' });
 				res.end(

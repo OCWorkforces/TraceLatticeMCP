@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { SequentialThinkingSchema } from '../schema.js';
+import {
+	SequentialThinkingSchema,
+	PartialToolRecommendationSchema,
+	PartialStepRecommendationSchema,
+} from '../schema.js';
 import { safeParse } from 'valibot';
 
 describe('SequentialThinkingSchema', () => {
@@ -126,5 +130,278 @@ describe('SequentialThinkingSchema', () => {
 		};
 		const result = safeParse(SequentialThinkingSchema, withBranch);
 		expect(result.success).toBe(true);
+	});
+});
+
+describe('PartialToolRecommendationSchema', () => {
+	it('should validate minimal valid input (only required fields)', () => {
+		const minimal = {
+			tool_name: 'Read',
+			rationale: 'Read the file',
+		};
+		const result = safeParse(PartialToolRecommendationSchema, minimal);
+		expect(result.success).toBe(true);
+	});
+
+	it('should accept optional confidence field', () => {
+		const withConfidence = {
+			tool_name: 'Grep',
+			rationale: 'Search code',
+			confidence: 0.8,
+		};
+		const result = safeParse(PartialToolRecommendationSchema, withConfidence);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.output.confidence).toBe(0.8);
+		}
+	});
+
+	it('should accept optional priority field', () => {
+		const withPriority = {
+			tool_name: 'Write',
+			rationale: 'Write to file',
+			priority: 5,
+		};
+		const result = safeParse(PartialToolRecommendationSchema, withPriority);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.output.priority).toBe(5);
+		}
+	});
+
+	it('should accept all optional fields', () => {
+		const complete = {
+			tool_name: 'Edit',
+			rationale: 'Edit file',
+			confidence: 0.9,
+			priority: 1,
+			suggested_inputs: { filePath: '/path/to/file' },
+			alternatives: ['Write'],
+		};
+		const result = safeParse(PartialToolRecommendationSchema, complete);
+		expect(result.success).toBe(true);
+	});
+
+	it('should validate confidence range 0-1 when provided', () => {
+		const invalidConfidence = {
+			tool_name: 'Read',
+			rationale: 'Read file',
+			confidence: 1.5,
+		};
+		const result = safeParse(PartialToolRecommendationSchema, invalidConfidence);
+		expect(result.success).toBe(false);
+	});
+
+	it('should require tool_name', () => {
+		const missingToolName = {
+			rationale: 'Some rationale',
+		};
+		const result = safeParse(PartialToolRecommendationSchema, missingToolName);
+		expect(result.success).toBe(false);
+	});
+
+	it('should require rationale', () => {
+		const missingRationale = {
+			tool_name: 'Read',
+		};
+		const result = safeParse(PartialToolRecommendationSchema, missingRationale);
+		expect(result.success).toBe(false);
+	});
+});
+
+describe('PartialStepRecommendationSchema', () => {
+	it('should validate minimal valid input (only required fields)', () => {
+		const minimal = {
+			step_description: 'Read the file',
+			recommended_tools: [
+				{
+					tool_name: 'Read',
+					rationale: 'Read the file',
+				},
+			],
+		};
+		const result = safeParse(PartialStepRecommendationSchema, minimal);
+		expect(result.success).toBe(true);
+	});
+
+	it('should accept optional expected_outcome field', () => {
+		const withOutcome = {
+			step_description: 'Search code',
+			recommended_tools: [
+				{
+					tool_name: 'Grep',
+					rationale: 'Search for pattern',
+				},
+			],
+			expected_outcome: 'List of matching files',
+		};
+		const result = safeParse(PartialStepRecommendationSchema, withOutcome);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.output.expected_outcome).toBe('List of matching files');
+		}
+	});
+
+	it('should accept optional recommended_skills field', () => {
+		const withSkills = {
+			step_description: 'Commit changes',
+			recommended_tools: [
+				{
+					tool_name: 'Bash',
+					rationale: 'Run git commands',
+				},
+			],
+			recommended_skills: [
+				{
+					skill_name: 'commit',
+					confidence: 0.95,
+					rationale: 'Handles git commit workflow',
+					priority: 1,
+				},
+			],
+		};
+		const result = safeParse(PartialStepRecommendationSchema, withSkills);
+		expect(result.success).toBe(true);
+	});
+
+	it('should accept optional next_step_conditions field', () => {
+		const withConditions = {
+			step_description: 'Analyze data',
+			recommended_tools: [
+				{
+					tool_name: 'Read',
+					rationale: 'Read data file',
+				},
+			],
+			next_step_conditions: ['Data loaded successfully', 'No errors encountered'],
+		};
+		const result = safeParse(PartialStepRecommendationSchema, withConditions);
+		expect(result.success).toBe(true);
+	});
+
+	it('should accept partial tool recommendations (missing confidence/priority)', () => {
+		const partialTools = {
+			step_description: 'Multi-step process',
+			recommended_tools: [
+				{
+					tool_name: 'Read',
+					rationale: 'Read file',
+				},
+				{
+					tool_name: 'Grep',
+					rationale: 'Search code',
+					confidence: 0.8,
+				},
+				{
+					tool_name: 'Write',
+					rationale: 'Write output',
+					priority: 1,
+				},
+			],
+		};
+		const result = safeParse(PartialStepRecommendationSchema, partialTools);
+		expect(result.success).toBe(true);
+	});
+
+	it('should require step_description', () => {
+		const missingDescription = {
+			recommended_tools: [
+				{
+					tool_name: 'Read',
+					rationale: 'Read file',
+				},
+			],
+		};
+		const result = safeParse(PartialStepRecommendationSchema, missingDescription);
+		expect(result.success).toBe(false);
+	});
+
+	it('should require recommended_tools array', () => {
+		const missingTools = {
+			step_description: 'Do something',
+		};
+		const result = safeParse(PartialStepRecommendationSchema, missingTools);
+		expect(result.success).toBe(false);
+	});
+});
+
+describe('SequentialThinkingSchema with lenient previous_steps', () => {
+	it('should accept partial previous_steps (missing confidence/priority/expected_outcome)', () => {
+		const input = {
+			thought: 'Test thought',
+			thought_number: 2,
+			total_thoughts: 3,
+			next_thought_needed: true,
+			current_step: {
+				step_description: 'Current step',
+				recommended_tools: [
+					{
+						tool_name: 'Read',
+						confidence: 0.9,
+						rationale: 'Read file',
+						priority: 1,
+					},
+				],
+				expected_outcome: 'File read successfully',
+			},
+			previous_steps: [
+				{
+					step_description: 'Previous step',
+					recommended_tools: [
+						{
+							tool_name: 'Grep',
+							rationale: 'Search code',
+							// Missing: confidence, priority
+						},
+					],
+					// Missing: expected_outcome
+				},
+			],
+		};
+		const result = safeParse(SequentialThinkingSchema, input);
+		expect(result.success).toBe(true);
+	});
+
+	it('should still require complete data in current_step', () => {
+		const incompleteInput = {
+			thought: 'Test thought',
+			thought_number: 1,
+			total_thoughts: 2,
+			current_step: {
+				step_description: 'Current step',
+				recommended_tools: [
+					{
+						tool_name: 'Read',
+						rationale: 'Read file',
+						// Missing: confidence, priority (should fail for current_step)
+					},
+				],
+				expected_outcome: 'File read successfully',
+			},
+		};
+		const result = safeParse(SequentialThinkingSchema, incompleteInput);
+		expect(result.success).toBe(false);
+	});
+
+	it('should validate confidence range in previous_steps when provided', () => {
+		const input = {
+			thought: 'Test thought',
+			thought_number: 2,
+			total_thoughts: 2,
+			previous_steps: [
+				{
+					step_description: 'Previous step',
+					recommended_tools: [
+						{
+							tool_name: 'Grep',
+							rationale: 'Search code',
+							confidence: 1.5, // Invalid - should fail
+						},
+					],
+				},
+			],
+		};
+		const result = safeParse(SequentialThinkingSchema, input);
+		expect(result.success).toBe(false);
 	});
 });

@@ -2,8 +2,8 @@
  * Display formatting for thoughts and recommendations.
  *
  * This module provides the `ThoughtFormatter` class which handles all
- * presentation logic for thought data, including boxed output formatting
- * and structured display of tool/skill recommendations.
+ * presentation logic for thought data, including clean, simple output
+ * formatting and structured display of tool/skill recommendations.
  *
  * @module formatter
  */
@@ -15,12 +15,11 @@ import chalk from 'chalk';
  * Formatter for thought data and step recommendations.
  *
  * This class separates presentation concerns from business logic, providing
- * visually appealing, boxed output for thoughts with structured display of
+ * clean, readable output for thoughts with structured display of
  * tool and skill recommendations.
  *
  * @remarks
- * Output Format example shows a boxed thought with visual indicators.
- * Visual Indicators:
+ * Output Format is clean and simple:
  * - 💭 Thought - Regular thought (blue)
  * - 🔄 Revision - Thought that revises a previous thought (yellow)
  * - 🌿 Branch - Thought that creates a new branch (green)
@@ -78,74 +77,44 @@ export class ThoughtFormatter {
 	 *
 	 * const formatted = formatter.formatRecommendation(step);
 	 * console.log(formatted);
-	 * // Output:
-	 * // Step: Search for API endpoints
-	 * // Recommended Tools:
-	 * //   - Grep (priority: 1)
-	 * //     Rationale: Best for searching code patterns
-	 * //     Suggested inputs: {"pattern":"export.*function"}
-	 * // Expected Outcome: List of all exported API functions
-	 * // Conditions for next step:
-	 * //   - If no results, try broader pattern
 	 * ```
 	 */
 	public formatRecommendation(step: StepRecommendation): string {
-		const tools = step.recommended_tools
-			.map((tool) => {
-				const alternatives = tool.alternatives?.length
-					? ` (alternatives: ${tool.alternatives.join(', ')})`
-					: '';
-				const inputs = tool.suggested_inputs
-					? `\n    Suggested inputs: ${JSON.stringify(tool.suggested_inputs)}`
-					: '';
-				return `  - ${tool.tool_name} (priority: ${tool.priority})${alternatives}
-    Rationale: ${tool.rationale}${inputs}`;
-			})
-			.join('\n');
+		const parts: string[] = [];
 
-		const skills = step.recommended_skills?.length
-			? step.recommended_skills
-					.map((skill) => {
-						const alternatives = skill.alternatives?.length
-							? ` (alternatives: ${skill.alternatives.join(', ')})`
-							: '';
-						const toolsInfo = skill.allowed_tools?.length
-							? `\n    Allowed tools: ${skill.allowed_tools.join(', ')}`
-							: '';
-						return `  - ${skill.skill_name} (priority: ${skill.priority})${alternatives}
-    Rationale: ${skill.rationale}${toolsInfo}`;
-					})
-					.join('\n')
-			: '';
-
-		let output = `Step: ${step.step_description}`;
-
+		// Add tools if present
 		if (step.recommended_tools?.length) {
-			output += `\nRecommended Tools:\n${tools}`;
+			const toolNames = step.recommended_tools
+				.map(t => t.tool_name)
+				.join(', ');
+			parts.push(chalk.cyan(`Tools: ${toolNames}`));
 		}
 
-		if (skills) {
-			output += `\nRecommended Skills:\n${skills}`;
+		// Add skills if present
+		if (step.recommended_skills?.length) {
+			const skillNames = step.recommended_skills
+				.map(s => s.skill_name)
+				.join(', ');
+			parts.push(chalk.green(`Skills: ${skillNames}`));
 		}
 
-		output += `\nExpected Outcome: ${step.expected_outcome}${
-			step.next_step_conditions
-				? `\nConditions for next step:\n  - ${step.next_step_conditions.join('\n  - ')}`
-				: ''
-		}`;
+		// Add expected outcome
+		if (step.expected_outcome) {
+			parts.push(chalk.gray(`→ ${step.expected_outcome}`));
+		}
 
-		return output;
+		return parts.join(' | ');
 	}
 
 	/**
-	 * Formats a thought into a visually appealing boxed display.
+	 * Formats a thought into a clean, simple display.
 	 *
-	 * Creates a bordered box containing the thought content with an appropriate
+	 * Creates a clean output containing the thought content with an appropriate
 	 * header indicating whether this is a regular thought, revision, or branch.
-	 * Any current step recommendation is appended below the box.
+	 * Any current step recommendation is appended below.
 	 *
 	 * @param thoughtData - The thought data to format
-	 * @returns A formatted string with boxed thought and recommendations
+	 * @returns A formatted string with thought and recommendations
 	 *
 	 * @example
 	 * ```typescript
@@ -156,29 +125,23 @@ export class ThoughtFormatter {
 	 *   total_thoughts: 3,
 	 *   next_thought_needed: true
 	 * });
-	 * // 💭 Thought 1/3
+	 * // Output: 💭 Thought 1/3: I should read the configuration file
 	 *
-	 * // Revision thought
-	 * const revision = formatter.formatThought({
-	 *   thought: 'Actually, I should read the README first',
-	 *   thought_number: 2,
-	 *   total_thoughts: 3,
-	 *   is_revision: true,
-	 *   revises_thought: 1,
-	 *   next_thought_needed: true
-	 * });
-	 * // 🔄 Revision 2/3 (revising thought 1)
-	 *
-	 * // Branch thought
-	 * const branch = formatter.formatThought({
-	 *   thought: 'Let me try a different approach',
+	 * // With recommendation
+	 * const withRec = formatter.formatThought({
+	 *   thought: 'I need to search the codebase',
 	 *   thought_number: 1,
-	 *   total_thoughts: 2,
-	 *   branch_from_thought: 5,
-	 *   branch_id: 'alt-approach',
-	 *   next_thought_needed: true
+	 *   total_thoughts: 3,
+	 *   next_thought_needed: true,
+	 *   current_step: {
+	 *     step_description: 'Search for files',
+	 *     recommended_tools: [{ tool_name: 'Grep', priority: 1 }],
+	 *     expected_outcome: 'List of matching files'
+	 *   }
 	 * });
-	 * // 🌿 Branch 1/2 (from thought 5, ID: alt-approach)
+	 * // Output:
+	 * // 💭 Thought 1/3: I need to search the codebase
+	 * //   → Tools: Grep | List of matching files
 	 * ```
 	 */
 	public formatThought(thoughtData: ThoughtData): string {
@@ -189,38 +152,40 @@ export class ThoughtFormatter {
 			is_revision,
 			revises_thought,
 			branch_from_thought,
-			branch_id,
 			current_step,
 		} = thoughtData;
 
-		let prefix = '';
-		let context = '';
+		let icon = '';
+		let label = 'Thought';
+		let suffix = '';
 
 		if (is_revision) {
-			prefix = chalk.yellow('🔄 Revision');
-			context = ` (revising thought ${revises_thought})`;
+			icon = chalk.yellow('🔄');
+			label = 'Revision';
+			suffix = chalk.gray(` (revise #${revises_thought})`);
 		} else if (branch_from_thought) {
-			prefix = chalk.green('🌿 Branch');
-			context = ` (from thought ${branch_from_thought}, ID: ${branch_id})`;
+			icon = chalk.green('🌿');
+			label = 'Branch';
+			suffix = chalk.gray(` (from #${branch_from_thought})`);
 		} else {
-			prefix = chalk.blue('💭 Thought');
-			context = '';
+			icon = chalk.blue('💭');
 		}
 
-		const header = `${prefix} ${thought_number}/${total_thoughts}${context}`;
-		let content = thought;
+		// Build header: "💭 Thought 1/3: "
+		const header = `${icon} ${label} ${thought_number}/${total_thoughts}${suffix}: `;
 
+		// Build content lines
+		const lines: string[] = [];
+
+		// Add the thought content
+		lines.push(`${header}${thought}`);
+
+		// Add recommendation if present
 		if (current_step) {
-			content = `${thought}\n\nRecommendation:\n${this.formatRecommendation(current_step)}`;
+			const recommendation = this.formatRecommendation(current_step);
+			lines.push(`  ${recommendation}`);
 		}
 
-		const border = '─'.repeat(Math.max(header.length, content.length) + 4);
-
-		return `
- ┌${border}┐
- │ ${header} │
- ├${border}┤
- │ ${content.padEnd(border.length - 2)} │
- └${border}┘`;
+		return lines.join('\n');
 	}
 }

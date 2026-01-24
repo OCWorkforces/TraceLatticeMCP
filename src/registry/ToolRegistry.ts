@@ -546,7 +546,7 @@ export class ToolRegistry {
 			}
 
 			return result;
-		} catch (error) {
+		} catch {
 			return { _error: 'YAML parse error' };
 		}
 	}

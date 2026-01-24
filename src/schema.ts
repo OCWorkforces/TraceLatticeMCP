@@ -275,6 +275,129 @@ export const StepRecommendationSchema = v.object({
 });
 
 /**
+ * Valibot schema for validating partial tool recommendation objects.
+ *
+ * This is a lenient version of ToolRecommendationSchema used for previous_steps,
+ * where LLMs naturally provide partial/skeletal data. Only tool_name and rationale
+ * are required, while confidence and priority are optional with default values.
+ *
+ * Validates that a partial tool recommendation has:
+ * - A tool name (required)
+ * - A rationale explaining the recommendation (required)
+ * - An optional confidence score (defaults to 0.5)
+ * - An optional priority number (defaults to 999)
+ * - Optional suggested input parameters
+ * - Optional alternative tools
+ *
+ * @remarks
+ * **Design Rationale:**
+ * LLMs tend to provide complete data for current_step but only partial data
+ * for previous_steps (historical context). This schema accommodates that natural
+ * LLM behavior while maintaining data integrity through sensible defaults.
+ *
+ * @example
+ * ```typescript
+ * import { safeParse } from 'valibot';
+ * import { PartialToolRecommendationSchema } from './schema.js';
+ *
+ * // Minimal valid input (LLM often generates this for previous_steps)
+ * const result = safeParse(PartialToolRecommendationSchema, {
+ *   tool_name: 'Read',
+ *   rationale: 'Read the file'
+ * });
+ * // confidence and priority will be filled in by the normalizer
+ * ```
+ */
+export const PartialToolRecommendationSchema = v.object({
+	tool_name: v.pipe(
+		v.string(),
+		v.description('Name of the tool being recommended')
+	),
+	rationale: v.pipe(
+		v.string(),
+		v.description('Why this tool is recommended')
+	),
+	confidence: v.optional(v.pipe(
+		v.number(),
+		v.minValue(0),
+		v.maxValue(1),
+		v.description('0-1 indicating confidence in recommendation (default: 0.5)')
+	)),
+	priority: v.optional(v.pipe(
+		v.number(),
+		v.description('Order in the recommendation sequence (default: 999)')
+	)),
+	suggested_inputs: v.optional(v.pipe(
+		v.record(v.string(), v.unknown()),
+		v.description('Optional suggested parameters')
+	)),
+	alternatives: v.optional(v.pipe(
+		v.array(v.string()),
+		v.description('Alternative tools that could be used')
+	))
+});
+
+/**
+ * Valibot schema for validating partial step recommendation objects.
+ *
+ * This is a lenient version of StepRecommendationSchema used for previous_steps,
+ * where LLMs naturally provide partial/skeletal data. Only step_description is
+ * strictly required, while expected_outcome and tool recommendation fields are
+ * optional with default values.
+ *
+ * Validates that a partial step recommendation has:
+ * - A step description (required)
+ * - An array of recommended tools (with optional confidence/priority)
+ * - An optional array of recommended skills
+ * - An optional expected outcome (defaults to empty string)
+ * - Optional conditions for the next step
+ *
+ * @remarks
+ * **Design Rationale:**
+ * LLMs provide complete, detailed data for current_step but only brief summaries
+ * for previous_steps. This schema allows the natural LLM behavior while the
+ * InputNormalizer fills in sensible defaults for missing fields.
+ *
+ * @example
+ * ```typescript
+ * import { safeParse } from 'valibot';
+ * import { PartialStepRecommendationSchema } from './schema.js';
+ *
+ * // Minimal valid input (LLM often generates this for previous_steps)
+ * const result = safeParse(PartialStepRecommendationSchema, {
+ *   step_description: 'Read the file',
+ *   recommended_tools: [{
+ *     tool_name: 'Read',
+ *     rationale: 'Read the file'
+ *   }]
+ * });
+ * // confidence, priority, and expected_outcome will be filled in by normalizer
+ * ```
+ */
+export const PartialStepRecommendationSchema = v.object({
+	step_description: v.pipe(
+		v.string(),
+		v.description('What needs to be done')
+	),
+	recommended_tools: v.pipe(
+		v.array(PartialToolRecommendationSchema),
+		v.description('Tools recommended for this step')
+	),
+	recommended_skills: v.optional(v.pipe(
+		v.array(SkillRecommendationSchema),
+		v.description('Skills recommended for this step')
+	)),
+	expected_outcome: v.optional(v.pipe(
+		v.string(),
+		v.description('What to expect from this step (default: empty string)')
+	)),
+	next_step_conditions: v.optional(v.pipe(
+		v.array(v.string()),
+		v.description('Conditions to consider for the next step')
+	))
+});
+
+/**
  * Main Valibot schema for validating sequential thinking tool input.
  *
  * This is the primary schema used for the sequential thinking MCP tool.
@@ -369,8 +492,8 @@ export const SequentialThinkingSchema = v.object({
 		v.description('Current step recommendation')
 	)),
 	previous_steps: v.optional(v.pipe(
-		v.array(StepRecommendationSchema),
-		v.description('Steps already recommended')
+		v.array(PartialStepRecommendationSchema),
+		v.description('Steps already recommended (lenient schema - allows partial data with defaults)')
 	)),
 	remaining_steps: v.optional(v.pipe(
 		v.array(v.string()),

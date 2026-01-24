@@ -393,7 +393,7 @@ export class SseTransport {
 				res.writeHead(503, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Server not ready' }));
 			}
-		} catch (error) {
+		} catch {
 			res.writeHead(400, { 'Content-Type': 'application/json' });
 			res.end(JSON.stringify({ error: 'Invalid JSON' }));
 		}

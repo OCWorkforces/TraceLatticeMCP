@@ -90,7 +90,7 @@ export class ToolWatcher {
 		const toolDirs = ['.claude/tools', join(homedir(), '.claude/tools')];
 
 		this._watcher = watch(toolDirs, {
-			ignored: /node_modules/,
+			ignored: [/node_modules/, /\.DS_Store$/],
 			persistent: true,
 		});
 
@@ -119,13 +119,11 @@ export class ToolWatcher {
 			return;
 		}
 
-		this.log(`Tool file added: ${toolPath}`);
-
 		// Trigger rediscovery to pick up the new tool
 		try {
 			await this._toolRegistry.discoverAsync();
 		} catch (error) {
-			this.log(`Failed to discover tools after file add: ${error instanceof Error ? error.message : String(error)}`);
+			this.log(`Failed to discover tools: ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
 
@@ -145,8 +143,6 @@ export class ToolWatcher {
 			return;
 		}
 
-		this.log(`Tool file removed: ${toolPath}`);
-
 		// Extract tool name from filename (e.g., "my-tool.tool.md" -> "my-tool")
 		const fileName = basename(toolPath);
 		const toolName = fileName.replace('.tool.md', '');
@@ -154,22 +150,24 @@ export class ToolWatcher {
 		if (toolName) {
 			try {
 				this._toolRegistry.removeTool(toolName);
-				this.log(`Unregistered tool: ${toolName}`);
 			} catch (error) {
 				// Tool might not have been registered, that's okay
-				this.log(`Note: Tool '${toolName}' was not registered: ${error instanceof Error ? error.message : String(error)}`);
+				this.log(`Tool '${toolName}' not registered: ${error instanceof Error ? error.message : String(error)}`);
 			}
 		}
 	}
 
 	/**
 	 * Internal logging method.
-	 *
+	 * Only logs when WATCHER_VERBOSE environment variable is set.
 	 * @param message - The message to log
 	 * @private
 	 */
 	private log(message: string): void {
-		console.error(message);
+		// Optional: check environment variable to enable watcher logs
+		if (process.env.WATCHER_VERBOSE === 'true') {
+			console.error(`[Watcher] ${message}`);
+		}
 	}
 
 	/**
