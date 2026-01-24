@@ -45,9 +45,12 @@ npm run type-check
     ├── types.ts              # TypeScript interfaces
     ├── errors.ts             # Custom error classes
     ├── ServerConfig.ts       # Server configuration
+    ├── IHistoryManager.ts    # History manager interface
     ├── HistoryManager.ts     # History and branch management
     ├── di/                   # Dependency injection
     │   └── Container.ts      # DI container implementation
+    ├── cache/                # Discovery cache
+    │   └── DiscoveryCache.ts # LRU cache with TTL
     ├── config/               # Configuration
     │   └── ConfigLoader.ts   # File-based config loading
     ├── logger/               # Logging
@@ -58,7 +61,8 @@ npm run type-check
     │   ├── SqlitePersistence.ts
     │   └── MemoryPersistence.ts
     ├── transport/            # MCP transports
-    │   └── SseTransport.ts    # Server-Sent Events transport
+    │   ├── SseTransport.ts   # Server-Sent Events transport
+    │   └── HttpTransport.ts  # HTTP request-response transport
     ├── cluster/              # Multi-process architecture
     │   ├── WorkerManager.ts
     │   └── worker.ts
@@ -495,7 +499,7 @@ Test files are located in `src/__tests__/`:
 - `sequentialthinking-tools.test.ts` - MCP tool comprehensive tests (35 tests)
 - Plus other integration and unit tests
 
-Total: 287+ tests passing
+Total: 380+ tests passing
 
 ## Transport Options
 

@@ -19,8 +19,8 @@ This directory contains all test files for the MCP Sequential Thinking Server.
 | `tool-registry.test.ts` | Tool registry tests | 10 |
 | `errors.test.ts` | Error handling tests | 6 |
 | `skill-discovery.test.ts` | Skill discovery tests | 15 |
-| `thought-processor.test.ts` | Thought processor tests | - |
-| `input-normalizer.test.ts` | Input normalizer tests | - |
+| `thought-processor.test.ts` | Thought processor tests | 20 |
+| `input-normalizer.test.ts` | Input normalizer tests | 12 |
 
 ## Vitest Configuration
 
