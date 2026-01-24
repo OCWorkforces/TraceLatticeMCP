@@ -6,6 +6,7 @@ This directory contains thought processing logic.
 
 - `ThoughtProcessor.ts` - Core thought processing and validation
 - `InputNormalizer.ts` - Input normalization for LLM field name mistakes
+- `index.ts` - Module exports
 
 ## InputNormalizer
 

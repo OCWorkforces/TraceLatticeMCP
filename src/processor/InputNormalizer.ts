@@ -18,6 +18,7 @@ import type { ThoughtData } from '../types.js';
  */
 const DEFAULT_TOOL_CONFIDENCE = 0.5;
 const DEFAULT_TOOL_PRIORITY = 999;
+const DEFAULT_TOOL_RATIONALE = '';
 const DEFAULT_STEP_OUTCOME = '';
 
 /**
@@ -26,6 +27,7 @@ const DEFAULT_STEP_OUTCOME = '';
  * Fills in sensible defaults for missing optional fields:
  * - `confidence`: 0.5
  * - `priority`: 999
+ * - `rationale`: empty string
  *
  * @param tool - The tool recommendation to normalize
  * @returns The normalized tool recommendation with defaults filled in
@@ -48,6 +50,11 @@ function normalizeToolRecommendation(tool: Record<string, unknown>): Record<stri
 	// Fill in default priority if missing
 	if (!('priority' in normalized) || normalized.priority === undefined) {
 		normalized.priority = DEFAULT_TOOL_PRIORITY;
+	}
+
+	// Fill in default rationale if missing
+	if (!('rationale' in normalized) || normalized.rationale === undefined) {
+		normalized.rationale = DEFAULT_TOOL_RATIONALE;
 	}
 
 	return normalized;
@@ -153,6 +160,7 @@ function normalizeStepRecommendation(
  * The lenient mode for `previous_steps` fills in sensible defaults:
  * - `confidence`: 0.5 for missing tool recommendation confidence
  * - `priority`: 999 for missing tool recommendation priority
+ * - `rationale`: empty string for missing tool recommendation rationale
  * - `expected_outcome`: empty string for missing step expected outcome
  *
  * @example

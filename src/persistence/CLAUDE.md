@@ -8,6 +8,7 @@ This directory contains persistence backends for storing thought history and sta
 - `FilePersistence.ts` - File-based persistence backend
 - `SqlitePersistence.ts` - SQLite-based persistence backend
 - `MemoryPersistence.ts` - In-memory persistence backend
+- `index.ts` - Module exports and factory function
 
 ## Persistence Architecture
 
@@ -53,6 +54,7 @@ interface PersistenceBackend {
 - Best for production use
 - Efficient for large datasets
 - Supports concurrent access
+- WAL (Write-Ahead Logging) mode for improved performance
 
 ## Configuration
 
@@ -69,6 +71,7 @@ PERSISTENCE_DATA_DIR=./data
 # SQLite backend
 PERSISTENCE_BACKEND=sqlite
 PERSISTENCE_DB_PATH=./data/thoughts.db
+PERSISTENCE_ENABLE_WAL=true
 ```
 
 ### Via Config File
@@ -79,6 +82,8 @@ persistence:
   backend: file  # or sqlite, memory
   options:
     dataDir: ./data
+    dbPath: ./data/thoughts.db  # For sqlite backend
+    enableWAL: true  # Enable WAL mode for sqlite
 ```
 
 ## Usage

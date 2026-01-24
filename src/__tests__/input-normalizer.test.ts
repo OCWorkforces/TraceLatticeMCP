@@ -276,6 +276,30 @@ describe('InputNormalizer', () => {
 			expect(normalized.previous_steps?.[0].recommended_tools?.[0].priority).toBe(999);
 		});
 
+		it('should fill in default rationale (empty string) for missing tool rationale in previous_steps', () => {
+			const input = {
+				thought: 'Test thought',
+				thought_number: 2,
+				total_thoughts: 2,
+				next_thought_needed: false,
+				previous_steps: [
+					{
+						step_description: 'Previous step',
+						recommended_tools: [
+							{
+								tool_name: 'Task',
+								// Missing: rationale
+							},
+						],
+					},
+				],
+			} as unknown;
+
+			const normalized = normalizeInput(input) as ThoughtData;
+
+			expect(normalized.previous_steps?.[0].recommended_tools?.[0].rationale).toBe('');
+		});
+
 		it('should fill in default expected_outcome (empty string) for missing in previous_steps', () => {
 			const input = {
 				thought: 'Test thought',

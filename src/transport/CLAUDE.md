@@ -24,10 +24,10 @@ The `SseTransport` class implements an SSE-based transport for multi-user MCP se
 
 ```typescript
 interface SseTransportOptions {
-  port: number;           // Server port (default: 3000)
-  host: string;           // Server host (default: 'localhost')
-  corsOrigin: string;     // CORS origin (default: '*')
-  enableCors: boolean;    // Enable CORS (default: true)
+  port?: number;           // Server port (default: 9108)
+  host?: string;           // Server host (default: '127.0.0.1')
+  corsOrigin?: string;     // CORS origin (default: '*')
+  enableCors?: boolean;    // Enable CORS (default: true)
   path?: string;          // SSE endpoint path (default: '/sse')
   enableRateLimit?: boolean;  // Enable rate limiting (default: true)
   maxRequestsPerMinute?: number; // Rate limit (default: 100)
@@ -44,30 +44,30 @@ const server = new McpServer({...});
 
 // Direct instantiation
 const sseTransport = new SseTransport({
-  port: 3000,
-  host: 'localhost',
+  port: 9108,
+  host: '127.0.0.1',
   corsOrigin: '*',
   enableCors: true
 });
 
 // Using factory function
 const sseTransport2 = createSseTransport({
-  port: 3001,
+  port: 9109,
   host: '0.0.0.0'
 });
 
 // Connect the transport
 await sseTransport.connect(server);
 
-// Server now listening on http://localhost:3000
+// Server now listening on http://127.0.0.1:9108
 ```
 
 ### Complete SseTransportOptions
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `port` | number | 3000 | Server port |
-| `host` | string | 'localhost' | Server host |
+| `port` | number | 9108 | Server port |
+| `host` | string | '127.0.0.1' | Server host |
 | `corsOrigin` | string | '*' | CORS origin |
 | `enableCors` | boolean | true | Enable CORS |
 | `path` | string | '/sse' | SSE endpoint path |
@@ -87,8 +87,8 @@ await sseTransport.connect(server);
 export TRANSPORT_TYPE=sse
 
 # Configure SSE
-export SSE_PORT=3000
-export SSE_HOST=localhost
+export SSE_PORT=9108
+export SSE_HOST=127.0.0.1
 export CORS_ORIGIN=*
 ```
 
@@ -97,7 +97,7 @@ export CORS_ORIGIN=*
 Clients connect via SSE:
 
 ```javascript
-const eventSource = new EventSource('http://localhost:3000/sse');
+const eventSource = new EventSource('http://127.0.0.1:9108/sse');
 
 eventSource.onmessage = (event) => {
   const data = JSON.parse(event.data);
@@ -169,11 +169,11 @@ await httpTransport.connect(server);
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `port` | number | 3000 | Server port |
-| `host` | string | 'localhost' | Server host |
+| `port` | number | 9108 | Server port |
+| `host` | string | '127.0.0.1' | Server host |
 | `corsOrigin` | string | '*' | CORS origin |
 | `enableCors` | boolean | true | Enable CORS |
-| `path` | string | '/messages' | Messages endpoint path |
+| `path` | string | '/mcp' | Messages endpoint path |
 | `enableRateLimit` | boolean | true | Enable rate limiting |
 | `maxRequestsPerMinute` | number | 100 | Rate limit threshold |
 | `enableBodySizeLimit` | boolean | true | Enable body size limit |
@@ -182,7 +182,7 @@ await httpTransport.connect(server);
 
 ### Endpoints
 
-- `POST /messages` - JSON-RPC method calls
+- `POST /mcp` - JSON-RPC method calls
 - `GET /health` - Health check endpoint
 - `GET /` - Server info endpoint
 
@@ -207,9 +207,9 @@ await httpTransport.connect(server);
 export TRANSPORT_TYPE=http
 
 # Configure HTTP
-export HTTP_PORT=3000
-export HTTP_HOST=localhost
-export HTTP_PATH=/messages
+export HTTP_PORT=9108
+export HTTP_HOST=127.0.0.1
+export HTTP_PATH=/mcp
 export CORS_ORIGIN=*
 export ENABLE_CORS=true
 export ENABLE_RATE_LIMIT=true
@@ -222,13 +222,13 @@ Clients make HTTP POST requests to the messages endpoint:
 
 ```bash
 # Health check
-curl http://localhost:3000/health
+curl http://127.0.0.1:9108/health
 
 # Server info
-curl http://localhost:3000/
+curl http://127.0.0.1:9108/
 
 # JSON-RPC call
-curl -X POST http://localhost:3000/messages \
+curl -X POST http://127.0.0.1:9108/mcp \
   -H "Content-Type: application/json" \
   -d '{
     "jsonrpc": "2.0",
@@ -248,7 +248,7 @@ curl -X POST http://localhost:3000/messages \
 | Connection | Persistent (keep-alive) | Stateless (per-request) |
 | Use case | Real-time updates, notifications | Traditional API calls |
 | Response | Events pushed to client | Direct JSON response to request |
-| Endpoints | `/sse`, `/sse/message`, `/health` | `/messages`, `/health`, `/` |
+| Endpoints | `/sse`, `/sse/message`, `/health` | `/mcp`, `/health`, `/` |
 
 ---
 

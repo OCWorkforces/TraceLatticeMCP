@@ -5,6 +5,7 @@ This directory contains response formatting components.
 ## Files
 
 - `ThoughtFormatter.ts` - Formats thought responses for display
+- `index.ts` - Module exports
 
 ## ThoughtFormatter
 

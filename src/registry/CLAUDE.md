@@ -11,12 +11,35 @@ This directory contains registry components for managing tools and skills.
 
 The `ToolRegistry` class manages MCP tool registration, lookup, and CRUD operations.
 
+### Tool Discovery
+
+Tools are discovered from directories in priority order:
+1. `.claude/tools/` (project-local, highest priority)
+2. `~/.claude/tools/` (user-global)
+
+### Tool File Format
+
+Tools are defined in `.tool.md` files with YAML frontmatter:
+
+```markdown
+---
+name: my-tool
+description: A custom tool for doing something
+---
+# My Tool
+
+Guidelines and usage information...
+```
+
 ### Usage
 
 ```typescript
 import { ToolRegistry } from './registry/ToolRegistry.js';
 
 const registry = new ToolRegistry(logger, cache);
+
+// Discover tools asynchronously
+const count = await registry.discoverAsync();
 
 // Add a tool
 registry.addTool({

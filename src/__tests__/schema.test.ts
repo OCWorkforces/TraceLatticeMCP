@@ -200,12 +200,13 @@ describe('PartialToolRecommendationSchema', () => {
 		expect(result.success).toBe(false);
 	});
 
-	it('should require rationale', () => {
-		const missingRationale = {
+	it('should accept tool with only tool_name (rationale optional)', () => {
+		const minimalTool = {
 			tool_name: 'Read',
 		};
-		const result = safeParse(PartialToolRecommendationSchema, missingRationale);
-		expect(result.success).toBe(false);
+		const result = safeParse(PartialToolRecommendationSchema, minimalTool);
+		expect(result.success).toBe(true);
+		// Note: rationale will be undefined here, defaults are filled by InputNormalizer
 	});
 });
 

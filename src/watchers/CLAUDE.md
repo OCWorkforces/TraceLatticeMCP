@@ -6,6 +6,7 @@ This directory contains file system watchers for dynamic tool and skill discover
 
 - `SkillWatcher.ts` - File watcher for skill directory changes
 - `ToolWatcher.ts` - File watcher for tool directory changes
+- `index.ts` - Module exports
 
 ## Overview
 
@@ -124,6 +125,7 @@ The watcher uses `chokidar` with these settings:
 | **File Types** | `.md`, `.yml`, `.yaml` | Only `.tool.md` |
 | **Name Extraction** | Uses full filename with extension | Removes `.tool.md` extension |
 | **Removal Method** | `removeSkillByName()` | `removeTool()` |
+| **Discovery** | Full re-discovery | Full re-discovery |
 
 ## Integration with Server
 

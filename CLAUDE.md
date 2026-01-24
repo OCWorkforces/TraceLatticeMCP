@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is an MCP (Model Context Protocol) server that provides sequential thinking capabilities with tool and skill recommendations for AI assistants. It features a modular architecture with dependency injection, persistence, multi-transport support, and optional multi-user scaling.
 
-The server supports both stdio (single-user) and SSE (multi-user) transports, uses the `tmcp` framework with Valibot for schema validation, and includes comprehensive test coverage.
+The server supports stdio (single-user), SSE (multi-user), and HTTP transports, uses the `tmcp` framework with Valibot for schema validation, and includes comprehensive test coverage.
 
 ## Commands
 
@@ -85,7 +85,7 @@ npm run type-check
 1. **Dependency Injection**: All components are managed through a DI container for testability
 2. **Manager Properties**: Direct access via `server.history`, `server.tools`, `server.skills`, `server.config`
 3. **Async-First**: Skill discovery and server creation are async operations
-4. **Transport Flexibility**: Supports stdio (default) and SSE transports
+4. **Transport Flexibility**: Supports stdio (default), SSE, and HTTP transports
 5. **Persistence**: Optional state persistence with multiple backends
 
 ### Recommended API Usage
@@ -130,6 +130,11 @@ server.config.maxHistorySize;
   - CORS support
   - Health check endpoint
 
+- **`HttpTransport`** (src/transport/HttpTransport.ts): HTTP request-response transport
+  - Stateless REST-like API
+  - Configurable endpoint path
+  - Rate limiting and body size limits
+
 - **`WorkerManager`** (src/cluster/WorkerManager.ts): Multi-process architecture
   - Worker pool for parallel processing
   - Health monitoring and auto-restart
@@ -147,7 +152,7 @@ server.config.maxHistorySize;
 5. LLM calls `sequentialthinking_tools` with thought data
 6. ThoughtProcessor validates and processes the thought
 7. Response formatted with tool/skill recommendations
-8. Result returned via configured transport (stdio or SSE)
+8. Result returned via configured transport (stdio, SSE, or HTTP)
 
 ## Error Handling
 
@@ -259,9 +264,21 @@ const pool = createConnectionPool({
 import { createSseTransport } from './transport/index.js';
 
 const transport = createSseTransport({
-    port: 3000,
+    port: 9108,
     host: 'localhost',
     corsOrigin: '*'
+});
+```
+
+### HTTP Transport Factory
+
+```typescript
+import { createHttpTransport } from './transport/index.js';
+
+const transport = createHttpTransport({
+    port: 9108,
+    host: 'localhost',
+    path: '/mcp'
 });
 ```
 
@@ -371,10 +388,14 @@ All environment variables override file-based configuration:
 | `SKILL_DIRS` | Colon-separated skill directories | `.claude/skills:~/.claude/skills` |
 | `DISCOVERY_CACHE_TTL` | Discovery cache TTL (milliseconds) | 300000 |
 | `DISCOVERY_CACHE_MAX_SIZE` | Discovery cache max entries | 100 |
-| `TRANSPORT_TYPE` | Transport type (`stdio` or `sse`) | stdio |
-| `SSE_PORT` | SSE transport port | 3000 |
-| `SSE_HOST` | SSE transport host | localhost |
-| `CORS_ORIGIN` | CORS origin for SSE | * |
+| `TRANSPORT_TYPE` | Transport type (`stdio`, `sse`, or `http`) | stdio |
+| `SSE_PORT` / `HTTP_PORT` | Transport port | 9108 |
+| `SSE_HOST` / `HTTP_HOST` | Transport host | 127.0.0.1 |
+| `HTTP_PATH` | HTTP endpoint path | /mcp |
+| `CORS_ORIGIN` | CORS origin | * |
+| `ENABLE_CORS` | Enable CORS | true |
+| `ENABLE_RATE_LIMIT` | Enable rate limiting | true |
+| `MAX_REQUESTS_PER_MINUTE` | Rate limit threshold | 100 |
 
 ### Server Configuration Options
 
@@ -394,7 +415,7 @@ const server = await ToolAwareSequentialThinkingServer.create({
     loadFromPersistence: true, // Load history from persistence (default: true)
 
     // Transport
-    transport: 'stdio',        // 'stdio' or 'sse' (default: 'stdio')
+    transport: 'stdio',        // 'stdio', 'sse', or 'http' (default: 'stdio')
 
     // Logger
     logger: customLogger,      // Optional custom logger instance
@@ -468,6 +489,7 @@ Test files are located in `src/__tests__/`:
 - `container.test.ts` - DI container tests (48 tests)
 - `persistence.test.ts` - Persistence backend tests (42 tests)
 - `sse-transport.test.ts` - SSE transport tests (33 tests, 1 skipped)
+- `http-transport.test.ts` - HTTP transport tests (27 tests)
 - `worker-manager.test.ts` - Worker pool tests (33 tests)
 - `connection-pool.test.ts` - Connection pool tests (39 tests)
 - `sequentialthinking-tools.test.ts` - MCP tool comprehensive tests (35 tests)
@@ -486,7 +508,13 @@ npm start
 ### SSE (multi-user)
 
 ```bash
-TRANSPORT_TYPE=sse SSE_PORT=3000 npm start
+TRANSPORT_TYPE=sse SSE_PORT=9108 npm start
+```
+
+### HTTP (multi-user, request-response)
+
+```bash
+TRANSPORT_TYPE=http HTTP_PORT=9108 npm start
 ```
 
 ## Dependencies

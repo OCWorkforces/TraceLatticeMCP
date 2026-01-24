@@ -313,10 +313,10 @@ export const PartialToolRecommendationSchema = v.object({
 		v.string(),
 		v.description('Name of the tool being recommended')
 	),
-	rationale: v.pipe(
+	rationale: v.optional(v.pipe(
 		v.string(),
-		v.description('Why this tool is recommended')
-	),
+		v.description('Why this tool is recommended (default: empty string)')
+	)),
 	confidence: v.optional(v.pipe(
 		v.number(),
 		v.minValue(0),

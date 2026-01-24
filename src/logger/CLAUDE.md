@@ -5,6 +5,7 @@ This directory contains structured logging components.
 ## Files
 
 - `StructuredLogger.ts` - JSON-based structured logger
+- `index.ts` - Module exports
 
 ## StructuredLogger
 
@@ -14,7 +15,7 @@ The `StructuredLogger` class provides structured logging with support for differ
 
 ```typescript
 interface LoggerOptions {
-  level?: LogLevel;    // debug, info, warn, error
+  level?: LogLevel;    // debug, info, warn, error (default: info)
   context?: string;    // Logging context/module name
   pretty?: boolean;    // Enable pretty printing (default: true)
 }
