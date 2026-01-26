@@ -12,6 +12,7 @@
 		"declaration": true,
 		"declarationMap": true,
 		"sourceMap": true,
+		"noErrorTruncation": true,
 		"paths": {
 			"*": ["./src/*"],
 			"../types": ["./src/types"]
