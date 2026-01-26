@@ -1,3 +1,5 @@
+import type { ServiceRegistry, ServiceKey } from './ServiceRegistry.js';
+
 /**
  * Lightweight dependency injection container for managing service dependencies.
  *
@@ -6,12 +8,18 @@
  * - Factory registration (lazy instantiation with caching)
  * - Transient factory registration (new instance each time)
  *
+ * The container is type-safe when using ServiceKey from ServiceRegistry.
+ * For dynamic/unknown services, use string keys with generic type parameters.
+ *
  * @example
  * ```typescript
  * const container = new Container();
  *
- * // Register a singleton instance
+ * // Type-safe registration with ServiceKey (recommended)
  * container.registerInstance('Logger', new StructuredLogger());
+ *
+ * // Type inference works automatically
+ * const logger = container.resolve('Logger');  // Type: StructuredLogger
  *
  * // Register a factory with caching (singleton per container)
  * container.register('HistoryManager', () =>
@@ -23,8 +31,9 @@
  *   new RequestContext()
  * );
  *
- * // Resolve a service
- * const history = container.resolve<HistoryManager>('HistoryManager');
+ * // For dynamic services not in ServiceRegistry
+ * container.registerInstance<MyService>('MyService', myService);
+ * const service = container.resolve<MyService>('MyService');
  * ```
  */
 export class Container {
@@ -43,8 +52,14 @@ export class Container {
 	 * container.registerInstance('Config', new ServerConfig({ ... }));
 	 * ```
 	 */
-	registerInstance<T>(name: string, instance: T): void {
-		if (this._services.has(name) || this._factories.has(name) || this._transientFactories.has(name)) {
+	registerInstance<K extends ServiceKey>(name: K, instance: ServiceRegistry[K]): void;
+	registerInstance<T>(name: string, instance: T): void;
+	registerInstance(name: string, instance: unknown): void {
+		if (
+			this._services.has(name) ||
+			this._factories.has(name) ||
+			this._transientFactories.has(name)
+		) {
 			throw new Error(`Service '${name}' is already registered`);
 		}
 		this._services.set(name, instance);
@@ -65,8 +80,14 @@ export class Container {
 	 * );
 	 * ```
 	 */
-	register<T>(name: string, factory: () => T): void {
-		if (this._services.has(name) || this._factories.has(name) || this._transientFactories.has(name)) {
+	register<K extends ServiceKey>(name: K, factory: () => ServiceRegistry[K]): void;
+	register<T>(name: string, factory: () => T): void;
+	register(name: string, factory: () => unknown): void {
+		if (
+			this._services.has(name) ||
+			this._factories.has(name) ||
+			this._transientFactories.has(name)
+		) {
 			throw new Error(`Service '${name}' is already registered`);
 		}
 		this._factories.set(name, factory);
@@ -86,8 +107,14 @@ export class Container {
 	 * );
 	 * ```
 	 */
-	registerFactory<T>(name: string, factory: () => T): void {
-		if (this._services.has(name) || this._factories.has(name) || this._transientFactories.has(name)) {
+	registerFactory<K extends ServiceKey>(name: K, factory: () => ServiceRegistry[K]): void;
+	registerFactory<T>(name: string, factory: () => T): void;
+	registerFactory(name: string, factory: () => unknown): void {
+		if (
+			this._services.has(name) ||
+			this._factories.has(name) ||
+			this._transientFactories.has(name)
+		) {
 			throw new Error(`Service '${name}' is already registered`);
 		}
 		this._transientFactories.set(name, factory);
@@ -103,26 +130,32 @@ export class Container {
 	 * 4. If a transient factory exists, invoke it and return a new instance
 	 * 5. Throw an error if the service is not found
 	 *
-	 * @param name - The name/identifier of the service to resolve
+	 * @param name - The name/identifier of service to resolve
 	 * @returns The resolved service instance
 	 * @throws {Error} If the service is not registered
 	 *
 	 * @example
 	 * ```typescript
-	 * const history = container.resolve<HistoryManager>('HistoryManager');
-	 * const logger = container.resolve<StructuredLogger>('Logger');
+	 * // Type-safe: ServiceRegistry provides autocomplete
+	 * const logger = container.resolve('Logger');  // Type: StructuredLogger
+	 * const config = container.resolve('Config');  // Type: ServerConfig
+	 *
+	 * // Dynamic: For services not in ServiceRegistry
+	 * const service = container.resolve<MyService>('MyService');
 	 * ```
 	 */
-	resolve<T>(name: string): T {
+	resolve<K extends ServiceKey>(name: K): ServiceRegistry[K];
+	resolve<T>(name: string): T;
+	resolve(name: string): unknown {
 		// Check for registered instance first
 		if (this._services.has(name)) {
-			return this._services.get(name) as T;
+			return this._services.get(name);
 		}
 
 		// Check for cached factory result
 		if (this._factories.has(name)) {
 			const factory = this._factories.get(name)!;
-			const instance = factory() as T;
+			const instance = factory();
 			// Cache the result for future calls (singleton behavior)
 			this._services.set(name, instance);
 			this._factories.delete(name);
@@ -132,7 +165,7 @@ export class Container {
 		// Check for transient factory (call every time)
 		if (this._transientFactories.has(name)) {
 			const factory = this._transientFactories.get(name)!;
-			return factory() as T;
+			return factory();
 		}
 
 		throw new Error(`Service not found: ${name}. Did you forget to register it?`);
@@ -153,9 +186,7 @@ export class Container {
 	 */
 	has(name: string): boolean {
 		return (
-			this._services.has(name) ||
-			this._factories.has(name) ||
-			this._transientFactories.has(name)
+			this._services.has(name) || this._factories.has(name) || this._transientFactories.has(name)
 		);
 	}
 

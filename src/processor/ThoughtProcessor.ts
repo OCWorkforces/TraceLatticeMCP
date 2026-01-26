@@ -9,10 +9,11 @@
  */
 
 import type { ThoughtData } from '../types.js';
-import type { StructuredLogger } from '../logger/StructuredLogger.js';
+import type { Logger } from '../logger/StructuredLogger.js';
 import type { IHistoryManager } from '../IHistoryManager.js';
 import { ThoughtFormatter } from '../formatter/ThoughtFormatter.js';
 import { normalizeInput } from './InputNormalizer.js';
+import { NullLogger } from '../logger/NullLogger.js';
 
 /**
  * The return type expected by MCP tool invocations.
@@ -90,15 +91,15 @@ export interface CallToolResult {
  * ```
  */
 export class ThoughtProcessor {
-	/** Optional logger for debugging and monitoring. */
-	private _logger: StructuredLogger | null;
+	/** Logger for debugging and monitoring. */
+	private _logger: Logger;
 
 	/**
 	 * Creates a new ThoughtProcessor instance.
 	 *
 	 * @param historyManager - The history manager for storing thoughts
 	 * @param thoughtFormatter - The formatter for output formatting
-	 * @param logger - Optional logger for diagnostics
+	 * @param logger - Optional logger for diagnostics (defaults to NullLogger)
 	 *
 	 * @example
 	 * ```typescript
@@ -112,23 +113,19 @@ export class ThoughtProcessor {
 	constructor(
 		private historyManager: IHistoryManager,
 		private thoughtFormatter: ThoughtFormatter,
-		logger?: StructuredLogger
+		logger?: Logger
 	) {
-		this._logger = logger || null;
+		this._logger = logger ?? new NullLogger();
 	}
 
 	/**
-	 * Internal logging method with fallback.
+	 * Internal logging method.
 	 * @param message - The message to log
 	 * @param meta - Optional metadata
 	 * @private
 	 */
 	private log(message: string, meta?: Record<string, unknown>): void {
-		if (this._logger) {
-			this._logger.info(message, meta);
-		} else {
-			console.error(message); // Fallback for backward compatibility
-		}
+		this._logger.info(message, meta);
 	}
 
 	/**

@@ -17,6 +17,54 @@
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 /**
+ * Common logger interface for all logger implementations.
+ *
+ * This interface defines the contract that all loggers must implement,
+ * allowing them to be used interchangeably throughout the application.
+ */
+export interface Logger {
+	/**
+	 * Log a debug message.
+	 * @param message - The message to log
+	 * @param meta - Optional structured metadata
+	 */
+	debug(message: string, meta?: Record<string, unknown>): void;
+
+	/**
+	 * Log an info message.
+	 * @param message - The message to log
+	 * @param meta - Optional structured metadata
+	 */
+	info(message: string, meta?: Record<string, unknown>): void;
+
+	/**
+	 * Log a warning message.
+	 * @param message - The message to log
+	 * @param meta - Optional structured metadata
+	 */
+	warn(message: string, meta?: Record<string, unknown>): void;
+
+	/**
+	 * Log an error message.
+	 * @param message - The message to log
+	 * @param meta - Optional structured metadata
+	 */
+	error(message: string, meta?: Record<string, unknown>): void;
+
+	/**
+	 * Sets the minimum log level.
+	 * @param level - The new minimum log level
+	 */
+	setLevel(level: LogLevel): void;
+
+	/**
+	 * Gets the current minimum log level.
+	 * @returns The current log level
+	 */
+	getLevel(): LogLevel;
+}
+
+/**
  * A single log entry with all relevant metadata.
  *
  * @example

@@ -9,7 +9,8 @@
  */
 
 import type { Tool } from '../types.js';
-import type { StructuredLogger } from '../logger/StructuredLogger.js';
+import type { Logger } from '../logger/StructuredLogger.js';
+import { NullLogger } from '../logger/NullLogger.js';
 import { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -32,7 +33,7 @@ import { parse as parseYaml } from 'yaml';
  */
 export interface ToolRegistryOptions {
 	/** Optional logger for diagnostics. */
-	logger?: StructuredLogger;
+	logger?: Logger;
 
 	/** Optional cache for tool lookups. */
 	cache?: DiscoveryCache<Tool>;
@@ -124,8 +125,8 @@ export class ToolRegistry {
 	/** Internal storage for tools indexed by name. */
 	private _tools: Map<string, Tool>;
 
-	/** Optional logger for diagnostics. */
-	private _logger: StructuredLogger | null;
+	/** Logger for diagnostics. */
+	private _logger: Logger;
 
 	/** Optional cache for tool lookups. */
 	private _cache: DiscoveryCache<Tool>;
@@ -142,7 +143,7 @@ export class ToolRegistry {
 	/**
 	 * Creates a new ToolRegistry instance.
 	 *
-	 * @param options - Configuration options for the registry
+	 * @param options - Configuration options for registry
 	 *
 	 * @example
 	 * ```typescript
@@ -158,26 +159,20 @@ export class ToolRegistry {
 	 */
 	constructor(options: ToolRegistryOptions = {}) {
 		this._tools = new Map();
-		this._logger = options.logger || null;
-		// Create cache internally if not provided
+		this._logger = options.logger ?? new NullLogger();
 		this._cache = options.cache || new DiscoveryCache<Tool>({ maxSize: 50, ttl: 300000 });
 		this._toolDirs = options.toolDirs || ['.claude/tools', join(homedir(), '.claude/tools')];
 	}
 
 	/**
-	 * Internal logging method with fallback.
+	 * Internal logging method.
 	 * @param message - The message to log
 	 * @param meta - Optional metadata
 	 * @private
 	 */
 	private log(message: string, meta?: Record<string, unknown>): void {
-		if (this._logger) {
-			this._logger.info(message, meta);
-		} else {
-			console.error(message); // Fallback for backward compatibility
-		}
+		this._logger.info(message, meta);
 	}
-
 	/**
 	 * Adds a tool to the registry.
 	 *
@@ -572,10 +567,10 @@ export class ToolRegistry {
 			try {
 				this.addTool(tool);
 			} catch (error) {
-				this.log(
-					`Error adding tool '${tool.name}':`,
-					{ toolName: tool.name, error: error instanceof Error ? error.message : String(error) }
-				);
+				this.log(`Error adding tool '${tool.name}':`, {
+					toolName: tool.name,
+					error: error instanceof Error ? error.message : String(error),
+				});
 			}
 		}
 		this.log(`Set ${tools.length} tools from external source`, { toolCount: tools.length });

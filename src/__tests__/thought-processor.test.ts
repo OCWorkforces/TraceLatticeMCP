@@ -432,13 +432,13 @@ describe('ThoughtProcessor', () => {
 				previous_steps: [
 					{
 						step_description: 'Step 1',
-						recommended_tools: [{ tool_name: 'tool1', confidence: 0.8, rationale: 'test', priority: 1 }],
+						recommended_tools: [
+							{ tool_name: 'tool1', confidence: 0.8, rationale: 'test', priority: 1 },
+						],
 						expected_outcome: 'Done',
 					},
 				],
-				remaining_steps: [
-					'Step 3: Final step'
-				],
+				remaining_steps: ['Step 3: Final step'],
 			};
 
 			const result = await processor.process(input);
@@ -469,10 +469,8 @@ describe('ThoughtProcessor', () => {
 			expect(logSpy).toHaveBeenCalled();
 		});
 
-		it('should work without logger (fallback to console.error)', async () => {
+		it('should use NullLogger as default when no logger provided', async () => {
 			const processorWithoutLogger = new ThoughtProcessor(mockHistory, formatter);
-
-			const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 			const input: ThoughtData = {
 				thought: 'Test thought',
@@ -481,10 +479,10 @@ describe('ThoughtProcessor', () => {
 				next_thought_needed: false,
 			};
 
-			await processorWithoutLogger.process(input);
+			const result = await processorWithoutLogger.process(input);
 
-			expect(consoleSpy).toHaveBeenCalled();
-			consoleSpy.mockRestore();
+			// Should work without throwing errors
+			expect(result.content).toBeDefined();
 		});
 	});
 });

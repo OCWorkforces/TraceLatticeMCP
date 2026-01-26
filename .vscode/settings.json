@@ -1,0 +1,70 @@
+{
+	"typescript.tsdk": "node_modules/typescript/lib",
+	"typescript.enablePromptUseWorkspaceTsdk": true,
+	"typescript.preferences.importModuleSpecifier": "relative",
+	"typescript.suggest.autoImports": true,
+	"typescript.suggest.includeAutomaticOptionalChainCompletions": true,
+	"typescript.suggest.includeCompletionsForImportStatements": true,
+	"typescript.format.enable": true,
+	"typescript.format.insertSpaceAfterCommaDelimiter": true,
+	"typescript.format.insertSpaceAfterConstructor": false,
+	"typescript.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
+	"typescript.format.insertSpaceAfterKeywordsInControlFlowStatements": true,
+	"typescript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis": false,
+	"typescript.format.insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
+	"typescript.format.insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces": false,
+	"typescript.format.insertSpaceBeforeAndAfterBinaryOperators": true,
+	"typescript.format.insertSpaceAfterSemicolonInForStatements": true,
+	"javascript.suggestionActions.enabled": true,
+	"javascript.validate.enable": true,
+	"javascript.format.enable": true,
+	"editor.defaultFormatter": "esbenp.prettier-vscode",
+	"editor.formatOnSave": true,
+	"editor.formatOnPaste": true,
+	"editor.codeActionsOnSave": {
+		"source.fixAll.eslint": "explicit",
+		"source.organizeImports": "explicit"
+	},
+	"eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
+	"eslint.packageManager": "npm",
+	"files.eol": "\n",
+	"files.trimTrailingWhitespace": true,
+	"files.insertFinalNewline": true,
+	"files.exclude": {
+		"**/.git": true,
+		"**/.DS_Store": true,
+		"**/node_modules": true,
+		"**/dist": true,
+		"**/.vscode-test": true,
+		"**/.cache": true
+	},
+	"search.exclude": {
+		"**/node_modules": true,
+		"**/dist": true,
+		"**/.git": true,
+		"**/.cache": true
+	},
+	"typescript.preferences.renameShorthandProperties": true,
+	"typescript.inlayHints.parameterNames.enabled": "all",
+	"typescript.inlayHints.variableTypes.enabled": true,
+	"typescript.inlayHints.propertyDeclarationTypes.enabled": true,
+	"typescript.inlayHints.functionLikeReturnTypes.enabled": true,
+	"typescript.inlayHints.enumMemberValues.enabled": true,
+	"testing.automaticallyOpenPeekView": "never",
+	"vitest.enable": true,
+	"[typescript]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode"
+	},
+	"[typescriptreact]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode"
+	},
+	"[javascript]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode"
+	},
+	"[json]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode"
+	},
+	"[markdown]": {
+		"editor.defaultFormatter": "esbenp.prettier-vscode"
+	}
+}

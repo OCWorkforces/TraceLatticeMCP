@@ -142,32 +142,23 @@ You should:
  * ```
  */
 export const ToolRecommendationSchema = v.object({
-	tool_name: v.pipe(
-		v.string(),
-		v.description('Name of the tool being recommended')
-	),
+	tool_name: v.pipe(v.string(), v.description('Name of the tool being recommended')),
 	confidence: v.pipe(
 		v.number(),
 		v.minValue(0),
 		v.maxValue(1),
 		v.description('0-1 indicating confidence in recommendation')
 	),
-	rationale: v.pipe(
-		v.string(),
-		v.description('Why this tool is recommended')
+	rationale: v.pipe(v.string(), v.description('Why this tool is recommended')),
+	priority: v.optional(
+		v.pipe(v.number(), v.description('Order in the recommendation sequence (default: 999)'))
 	),
-	priority: v.optional(v.pipe(
-		v.number(),
-		v.description('Order in the recommendation sequence (default: 999)')
-	)),
-	suggested_inputs: v.optional(v.pipe(
-		v.record(v.string(), v.unknown()),
-		v.description('Optional suggested parameters')
-	)),
-	alternatives: v.optional(v.pipe(
-		v.array(v.string()),
-		v.description('Alternative tools that could be used')
-	))
+	suggested_inputs: v.optional(
+		v.pipe(v.record(v.string(), v.unknown()), v.description('Optional suggested parameters'))
+	),
+	alternatives: v.optional(
+		v.pipe(v.array(v.string()), v.description('Alternative tools that could be used'))
+	),
 });
 
 /**
@@ -197,36 +188,29 @@ export const ToolRecommendationSchema = v.object({
  * ```
  */
 export const SkillRecommendationSchema = v.object({
-	skill_name: v.pipe(
-		v.string(),
-		v.description('Name of the skill being recommended')
-	),
+	skill_name: v.pipe(v.string(), v.description('Name of the skill being recommended')),
 	confidence: v.pipe(
 		v.number(),
 		v.minValue(0),
 		v.maxValue(1),
 		v.description('0-1 indicating confidence in recommendation')
 	),
-	rationale: v.pipe(
-		v.string(),
-		v.description('Why this skill is recommended')
+	rationale: v.pipe(v.string(), v.description('Why this skill is recommended')),
+	priority: v.optional(
+		v.pipe(v.number(), v.description('Order in the recommendation sequence (default: 999)'))
 	),
-	priority: v.optional(v.pipe(
-		v.number(),
-		v.description('Order in the recommendation sequence (default: 999)')
-	)),
-	alternatives: v.optional(v.pipe(
-		v.array(v.string()),
-		v.description('Alternative skills that could be used')
-	)),
-	allowed_tools: v.optional(v.pipe(
-		v.array(v.string()),
-		v.description('Tools this skill is allowed to use (from skill frontmatter)')
-	)),
-	user_invocable: v.optional(v.pipe(
-		v.boolean(),
-		v.description('Whether this skill can be user-invoked')
-	))
+	alternatives: v.optional(
+		v.pipe(v.array(v.string()), v.description('Alternative skills that could be used'))
+	),
+	allowed_tools: v.optional(
+		v.pipe(
+			v.array(v.string()),
+			v.description('Tools this skill is allowed to use (from skill frontmatter)')
+		)
+	),
+	user_invocable: v.optional(
+		v.pipe(v.boolean(), v.description('Whether this skill can be user-invoked'))
+	),
 });
 
 /**
@@ -252,26 +236,18 @@ export const SkillRecommendationSchema = v.object({
  * ```
  */
 export const StepRecommendationSchema = v.object({
-	step_description: v.pipe(
-		v.string(),
-		v.description('What needs to be done')
-	),
+	step_description: v.pipe(v.string(), v.description('What needs to be done')),
 	recommended_tools: v.pipe(
 		v.array(ToolRecommendationSchema),
 		v.description('Tools recommended for this step')
 	),
-	recommended_skills: v.optional(v.pipe(
-		v.array(SkillRecommendationSchema),
-		v.description('Skills recommended for this step')
-	)),
-	expected_outcome: v.pipe(
-		v.string(),
-		v.description('What to expect from this step')
+	recommended_skills: v.optional(
+		v.pipe(v.array(SkillRecommendationSchema), v.description('Skills recommended for this step'))
 	),
-	next_step_conditions: v.optional(v.pipe(
-		v.array(v.string()),
-		v.description('Conditions to consider for the next step')
-	))
+	expected_outcome: v.pipe(v.string(), v.description('What to expect from this step')),
+	next_step_conditions: v.optional(
+		v.pipe(v.array(v.string()), v.description('Conditions to consider for the next step'))
+	),
 });
 
 /**
@@ -309,32 +285,27 @@ export const StepRecommendationSchema = v.object({
  * ```
  */
 export const PartialToolRecommendationSchema = v.object({
-	tool_name: v.pipe(
-		v.string(),
-		v.description('Name of the tool being recommended')
+	tool_name: v.pipe(v.string(), v.description('Name of the tool being recommended')),
+	rationale: v.optional(
+		v.pipe(v.string(), v.description('Why this tool is recommended (default: empty string)'))
 	),
-	rationale: v.optional(v.pipe(
-		v.string(),
-		v.description('Why this tool is recommended (default: empty string)')
-	)),
-	confidence: v.optional(v.pipe(
-		v.number(),
-		v.minValue(0),
-		v.maxValue(1),
-		v.description('0-1 indicating confidence in recommendation (default: 0.5)')
-	)),
-	priority: v.optional(v.pipe(
-		v.number(),
-		v.description('Order in the recommendation sequence (default: 999)')
-	)),
-	suggested_inputs: v.optional(v.pipe(
-		v.record(v.string(), v.unknown()),
-		v.description('Optional suggested parameters')
-	)),
-	alternatives: v.optional(v.pipe(
-		v.array(v.string()),
-		v.description('Alternative tools that could be used')
-	))
+	confidence: v.optional(
+		v.pipe(
+			v.number(),
+			v.minValue(0),
+			v.maxValue(1),
+			v.description('0-1 indicating confidence in recommendation (default: 0.5)')
+		)
+	),
+	priority: v.optional(
+		v.pipe(v.number(), v.description('Order in the recommendation sequence (default: 999)'))
+	),
+	suggested_inputs: v.optional(
+		v.pipe(v.record(v.string(), v.unknown()), v.description('Optional suggested parameters'))
+	),
+	alternatives: v.optional(
+		v.pipe(v.array(v.string()), v.description('Alternative tools that could be used'))
+	),
 });
 
 /**
@@ -375,26 +346,20 @@ export const PartialToolRecommendationSchema = v.object({
  * ```
  */
 export const PartialStepRecommendationSchema = v.object({
-	step_description: v.pipe(
-		v.string(),
-		v.description('What needs to be done')
-	),
+	step_description: v.pipe(v.string(), v.description('What needs to be done')),
 	recommended_tools: v.pipe(
 		v.array(PartialToolRecommendationSchema),
 		v.description('Tools recommended for this step')
 	),
-	recommended_skills: v.optional(v.pipe(
-		v.array(SkillRecommendationSchema),
-		v.description('Skills recommended for this step')
-	)),
-	expected_outcome: v.optional(v.pipe(
-		v.string(),
-		v.description('What to expect from this step (default: empty string)')
-	)),
-	next_step_conditions: v.optional(v.pipe(
-		v.array(v.string()),
-		v.description('Conditions to consider for the next step')
-	))
+	recommended_skills: v.optional(
+		v.pipe(v.array(SkillRecommendationSchema), v.description('Skills recommended for this step'))
+	),
+	expected_outcome: v.optional(
+		v.pipe(v.string(), v.description('What to expect from this step (default: empty string)'))
+	),
+	next_step_conditions: v.optional(
+		v.pipe(v.array(v.string()), v.description('Conditions to consider for the next step'))
+	),
 });
 
 /**
@@ -436,69 +401,71 @@ export const PartialStepRecommendationSchema = v.object({
  * ```
  */
 export const SequentialThinkingSchema = v.object({
-	available_mcp_tools: v.optional(v.pipe(
-		v.array(v.string()),
-		v.description('Array of MCP tool names available for use (e.g., ["mcp-omnisearch", "mcp-turso-cloud"])')
-	)),
-	available_skills: v.optional(v.pipe(
-		v.array(v.string()),
-		v.description('Array of skill names available for use (e.g., ["commit", "review-pr", "pdf"])')
-	)),
-	thought: v.pipe(
-		v.string(),
-		v.description('Your current thinking step')
+	available_mcp_tools: v.optional(
+		v.pipe(
+			v.array(v.string()),
+			v.description(
+				'Array of MCP tool names available for use (e.g., ["mcp-omnisearch", "mcp-turso-cloud"])'
+			)
+		)
 	),
-	next_thought_needed: v.optional(v.pipe(
-		v.boolean(),
-		v.description('Whether another thought step is needed (defaults to true if not provided)')
-	)),
-	thought_number: v.pipe(
-		v.number(),
-		v.minValue(1),
-		v.description('Current thought number')
+	available_skills: v.optional(
+		v.pipe(
+			v.array(v.string()),
+			v.description('Array of skill names available for use (e.g., ["commit", "review-pr", "pdf"])')
+		)
 	),
+	thought: v.pipe(v.string(), v.description('Your current thinking step')),
+	next_thought_needed: v.optional(
+		v.pipe(
+			v.boolean(),
+			v.description('Whether another thought step is needed (defaults to true if not provided)')
+		)
+	),
+	thought_number: v.pipe(v.number(), v.minValue(1), v.description('Current thought number')),
 	total_thoughts: v.pipe(
 		v.number(),
 		v.minValue(1),
 		v.description('Estimated total thoughts needed')
 	),
-	is_revision: v.optional(v.pipe(
-		v.boolean(),
-		v.description('Whether this revises previous thinking')
-	)),
-	revises_thought: v.optional(v.pipe(
-		v.number(),
-		v.minValue(1),
-		v.description('Which thought is being reconsidered')
-	)),
-	branch_from_thought: v.optional(v.pipe(
-		v.number(),
-		v.minValue(1),
-		v.description('Branching point thought number')
-	)),
-	branch_id: v.optional(v.pipe(
-		v.string(),
-		v.regex(/^[a-zA-Z0-9_-]+$/, 'Branch ID must contain only letters, numbers, hyphens, and underscores'),
-		v.minLength(1),
-		v.maxLength(50),
-		v.description('Branch identifier (alphanumeric, hyphens, underscores only, max 50 chars)')
-	)),
-	needs_more_thoughts: v.optional(v.pipe(
-		v.boolean(),
-		v.description('If more thoughts are needed')
-	)),
-	current_step: v.optional(v.pipe(
-		StepRecommendationSchema,
-		v.description('Current step recommendation')
-	)),
-	previous_steps: v.optional(v.pipe(
-		v.array(PartialStepRecommendationSchema),
-		v.description('Steps already recommended (lenient schema - allows partial data with defaults)')
-	)),
-	remaining_steps: v.optional(v.pipe(
-		v.array(v.string()),
-		v.description('High-level descriptions of upcoming steps')
-	))
+	is_revision: v.optional(
+		v.pipe(v.boolean(), v.description('Whether this revises previous thinking'))
+	),
+	revises_thought: v.optional(
+		v.pipe(v.number(), v.minValue(1), v.description('Which thought is being reconsidered'))
+	),
+	branch_from_thought: v.optional(
+		v.pipe(v.number(), v.minValue(1), v.description('Branching point thought number'))
+	),
+	branch_id: v.optional(
+		v.pipe(
+			v.string(),
+			v.regex(
+				/^[a-zA-Z0-9_-]+$/,
+				'Branch ID must contain only letters, numbers, hyphens, and underscores'
+			),
+			v.minLength(1),
+			v.maxLength(50),
+			v.description('Branch identifier (alphanumeric, hyphens, underscores only, max 50 chars)')
+		)
+	),
+	needs_more_thoughts: v.optional(
+		v.pipe(v.boolean(), v.description('If more thoughts are needed'))
+	),
+	current_step: v.optional(
+		v.pipe(StepRecommendationSchema, v.description('Current step recommendation'))
+	),
+	previous_steps: v.optional(
+		v.pipe(
+			v.array(PartialStepRecommendationSchema),
+			v.description(
+				'Steps already recommended (lenient schema - allows partial data with defaults)'
+			)
+		)
+	),
+	remaining_steps: v.optional(
+		v.pipe(v.array(v.string()), v.description('High-level descriptions of upcoming steps'))
+	),
 });
 
 /**
@@ -524,5 +491,47 @@ export const SequentialThinkingSchema = v.object({
 export const SEQUENTIAL_THINKING_TOOL: Tool = {
 	name: 'sequentialthinking_tools',
 	description: TOOL_DESCRIPTION,
-	inputSchema: {} // Schema is handled by tmcp when registering the tool
+	inputSchema: {}, // Schema is handled by tmcp when registering the tool
 };
+
+/**
+ * Valibot schema for validating JSON-RPC 2.0 request messages.
+ *
+ * Validates that a JSON-RPC request has:
+ * - A jsonrpc version (must be "2.0")
+ * - A method name (string)
+ * - Optional params (object or array)
+ * - Optional id (string, number, or null for notifications)
+ *
+ * @example
+ * ```typescript
+ * import { safeParse } from 'valibot';
+ * import { JsonRpcRequestSchema } from './schema.js';
+ *
+ * const result = safeParse(JsonRpcRequestSchema, {
+ *   jsonrpc: '2.0',
+ *   method: 'tools/list',
+ *   id: 1
+ * });
+ * ```
+ */
+export const JsonRpcRequestSchema = v.object({
+	jsonrpc: v.pipe(
+		v.string(),
+		v.literal('2.0'),
+		v.description('JSON-RPC protocol version (must be "2.0")')
+	),
+	method: v.pipe(v.string(), v.minLength(1), v.description('Method name to invoke')),
+	params: v.optional(
+		v.pipe(
+			v.union([v.object({}), v.array(v.unknown())]),
+			v.description('Method parameters (object or array)')
+		)
+	),
+	id: v.optional(
+		v.pipe(
+			v.union([v.string(), v.number(), v.null()]),
+			v.description('Request ID (omit for notifications)')
+		)
+	),
+});

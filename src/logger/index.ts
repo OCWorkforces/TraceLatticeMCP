@@ -19,4 +19,5 @@
  */
 
 export { StructuredLogger } from './StructuredLogger.js';
-export type { LogLevel, LogEntry, LoggerOptions } from './StructuredLogger.js';
+export { NullLogger } from './NullLogger.js';
+export type { LogLevel, LogEntry, LoggerOptions, Logger } from './StructuredLogger.js';
