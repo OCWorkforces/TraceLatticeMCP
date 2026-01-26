@@ -32,7 +32,6 @@ import {
 	type PersistenceBackend,
 } from './persistence/PersistenceBackend.js';
 import type { SseTransportOptions } from './transport/SseTransport.js';
-import type { HttpTransportOptions } from './transport/HttpTransport.js';
 import type { ConfigFileOptions } from './config/ConfigLoader.js';
 
 // Get version from package.json
@@ -94,15 +93,11 @@ interface ServerOptions {
 	 * Transport type to use
 	 * @default 'stdio'
 	 */
-	transport?: 'stdio' | 'sse' | 'http';
+	transport?: 'stdio' | 'sse';
 	/**
 	 * SSE transport options (used when transport: 'sse')
 	 */
 	sseTransportOptions?: SseTransportOptions;
-	/**
-	 * HTTP transport options (used when transport: 'http')
-	 */
-	httpTransportOptions?: HttpTransportOptions;
 }
 
 /**
@@ -516,28 +511,6 @@ async function main() {
 
 		thinkingServer['_logger'].info(
 			`Sequential Thinking MCP Server running on SSE transport at http://${host}:${port}`
-		);
-	} else if (transportType === 'http') {
-		// Use HTTP transport for request-response communication
-		const { HttpTransport } = await import('./transport/HttpTransport.js');
-		const port = parseInt(process.env.HTTP_PORT || process.env.SSE_PORT || '3000', 10);
-		const host = process.env.HTTP_HOST || process.env.SSE_HOST || 'localhost';
-
-		const httpTransport = new HttpTransport({
-			port,
-			host,
-			corsOrigin: process.env.CORS_ORIGIN || '*',
-			enableCors: process.env.ENABLE_CORS !== 'false',
-			path: process.env.HTTP_PATH || '/messages',
-			enableRateLimit: process.env.ENABLE_RATE_LIMIT !== 'false',
-			maxRequestsPerMinute: parseInt(process.env.MAX_REQUESTS_PER_MINUTE || '100', 10),
-		});
-
-		// Connect the HTTP transport
-		await httpTransport.connect(server);
-
-		thinkingServer['_logger'].info(
-			`Sequential Thinking MCP Server running on HTTP transport at http://${host}:${port}`
 		);
 	} else {
 		// Use stdio transport (default, single-user)

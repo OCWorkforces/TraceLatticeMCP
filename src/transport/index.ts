@@ -6,20 +6,14 @@
  *
  * @example
  * ```typescript
- * import { SseTransport, HttpTransport, createSseTransport, createHttpTransport, BaseTransport } from './transport/index.js';
- * import type { SseTransportOptions, HttpTransportOptions } from './transport/index.js';
+ * import { SseTransport, createSseTransport, BaseTransport } from './transport/index.js';
+ * import type { SseTransportOptions } from './transport/index.js';
  *
  * // SSE for real-time streaming
  * const sseTransport = createSseTransport({
  *   port: 3000,
  *   host: 'localhost',
  *   corsOrigin: '*'
- * });
- *
- * // HTTP for request-response
- * const httpTransport = createHttpTransport({
- *   port: 3001,
- *   host: 'localhost'
  * });
  * ```
  * @module transport
@@ -29,6 +23,3 @@ export { BaseTransport } from './BaseTransport.js';
 
 export { SseTransport, createSseTransport } from './SseTransport.js';
 export type { SseTransportOptions } from './SseTransport.js';
-
-export { HttpTransport, createHttpTransport } from './HttpTransport.js';
-export type { HttpTransportOptions } from './HttpTransport.js';

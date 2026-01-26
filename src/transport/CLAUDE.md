@@ -24,13 +24,13 @@ The `SseTransport` class implements an SSE-based transport for multi-user MCP se
 
 ```typescript
 interface SseTransportOptions {
-  port?: number;           // Server port (default: 9108)
-  host?: string;           // Server host (default: '127.0.0.1')
-  corsOrigin?: string;     // CORS origin (default: '*')
-  enableCors?: boolean;    // Enable CORS (default: true)
-  path?: string;          // SSE endpoint path (default: '/sse')
-  enableRateLimit?: boolean;  // Enable rate limiting (default: true)
-  maxRequestsPerMinute?: number; // Rate limit (default: 100)
+	port?: number; // Server port (default: 9108)
+	host?: string; // Server host (default: '127.0.0.1')
+	corsOrigin?: string; // CORS origin (default: '*')
+	enableCors?: boolean; // Enable CORS (default: true)
+	path?: string; // SSE endpoint path (default: '/sse')
+	enableRateLimit?: boolean; // Enable rate limiting (default: true)
+	maxRequestsPerMinute?: number; // Rate limit (default: 100)
 }
 ```
 
@@ -64,15 +64,15 @@ await sseTransport.connect(server);
 
 ### Complete SseTransportOptions
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `port` | number | 9108 | Server port |
-| `host` | string | '127.0.0.1' | Server host |
-| `corsOrigin` | string | '*' | CORS origin |
-| `enableCors` | boolean | true | Enable CORS |
-| `path` | string | '/sse' | SSE endpoint path |
-| `enableRateLimit` | boolean | true | Enable rate limiting |
-| `maxRequestsPerMinute` | number | 100 | Rate limit threshold |
+| Option                 | Type    | Default     | Description          |
+| ---------------------- | ------- | ----------- | -------------------- |
+| `port`                 | number  | 9108        | Server port          |
+| `host`                 | string  | '127.0.0.1' | Server host          |
+| `corsOrigin`           | string  | '\*'        | CORS origin          |
+| `enableCors`           | boolean | true        | Enable CORS          |
+| `path`                 | string  | '/sse'      | SSE endpoint path    |
+| `enableRateLimit`      | boolean | true        | Enable rate limiting |
+| `maxRequestsPerMinute` | number  | 100         | Rate limit threshold |
 
 ### Endpoints
 
@@ -100,41 +100,35 @@ Clients connect via SSE:
 const eventSource = new EventSource('http://127.0.0.1:9108/sse');
 
 eventSource.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  // Handle MCP messages
+	const data = JSON.parse(event.data);
+	// Handle MCP messages
 };
 ```
 
 ---
 
-## HttpTransport
+## Architecture
 
-The `HttpTransport` class implements a standard HTTP request-response transport for MCP server communication.
-
-### Features
-
-- **Stateless Request-Response**: Traditional HTTP POST/GET pattern
-- **CORS Support**: Configurable CORS origins
-- **Health Check**: `/health` endpoint for monitoring
-- **Rate Limiting**: Per-IP request throttling
-- **Body Size Limits**: Configurable max request size
-- **Graceful Shutdown**: Proper server cleanup
-
-### Configuration
-
-```typescript
-interface HttpTransportOptions {
-  port?: number;           // Server port (default: 3000)
-  host?: string;           // Server host (default: 'localhost')
-  corsOrigin?: string;     // CORS origin (default: '*')
-  enableCors?: boolean;    // Enable CORS (default: true)
-  path?: string;           // Messages endpoint (default: '/messages')
-  enableRateLimit?: boolean;  // Enable rate limiting (default: true)
-  maxRequestsPerMinute?: number; // Rate limit (default: 100)
-  enableBodySizeLimit?: boolean; // Enable size limit (default: true)
-  maxBodySize?: number;    // Max body size (default: 10MB)
-  requestTimeout?: number; // Timeout in ms (default: 30000)
-}
+```
+┌─────────────────────────────────────┐
+│         MCP Server                  │
+│                                     │
+│  ┌─────────────────────────────┐   │
+│  │     Transport Layer         │   │
+│  │                              │   │
+│  │  ┌──────────┐              │   │
+│  │  │   SSE    │              │   │
+│  │  │Transport │              │   │
+│  │  └────┬─────┘              │   │
+│  └───────┼────────────┘           │
+│          │                         │
+├──────────┼─────────────────────────┤
+│          ▼                         │
+│  ┌───────────┐                  │
+│  │Client 1   │                  │
+│  │SSE         │                  │
+│  └───────────┘                  │
+└─────────────────────────────────────┘
 ```
 
 ### Usage
@@ -167,18 +161,18 @@ await httpTransport.connect(server);
 
 ### Complete HttpTransportOptions
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `port` | number | 9108 | Server port |
-| `host` | string | '127.0.0.1' | Server host |
-| `corsOrigin` | string | '*' | CORS origin |
-| `enableCors` | boolean | true | Enable CORS |
-| `path` | string | '/mcp' | Messages endpoint path |
-| `enableRateLimit` | boolean | true | Enable rate limiting |
-| `maxRequestsPerMinute` | number | 100 | Rate limit threshold |
-| `enableBodySizeLimit` | boolean | true | Enable body size limit |
-| `maxBodySize` | number | 10485760 | Max body size (10MB) |
-| `requestTimeout` | number | 30000 | Request timeout (ms) |
+| Option                 | Type    | Default     | Description            |
+| ---------------------- | ------- | ----------- | ---------------------- |
+| `port`                 | number  | 9108        | Server port            |
+| `host`                 | string  | '127.0.0.1' | Server host            |
+| `corsOrigin`           | string  | '\*'        | CORS origin            |
+| `enableCors`           | boolean | true        | Enable CORS            |
+| `path`                 | string  | '/mcp'      | Messages endpoint path |
+| `enableRateLimit`      | boolean | true        | Enable rate limiting   |
+| `maxRequestsPerMinute` | number  | 100         | Rate limit threshold   |
+| `enableBodySizeLimit`  | boolean | true        | Enable body size limit |
+| `maxBodySize`          | number  | 10485760    | Max body size (10MB)   |
+| `requestTimeout`       | number  | 30000       | Request timeout (ms)   |
 
 ### Endpoints
 
@@ -188,17 +182,17 @@ await httpTransport.connect(server);
 
 ### HTTP Status Code Mapping
 
-| Status | Condition | Response |
-|--------|-----------|----------|
-| 200 | Success | JSON-RPC response |
-| 204 | CORS Preflight | Empty body |
-| 400 | Bad Request | `{error: "message"}` |
-| 403 | Forbidden (invalid CORS) | `{error: "Forbidden"}` |
-| 404 | Not Found | "Not Found" |
-| 413 | Payload Too Large | `{error: "Request body too large"}` |
-| 429 | Too Many Requests | `{error: "Too many requests"}` |
-| 500 | Internal Error | `{error: "Internal server error"}` |
-| 503 | Server Not Ready | `{error: "Server not ready"}` |
+| Status | Condition                | Response                            |
+| ------ | ------------------------ | ----------------------------------- |
+| 200    | Success                  | JSON-RPC response                   |
+| 204    | CORS Preflight           | Empty body                          |
+| 400    | Bad Request              | `{error: "message"}`                |
+| 403    | Forbidden (invalid CORS) | `{error: "Forbidden"}`              |
+| 404    | Not Found                | "Not Found"                         |
+| 413    | Payload Too Large        | `{error: "Request body too large"}` |
+| 429    | Too Many Requests        | `{error: "Too many requests"}`      |
+| 500    | Internal Error           | `{error: "Internal server error"}`  |
+| 503    | Server Not Ready         | `{error: "Server not ready"}`       |
 
 ### Environment Configuration
 
@@ -240,18 +234,6 @@ curl -X POST http://127.0.0.1:9108/mcp \
 
 ---
 
-## SSE vs HTTP Transport
-
-| Aspect | SSE Transport | HTTP Transport |
-|--------|--------------|----------------|
-| Communication | One-way streaming (server->client) | Request-response (bidirectional) |
-| Connection | Persistent (keep-alive) | Stateless (per-request) |
-| Use case | Real-time updates, notifications | Traditional API calls |
-| Response | Events pushed to client | Direct JSON response to request |
-| Endpoints | `/sse`, `/sse/message`, `/health` | `/mcp`, `/health`, `/` |
-
----
-
 ## Architecture
 
 ```
@@ -261,17 +243,17 @@ curl -X POST http://127.0.0.1:9108/mcp \
 │  ┌─────────────────────────────┐   │
 │  │     Transport Layer         │   │
 │  │                              │   │
-│  │  ┌──────────┐  ┌──────────┐  │   │
-│  │  │   SSE    │  │   HTTP   │  │   │
-│  │  │Transport │  │Transport │  │   │
-│  │  └────┬─────┘  └────┬─────┘  │   │
-│  └───────┼────────────┼────────┘   │
-│          │            │             │
-├──────────┼────────────┼─────────────┤
-│          ▼            ▼             │
-│  ┌───────────┐  ┌───────────┐      │
-│  │Client 1   │  │Client 2   │      │
-│  │SSE/HTTP   │  │HTTP only  │      │
-│  └───────────┘  └───────────┘      │
+│  │  ┌──────────┐              │   │
+│  │  │   SSE    │              │   │
+│  │  │Transport │              │   │
+│  │  └────┬─────┘              │   │
+│  └───────┼────────────┘           │
+│          │                         │
+├──────────┼─────────────────────────┤
+│          ▼                         │
+│  ┌───────────┐                  │
+│  │Client 1   │                  │
+│  │SSE         │                  │
+│  └───────────┘                  │
 └─────────────────────────────────────┘
 ```
