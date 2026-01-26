@@ -218,7 +218,7 @@ export class ConnectionPool {
 		}
 
 		// Generate unique session ID
-		const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+		const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
 		// Create a new server instance for this session
 		// Note: In production, you might want to reuse server instances or use a different strategy
@@ -233,7 +233,9 @@ export class ConnectionPool {
 		const session = new Session(sessionId, server, this._sessionTimeout);
 		this._sessions.set(sessionId, session);
 
-		console.log(`Created session ${sessionId} (${this._sessions.size}/${this._maxSessions} active sessions)`);
+		console.log(
+			`Created session ${sessionId} (${this._sessions.size}/${this._maxSessions} active sessions)`
+		);
 		return sessionId;
 	}
 
@@ -271,7 +273,9 @@ export class ConnectionPool {
 		await session.close();
 		this._sessions.delete(sessionId);
 
-		console.log(`Closed session ${sessionId} (${this._sessions.size}/${this._maxSessions} active sessions)`);
+		console.log(
+			`Closed session ${sessionId} (${this._sessions.size}/${this._maxSessions} active sessions)`
+		);
 	}
 
 	/**
@@ -346,7 +350,9 @@ export class ConnectionPool {
 		}
 
 		if (cleaned > 0) {
-			console.log(`Cleaned ${cleaned} timed-out sessions (${this._sessions.size}/${this._maxSessions} active sessions)`);
+			console.log(
+				`Cleaned ${cleaned} timed-out sessions (${this._sessions.size}/${this._maxSessions} active sessions)`
+			);
 		}
 	}
 

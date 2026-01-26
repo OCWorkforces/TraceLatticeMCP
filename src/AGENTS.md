@@ -1,78 +1,38 @@
-# SOURCE DIRECTORY
+# SOURCE MODULE
 
-**Generated:** 2026-01-26 09:15
+**Generated:** 2026-01-26
+**Parent:** ../AGENTS.md
 
-## DIRECTORY MAP
+## OVERVIEW
+
+Core application source code organized by domain (Infrastructure, Core, Persistence, Discovery).
+
+## STRUCTURE
 
 ```
 src/
 ├── Core
-│   ├── index.ts          # Main entry + ToolAwareSequentialThinkingServer
-│   ├── schema.ts         # Valibot validation schemas
-│   ├── types.ts          # TypeScript interfaces
-│   ├── errors.ts         # SequentialThinkingError hierarchy
-│   ├── HistoryManager.ts # Thought history + branch management
-│   └── ServerConfig.ts   # Configuration class
+│   ├── index.ts          # Entry point
+│   ├── HistoryManager.ts # State & Branching logic
+│   └── ServerConfig.ts   # Config validation
 ├── Infrastructure
-│   ├── di/               # Dependency injection container
-│   ├── cache/            # Discovery LRU cache
-│   ├── config/           # File-based config loading
-│   └── logger/           # Structured logger
-├── Persistence (see persistence/CLAUDE.md)
-│   ├── persistence/      # State persistence backends
-├── Transport (see transport/CLAUDE.md)
-│   ├── transport/        # MCP transports (SSE, HTTP)
-├── Scalability
-│   ├── cluster/          # Worker pool manager
-│   └── pool/             # Session connection pool
-├── Discovery
-│   ├── registry/         # Tool + Skill registries
-│   └── watchers/         # File watchers
-├── Processing
-│   ├── processor/        # ThoughtProcessor + InputNormalizer
-│   └── formatter/        # ThoughtFormatter
-├── Telemetry (NEEDSDOC)
-│   └── metrics/          # Metrics + telemetry (UNDOCUMENTED)
-└── Testing
-    └── __tests__/        # 380+ tests
+│   ├── di/               # (see di/AGENTS.md)
+│   ├── cache/            # LRU Cache
+│   ├── config/           # Config loading
+│   └── logger/           # Structured logging
+├── Domains
+│   ├── persistence/      # (see persistence/AGENTS.md)
+│   ├── transport/        # (see transport/AGENTS.md)
+│   ├── registry/         # (see registry/AGENTS.md)
+│   ├── cluster/          # (see cluster/AGENTS.md)
+│   └── pool/             # Session pooling
+└── Quality
+    ├── metrics/          # (see metrics/AGENTS.md)
+    └── __tests__/        # (see __tests__/AGENTS.md)
 ```
 
-## WHERE TO WORK
+## KEY PATTERNS
 
-| Task         | Location                        | Documentation                 |
-| ------------ | ------------------------------- | ----------------------------- |
-| Server core  | `index.ts`, `HistoryManager.ts` | Root CLAUDE.md                |
-| DI container | `di/`                           | `di/CLAUDE.md`                |
-| Persistence  | `persistence/`                  | `persistence/CLAUDE.md`       |
-| Transports   | `transport/`                    | `transport/CLAUDE.md`         |
-| Worker pool  | `cluster/`                      | `cluster/CLAUDE.md`           |
-| Registries   | `registry/`                     | `registry/CLAUDE.md`          |
-| Processing   | `processor/`                    | `processor/CLAUDE.md`         |
-| **Metrics**  | `metrics/`                      | `metrics/AGENTS.md` ← MISSING |
-| Tests        | `__tests__/`                    | `__tests__/CLAUDE.md`         |
-
-## KEY EXPORTS
-
-```typescript
-// Main server
-import { ToolAwareSequentialThinkingServer } from './index.js';
-
-// History management
-import { HistoryManager } from './HistoryManager.js';
-
-// Registries
-import { ToolRegistry, SkillRegistry } from './registry/index.js';
-
-// Processor
-import { ThoughtProcessor } from './processor/ThoughtProcessor.js';
-
-// Formatter
-import { ThoughtFormatter } from './formatter/ThoughtFormatter.js';
-```
-
-## PATTERNS
-
-- **index.ts re-exports**: All public APIs available from `./index.js`
-- **Module index.ts**: Each subdirectory has `index.ts` with factory functions
-- **Named exports**: Prefer named over default for tree-shaking
-- **Async factories**: `create*` functions return `Promise<T>`
+- **Re-exports**: Public API exported via `index.ts`.
+- **Manager Pattern**: `HistoryManager`, `ToolRegistry`, etc. encapsulate logic.
+- **Validation**: `valibot` schemas in `schema.ts`.

@@ -331,7 +331,7 @@ export class WorkerManager {
 		this._nextWorkerIndex = (this._nextWorkerIndex + 1) % this._workers.length;
 
 		// Generate unique request ID
-		const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+		const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
 		return new Promise((resolve, reject) => {
 			// Set timeout
@@ -459,7 +459,7 @@ export class WorkerManager {
 	 * @private
 	 * TODO: Integrate into processThought or call periodically
 	 */
-	// @ts-ignore - Not yet integrated
+	// @ts-expect-error - Not yet integrated, will be used in future
 	private _checkScalingNeed(): void {
 		if (!this._enableAutoScaling) return;
 
@@ -480,7 +480,7 @@ export class WorkerManager {
 	 * @private
 	 * TODO: Integrate into processThought or call periodically
 	 */
-	// @ts-ignore - Not yet integrated
+	// @ts-expect-error - Not yet integrated, will be used in future
 	private _stealWork(): void {
 		if (!this._enableWorkStealing) return;
 

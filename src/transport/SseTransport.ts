@@ -341,7 +341,7 @@ export class SseTransport {
 		res.writeHead(200, {
 			'Content-Type': 'text/event-stream',
 			'Cache-Control': 'no-cache',
-			'Connection': 'keep-alive',
+			Connection: 'keep-alive',
 			'Access-Control-Allow-Origin': this._corsOrigin,
 		});
 
@@ -425,7 +425,7 @@ export class SseTransport {
 	 * Generate a unique client ID
 	 */
 	private _generateClientId(): string {
-		return `client_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+		return `client_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 	}
 
 	/**
