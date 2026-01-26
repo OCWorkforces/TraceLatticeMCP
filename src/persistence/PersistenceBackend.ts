@@ -4,7 +4,7 @@ import type { ThoughtData } from '../types.js';
  * Persistence backend interface for storing thought history and branches.
  *
  * Implementations can store data in various formats (JSON files, SQLite, Redis, etc.)
- * while providing a unified API for the HistoryManager.
+ * while providing a unified API for HistoryManager.
  */
 export interface PersistenceBackend {
 	/**
@@ -26,7 +26,7 @@ export interface PersistenceBackend {
 	 * Save all thoughts in a branch to persistent storage.
 	 *
 	 * @param branchId - The unique identifier for the branch
-	 * @param thoughts - Array of thoughts in the branch
+	 * @param thoughts - Array of thoughts in branch
 	 */
 	saveBranch(branchId: string, thoughts: ThoughtData[]): Promise<void>;
 
@@ -34,7 +34,7 @@ export interface PersistenceBackend {
 	 * Load all thoughts for a specific branch.
 	 *
 	 * @param branchId - The unique identifier for the branch
-	 * @returns Array of thoughts in the branch, or undefined if branch doesn't exist
+	 * @returns Array of thoughts in branch, or undefined if branch doesn't exist
 	 */
 	loadBranch(branchId: string): Promise<ThoughtData[] | undefined>;
 
@@ -46,18 +46,17 @@ export interface PersistenceBackend {
 	listBranches(): Promise<string[]>;
 
 	/**
+	 * Check if backend is healthy.
+	 *
+	 * @returns Promise that resolves to true if healthy, false otherwise
+	 */
+	healthy(): Promise<boolean>;
+
+	/**
 	 * Clear all persisted data (history and branches).
 	 * Use with caution - this cannot be undone.
 	 */
 	clear(): Promise<void>;
-
-	/**
-	 * Check if the persistence backend is healthy and ready.
-	 * Useful for health checks and startup validation.
-	 *
-	 * @returns true if the backend is operational
-	 */
-	healthy(): Promise<boolean>;
 }
 
 /**

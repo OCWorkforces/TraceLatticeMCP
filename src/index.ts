@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
+import { EventEmitter } from 'node:events';
 import { SequentialThinkingSchema, SEQUENTIAL_THINKING_TOOL } from './schema.js';
 import { ThoughtData } from './types.js';
 
@@ -26,7 +27,10 @@ import { ToolWatcher } from './watchers/ToolWatcher.js';
 import { Container } from './di/index.js';
 import { ToolRegistry } from './registry/ToolRegistry.js';
 import { SkillRegistry } from './registry/SkillRegistry.js';
-import { createPersistenceBackend } from './persistence/PersistenceBackend.js';
+import {
+	createPersistenceBackend,
+	type PersistenceBackend,
+} from './persistence/PersistenceBackend.js';
 import type { SseTransportOptions } from './transport/SseTransport.js';
 import type { HttpTransportOptions } from './transport/HttpTransport.js';
 import type { ConfigFileOptions } from './config/ConfigLoader.js';
@@ -101,7 +105,17 @@ interface ServerOptions {
 	httpTransportOptions?: HttpTransportOptions;
 }
 
-export class ToolAwareSequentialThinkingServer {
+/**
+ * Server error events for event-driven error handling
+ */
+interface ServerEvents {
+	persistenceError: { operation: string; error: Error };
+	discoveryError: { directory: string; error: Error };
+	transportError: { transport: string; error: Error };
+	thoughtProcessed: { thoughtNumber: number; duration: number };
+}
+
+export class ToolAwareSequentialThinkingServer extends EventEmitter {
 	/**
 	 * Factory method to create a new server instance with async initialization.
 	 * This is the recommended way to create server instances.
@@ -130,6 +144,15 @@ export class ToolAwareSequentialThinkingServer {
 		}
 
 		return server;
+	}
+
+	// Type-safe event emission
+	emit<K extends keyof ServerEvents>(event: K, payload: ServerEvents[K]): boolean {
+		return super.emit(event, payload);
+	}
+
+	on<K extends keyof ServerEvents>(event: K, listener: (payload: ServerEvents[K]) => void): this {
+		return super.on(event, listener);
 	}
 
 	// DI Container for managing dependencies
@@ -185,6 +208,7 @@ export class ToolAwareSequentialThinkingServer {
 
 	constructor(options: ServerOptions = {}) {
 		// Use provided container or create a new one
+		super();
 		this._container = options.container ?? this._createContainerSync(options);
 
 		// Resolve dependencies from container
@@ -218,15 +242,15 @@ export class ToolAwareSequentialThinkingServer {
 	}
 
 	/**
-	 * Create and configure the DI container synchronously (without persistence)
-	 * This is used for backward compatibility when createServer is not used.
+	 * Shared core logic for container creation.
+	 * This method contains all common initialization logic between sync and async paths.
 	 */
-	private _createContainerSync(options: ServerOptions): Container {
+	private static _createContainerCore(
+		options: ServerOptions,
+		fileConfig: ConfigFileOptions | null,
+		persistence: PersistenceBackend | null
+	): Container {
 		const container = new Container();
-
-		// Load config from file
-		const configLoader = new ConfigLoader();
-		const fileConfig = configLoader.load();
 
 		// Initialize config with file defaults overridden by constructor options
 		const config = new ServerConfig({
@@ -251,84 +275,13 @@ export class ToolAwareSequentialThinkingServer {
 		container.registerInstance('Logger', logger);
 		container.registerInstance('Config', config);
 		container.registerInstance('FileConfig', fileConfig || {});
-
-		// Register null persistence for sync initialization
-		container.registerInstance('Persistence', null);
-
-		// Register HistoryManager with lazy initialization
-		container.register('HistoryManager', () => {
-			const cfg = container.resolve<ServerConfig>('Config');
-			const log = container.resolve<StructuredLogger>('Logger');
-			return new HistoryManager({
-				maxHistorySize: cfg.maxHistorySize,
-				maxBranches: cfg.maxBranches,
-				maxBranchSize: cfg.maxBranchSize,
-				logger: log,
-				skillDirs: cfg.skillDirs,
-				discoveryCache: cfg.discoveryCache,
-				lazyDiscovery: options.lazyDiscovery,
-				persistence: null,
-			});
-		});
-
-		// Register ThoughtFormatter (can be transient)
-		container.registerFactory('ThoughtFormatter', () => new ThoughtFormatter());
-
-		// Register ThoughtProcessor
-		container.register('ThoughtProcessor', () => {
-			const history = container.resolve<HistoryManager>('HistoryManager');
-			const formatter = container.resolve<ThoughtFormatter>('ThoughtFormatter');
-			const log = container.resolve<StructuredLogger>('Logger');
-			return new ThoughtProcessor(history, formatter, log);
-		});
-
-		return container;
-	}
-
-	/**
-	 * Create and configure the DI container with async persistence initialization.
-	 * This is used internally by the static create() factory.
-	 */
-	private static async _createContainerAsyncStatic(options: ServerOptions): Promise<Container> {
-		const container = new Container();
-
-		// Load config from file
-		const configLoader = new ConfigLoader();
-		const fileConfig = configLoader.load();
-
-		// Initialize config with file defaults overridden by constructor options
-		const config = new ServerConfig({
-			maxHistorySize: options.maxHistorySize ?? fileConfig?.maxHistorySize,
-			maxBranches: options.maxBranches ?? fileConfig?.maxBranches,
-			maxBranchSize: options.maxBranchSize ?? fileConfig?.maxBranchSize,
-			skillDirs: fileConfig?.skillDirs,
-			discoveryCache: fileConfig?.discoveryCache,
-			persistence: fileConfig?.persistence,
-		});
-
-		// Initialize logger
-		const logger =
-			options.logger ??
-			new StructuredLogger({
-				level: fileConfig?.logLevel ?? 'info',
-				context: 'SequentialThinking',
-				pretty: fileConfig?.prettyLog ?? true,
-			});
-
-		// Register all services in the container
-		container.registerInstance('Logger', logger);
-		container.registerInstance('Config', config);
-		container.registerInstance('FileConfig', fileConfig || {});
-
-		// Register persistence backend (async)
-		const persistence = await createPersistenceBackend(config.persistence);
 		container.registerInstance('Persistence', persistence);
 
 		// Register HistoryManager with lazy initialization
 		container.register('HistoryManager', () => {
 			const cfg = container.resolve<ServerConfig>('Config');
 			const log = container.resolve<StructuredLogger>('Logger');
-			const pers = container.resolve('Persistence') as Awaited<ReturnType<typeof createPersistenceBackend>>;
+			const pers = container.resolve('Persistence') as PersistenceBackend | null;
 			return new HistoryManager({
 				maxHistorySize: cfg.maxHistorySize,
 				maxBranches: cfg.maxBranches,
@@ -353,6 +306,33 @@ export class ToolAwareSequentialThinkingServer {
 		});
 
 		return container;
+	}
+
+	/**
+	 * Create and configure the DI container synchronously (without persistence)
+	 * This is used for backward compatibility when createServer is not used.
+	 */
+	private _createContainerSync(options: ServerOptions): Container {
+		const configLoader = new ConfigLoader();
+		const fileConfig = configLoader.load();
+
+		return ToolAwareSequentialThinkingServer._createContainerCore(options, fileConfig, null);
+	}
+
+	/**
+	 * Create and configure the DI container with async persistence initialization.
+	 * This is used internally by the static create() factory.
+	 */
+	private static async _createContainerAsyncStatic(options: ServerOptions): Promise<Container> {
+		const configLoader = new ConfigLoader();
+		const fileConfig = configLoader.load();
+
+		// Initialize persistence backend (async)
+		const persistence = await createPersistenceBackend(
+			fileConfig?.persistence ?? { enabled: false }
+		);
+
+		return ToolAwareSequentialThinkingServer._createContainerCore(options, fileConfig, persistence);
 	}
 
 	/**
@@ -434,22 +414,41 @@ export class ToolAwareSequentialThinkingServer {
  * const server = await createServer({ container: mockContainer });
  * ```
  */
-export async function createServer(options: ServerOptions = {}): Promise<ToolAwareSequentialThinkingServer> {
+export async function createServer(
+	options: ServerOptions = {}
+): Promise<ToolAwareSequentialThinkingServer> {
 	return ToolAwareSequentialThinkingServer.create(options);
 }
 
 /**
  * Synchronous factory function for creating a server without async operations.
  *
+ * @deprecated Since v0.0.16. Use `create` async factory method instead.
+ * The `create` method provides better error handling and async initialization support.
+ *
+ * @remarks
+ * **Migration Guide:**
+ * ```typescript
+ * // OLD (deprecated)
+ * const server = createServerSync({ autoDiscover: false });
+ *
+ * // NEW (recommended)
+ * const server = await create({ autoDiscover: false });
+ * ```
+ *
  * Use this when you need synchronous server creation, but note that
- * skill discovery will still occur synchronously if autoDiscover is enabled.
+ * skill discovery will still occur synchronously if `autoDiscover` is enabled.
  *
  * @param options - Server configuration options
  * @returns A configured server instance
  *
  * @example
  * ```typescript
+ * // Deprecated usage
  * const server = createServerSync({ autoDiscover: false });
+ *
+ * // Recommended usage
+ * const server = await create({ autoDiscover: false });
  * ```
  */
 export function createServerSync(options: ServerOptions = {}): ToolAwareSequentialThinkingServer {

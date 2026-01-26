@@ -14,30 +14,13 @@
  * ```
  */
 
-import type { McpServer } from 'tmcp';
+import type { McpServer, createServer, IncomingMessage, ServerResponse } from 'tmcp';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
+import type { Server } from 'node:http';
 import { URL } from 'node:url';
-
-/**
- * Allowed query parameter names (whitelist for security).
- */
-const ALLOWED_QUERY_PARAMS = new Set(['session', 'sessionId', 'client', 'clientId']);
-
-/**
- * Maximum session ID length.
- */
-const MAX_SESSION_ID_LENGTH = 64;
-
-/**
- * Session ID validation pattern (alphanumeric, hyphens, underscores).
- */
-const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
-
-/**
- * Rate limit settings (requests per minute per IP).
- */
-const RATE_LIMIT_REQUESTS = 100;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+import { safeParse } from 'valibot';
+import { JsonRpcRequestSchema } from '../schema.js';
+import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 
 /**
  * Default maximum body size (10MB).
@@ -49,48 +32,12 @@ const DEFAULT_MAX_BODY_SIZE = 10 * 1024 * 1024;
  */
 const DEFAULT_REQUEST_TIMEOUT = 30000;
 
-export interface HttpTransportOptions {
+export interface HttpTransportOptions extends TransportOptions {
 	/**
-	 * Port to listen on
-	 * @default 9108
-	 */
-	port?: number;
-
-	/**
-	 * Host to bind to
-	 * @default '127.0.0.1'
-	 */
-	host?: string;
-
-	/**
-	 * CORS origin to allow
-	 * @default '*'
-	 */
-	corsOrigin?: string;
-
-	/**
-	 * Enable CORS preflight
-	 * @default true
-	 */
-	enableCors?: boolean;
-
-	/**
-	 * Path for the messages endpoint
-	 * @default '/mcp'
+	 * Path for messages endpoint
+	 * @default '/messages'
 	 */
 	path?: string;
-
-	/**
-	 * Enable rate limiting
-	 * @default true
-	 */
-	enableRateLimit?: boolean;
-
-	/**
-	 * Max requests per minute per IP
-	 * @default 100
-	 */
-	maxRequestsPerMinute?: number;
 
 	/**
 	 * Enable request body size limit
@@ -114,8 +61,8 @@ export interface HttpTransportOptions {
 /**
  * HTTP Transport for MCP server.
  *
- * This transport uses standard HTTP request-response communication for MCP server
- * interactions, providing a stateless REST-like API interface.
+ * This transport provides a stateless, REST-like API interface for MCP tool invocations
+ * using standard HTTP request-response patterns.
  *
  * @remarks
  * **Security Features:**
@@ -142,29 +89,17 @@ export interface HttpTransportOptions {
  * - 500: Internal Server Error
  * - 503: Server Not Ready
  */
-export class HttpTransport {
+export class HttpTransport extends BaseTransport {
 	private _server: ReturnType<typeof createServer>;
-	private _port: number;
-	private _host: string;
-	private _corsOrigin: string;
-	private _enableCors: boolean;
 	private _path: string;
-	private _requestCount: number = 0;
-	private _rateLimitEnabled: boolean;
-	private _maxRequestsPerMinute: number;
-	private _rateLimitMap: Map<string, { count: number; resetTime: number }> = new Map();
 	private _bodySizeLimitEnabled: boolean;
 	private _maxBodySize: number;
 	private _requestTimeout: number;
+	private _requestCount: number = 0;
 
 	constructor(options: HttpTransportOptions = {}) {
-		this._port = options.port ?? 9108;
-		this._host = options.host ?? '127.0.0.1';
-		this._corsOrigin = options.corsOrigin ?? '*';
-		this._enableCors = options.enableCors ?? true;
-		this._path = options.path ?? '/mcp';
-		this._rateLimitEnabled = options.enableRateLimit ?? true;
-		this._maxRequestsPerMinute = options.maxRequestsPerMinute ?? RATE_LIMIT_REQUESTS;
+		super(options);
+		this._path = options.path ?? '/messages';
 		this._bodySizeLimitEnabled = options.enableBodySizeLimit ?? true;
 		this._maxBodySize = options.maxBodySize ?? DEFAULT_MAX_BODY_SIZE;
 		this._requestTimeout = options.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT;
@@ -172,14 +107,10 @@ export class HttpTransport {
 		this._server = createServer((req, res) => this._handleRequest(req, res));
 	}
 
-	private _mcpServer: McpServer | null = null;
-
 	/**
-	 * Connect the MCP server to this transport.
-	 *
-	 * @param mcpServer - The MCP server instance
+	 * Connects MCP server to this transport.
 	 */
-	async connect(mcpServer: McpServer): Promise<void> {
+	async connect(mcpServer: unknown): Promise<void> {
 		this._mcpServer = mcpServer;
 
 		return new Promise((resolve, reject) => {
@@ -199,135 +130,7 @@ export class HttpTransport {
 	}
 
 	/**
-	 * Validate session ID format.
-	 *
-	 * @param sessionId - The session ID to validate
-	 * @returns true if valid, false otherwise
-	 * @private
-	 */
-	private _validateSessionId(sessionId: string): boolean {
-		if (sessionId.length > MAX_SESSION_ID_LENGTH) {
-			return false;
-		}
-		return SESSION_ID_PATTERN.test(sessionId);
-	}
-
-	/**
-	 * Sanitize query parameters by removing any not in the whitelist.
-	 *
-	 * @param url - The URL object containing query parameters
-	 * @returns A sanitized record of allowed query parameters
-	 * @private
-	 */
-	private _sanitizeQueryParams(url: URL): Record<string, string> {
-		const sanitized: Record<string, string> = {};
-
-		for (const [key, value] of url.searchParams.entries()) {
-			if (ALLOWED_QUERY_PARAMS.has(key)) {
-				sanitized[key] = value;
-			}
-		}
-
-		return sanitized;
-	}
-
-	/**
-	 * Check rate limit for a given IP address.
-	 *
-	 * @param ip - The IP address to check
-	 * @returns true if rate limit exceeded, false otherwise
-	 * @private
-	 */
-	private _checkRateLimit(ip: string): boolean {
-		if (!this._rateLimitEnabled) {
-			return false;
-		}
-
-		const now = Date.now();
-		const record = this._rateLimitMap.get(ip);
-
-		if (!record || now > record.resetTime) {
-			// Create new rate limit record
-			this._rateLimitMap.set(ip, {
-				count: 1,
-				resetTime: now + RATE_LIMIT_WINDOW_MS,
-			});
-			return false;
-		}
-
-		if (record.count >= this._maxRequestsPerMinute) {
-			return true; // Rate limit exceeded
-		}
-
-		record.count++;
-		return false;
-	}
-
-	/**
-	 * Get client IP address from request.
-	 *
-	 * @param req - The incoming request
-	 * @returns The client IP address
-	 * @private
-	 */
-	private _getClientIp(req: IncomingMessage): string {
-		const forwardedFor = req.headers['x-forwarded-for'];
-		if (forwardedFor && typeof forwardedFor === 'string') {
-			return forwardedFor.split(',')[0].trim();
-		}
-		const remoteAddress = req.socket.remoteAddress;
-		return remoteAddress || 'unknown';
-	}
-
-	/**
-	 * Validate CORS origin from request headers.
-	 *
-	 * @param req - The incoming request
-	 * @returns true if origin is valid, false otherwise
-	 * @private
-	 */
-	private _validateCorsOrigin(req: IncomingMessage): boolean {
-		// If corsOrigin is '*', allow all origins
-		if (this._corsOrigin === '*') {
-			return true;
-		}
-
-		const origin = req.headers.origin;
-		if (!origin) {
-			return true; // No origin header is acceptable
-		}
-
-		// Exact match
-		if (this._corsOrigin === origin) {
-			return true;
-		}
-
-		// Check if the configured origin is a wildcard pattern
-		if (this._corsOrigin.includes('*')) {
-			const pattern = this._corsOrigin.replace(/\*/g, '.*');
-			const regex = new RegExp(`^${pattern}$`);
-			return regex.test(origin);
-		}
-
-		return false;
-	}
-
-	/**
-	 * Set CORS headers on response.
-	 *
-	 * @param res - The server response
-	 * @private
-	 */
-	private _setCorsHeaders(res: ServerResponse): void {
-		if (this._enableCors) {
-			res.setHeader('Access-Control-Allow-Origin', this._corsOrigin);
-			res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-			res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-		}
-	}
-
-	/**
-	 * Handle incoming HTTP requests
+	 * Handles incoming HTTP requests.
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		this._requestCount++;
@@ -335,33 +138,32 @@ export class HttpTransport {
 		const url = new URL(req.url || '', `http://${req.headers.host}`);
 
 		// Check rate limit first
-		const clientIp = this._getClientIp(req);
-		if (this._checkRateLimit(clientIp)) {
+		const clientIp = this.getClientIp(req);
+		if (this.checkRateLimit(clientIp)) {
 			res.writeHead(429, {
 				'Content-Type': 'application/json',
-				'Retry-After': '60',
 			});
 			res.end(JSON.stringify({ error: 'Too many requests' }));
 			return;
 		}
 
 		// Validate CORS origin
-		if (!this._validateCorsOrigin(req)) {
+		if (!this.validateCorsOrigin(req)) {
 			res.writeHead(403, { 'Content-Type': 'application/json' });
 			res.end(JSON.stringify({ error: 'Forbidden' }));
 			return;
 		}
 
 		// Set CORS headers for all responses
-		this._setCorsHeaders(res);
+		this.setCorsHeaders(res);
 
 		// Sanitize query parameters
-		const sanitizedParams = this._sanitizeQueryParams(url);
+		const sanitizedParams = this.sanitizeQueryParams(url);
 
 		// Validate session ID if present
 		if (sanitizedParams.session || sanitizedParams.sessionId) {
 			const sessionId = sanitizedParams.session || sanitizedParams.sessionId;
-			if (!this._validateSessionId(sessionId)) {
+			if (!this.validateSessionId(sessionId)) {
 				res.writeHead(400, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Invalid session ID format' }));
 				return;
@@ -411,13 +213,19 @@ export class HttpTransport {
 	}
 
 	/**
-	 * Handle incoming message (JSON-RPC method call)
+	 * Handles incoming message (JSON-RPC method call).
 	 */
 	private async _handleMessage(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		// Set up request timeout
 		const timeout = setTimeout(() => {
 			res.writeHead(500, { 'Content-Type': 'application/json' });
-			res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32603, message: 'Request timeout' } }));
+			res.end(
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: null,
+					error: { code: -32603, message: 'Request timeout' },
+				})
+			);
 		}, this._requestTimeout);
 
 		try {
@@ -432,7 +240,7 @@ export class HttpTransport {
 				if (this._bodySizeLimitEnabled && bodySize > this._maxBodySize) {
 					clearTimeout(timeout);
 					res.writeHead(413, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Request body too large' } }));
+					res.end(JSON.stringify({ error: 'Request body too large' }));
 					return;
 				}
 
@@ -456,6 +264,24 @@ export class HttpTransport {
 				return;
 			}
 
+			const parseResult = safeParse(JsonRpcRequestSchema, jsonRpcRequest);
+			if (!parseResult.success) {
+				clearTimeout(timeout);
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: jsonRpcRequest?.id ?? null,
+						error: {
+							code: -32600,
+							message: 'Invalid Request',
+							data: parseResult.issues,
+						},
+					})
+				);
+				return;
+			}
+
 			// Check if MCP server is ready
 			if (!this._mcpServer) {
 				clearTimeout(timeout);
@@ -470,8 +296,7 @@ export class HttpTransport {
 				return;
 			}
 
-			// Process the JSON-RPC request through the MCP server
-			// The server.receive() method is the public API for handling JSON-RPC requests
+			// Process JSON-RPC request through MCP server
 			const response = await this._mcpServer.receive(jsonRpcRequest, {
 				sessionInfo: {},
 			});
@@ -504,25 +329,18 @@ export class HttpTransport {
 	}
 
 	/**
-	 * Get the number of requests handled
+	 * Returns number of requests handled.
 	 */
 	get requestCount(): number {
 		return this._requestCount;
 	}
 
 	/**
-	 * Get the server URL
-	 */
-	get serverUrl(): string {
-		return `http://${this._host}:${this._port}`;
-	}
-
-	/**
-	 * Stop the transport server
+	 * Stops transport server.
 	 */
 	async stop(): Promise<void> {
 		return new Promise((resolve) => {
-			// Close the server
+			// Close server
 			this._server.close(() => {
 				console.log('HTTP transport stopped');
 				resolve();
@@ -532,15 +350,15 @@ export class HttpTransport {
 }
 
 /**
- * Create an HTTP transport with the given options.
+ * Create an HTTP transport with given options.
  *
  * @param options - Transport configuration
  * @returns A configured HTTP transport
  *
  * @example
  * ```typescript
- * const transport = createHttpTransport({ port: 3000 });
- * await transport.connect(mcpServer);
+ * const transport = new HttpTransport({ port: 3000 });
+ * await transport.connect(server);
  * ```
  */
 export function createHttpTransport(options: HttpTransportOptions = {}): HttpTransport {

@@ -9,7 +9,8 @@
  */
 
 import type { Skill } from '../types.js';
-import type { StructuredLogger } from '../logger/StructuredLogger.js';
+import type { Logger } from '../logger/StructuredLogger.js';
+import { NullLogger } from '../logger/NullLogger.js';
 import { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -32,7 +33,7 @@ import { parse as parseYaml } from 'yaml';
  */
 export interface SkillRegistryOptions {
 	/** Optional logger for diagnostics. */
-	logger?: StructuredLogger;
+	logger?: Logger;
 
 	/** Optional cache for skill lookups. */
 	cache?: DiscoveryCache<Skill>;
@@ -118,8 +119,8 @@ export class SkillRegistry {
 	/** Internal storage for skills indexed by name. */
 	private _skills: Map<string, Skill>;
 
-	/** Optional logger for diagnostics. */
-	private _logger: StructuredLogger | null;
+	/** Logger for diagnostics. */
+	private _logger: Logger;
 
 	/** Optional cache for skill lookups. */
 	private _cache: DiscoveryCache<Skill>;
@@ -151,23 +152,19 @@ export class SkillRegistry {
 	 */
 	constructor(options: SkillRegistryOptions = {}) {
 		this._skills = new Map();
-		this._logger = options.logger || null;
+		this._logger = options.logger ?? new NullLogger();
 		this._cache = options.cache || new DiscoveryCache<Skill>({ maxSize: 50, ttl: 300000 });
 		this._skillDirs = options.skillDirs || ['.claude/skills', join(homedir(), '.claude/skills')];
 	}
 
 	/**
-	 * Internal logging method with fallback.
+	 * Internal logging method.
 	 * @param message - The message to log
 	 * @param meta - Optional metadata
 	 * @private
 	 */
 	private log(message: string, meta?: Record<string, unknown>): void {
-		if (this._logger) {
-			this._logger.info(message, meta);
-		} else {
-			console.error(message); // Fallback for backward compatibility
-		}
+		this._logger.info(message, meta);
 	}
 
 	/**
@@ -385,7 +382,6 @@ export class SkillRegistry {
 		}
 	}
 
-
 	/**
 	 * Performs the actual skill discovery operation.
 	 *
@@ -406,7 +402,13 @@ export class SkillRegistry {
 
 				const entries = await readdir(skillDir, { withFileTypes: true });
 				for (const entry of entries) {
-					if (entry.isFile() && entry.name !== '.DS_Store' && (entry.name.endsWith('.md') || entry.name.endsWith('.yml') || entry.name.endsWith('.yaml'))) {
+					if (
+						entry.isFile() &&
+						entry.name !== '.DS_Store' &&
+						(entry.name.endsWith('.md') ||
+							entry.name.endsWith('.yml') ||
+							entry.name.endsWith('.yaml'))
+					) {
 						const filePath = join(skillDir, entry.name);
 						try {
 							const content = await readFile(filePath, 'utf-8');

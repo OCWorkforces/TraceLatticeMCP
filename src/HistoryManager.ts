@@ -8,7 +8,8 @@
  */
 
 import type { ThoughtData } from './types.js';
-import type { StructuredLogger } from './logger/StructuredLogger.js';
+import type { Logger } from './logger/StructuredLogger.js';
+import { NullLogger } from './logger/NullLogger.js';
 import type { DiscoveryCacheOptions } from './cache/DiscoveryCache.js';
 import type { PersistenceBackend } from './persistence/PersistenceBackend.js';
 import type { IHistoryManager } from './IHistoryManager.js';
@@ -53,7 +54,7 @@ export interface HistoryManagerConfig {
 	maxBranchSize?: number;
 
 	/** Optional logger for diagnostics. */
-	logger?: StructuredLogger;
+	logger?: Logger;
 
 	/** Directory paths to search for skills. */
 	skillDirs?: string[];
@@ -139,8 +140,8 @@ export class HistoryManager implements IHistoryManager {
 	/** Maximum size of each branch. */
 	private _maxBranchSize: number;
 
-	/** Optional logger for diagnostics. */
-	private _logger: StructuredLogger | null;
+	/** Logger for diagnostics. */
+	private _logger: Logger;
 
 	/** Persistence backend for saving/loading state. */
 	private _persistence: PersistenceBackend | null;
@@ -173,7 +174,7 @@ export class HistoryManager implements IHistoryManager {
 		this._maxHistorySize = config.maxHistorySize || 1000;
 		this._maxBranches = config.maxBranches || 50;
 		this._maxBranchSize = config.maxBranchSize || 100;
-		this._logger = config.logger || null;
+		this._logger = config.logger ?? new NullLogger();
 		this._persistence = config.persistence ?? null;
 		this._persistenceEnabled = this._persistence !== null;
 		this.tools = new ToolRegistry({
@@ -189,17 +190,13 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	/**
-	 * Internal logging method with fallback.
+	 * Internal logging method.
 	 * @param message - The message to log
 	 * @param meta - Optional metadata
 	 * @private
 	 */
 	private log(message: string, meta?: Record<string, unknown>): void {
-		if (this._logger) {
-			this._logger.info(message, meta);
-		} else {
-			console.error(message);
-		}
+		this._logger.info(message, meta);
 	}
 
 	/**

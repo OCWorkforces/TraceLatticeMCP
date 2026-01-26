@@ -6,7 +6,7 @@
  *
  * @example
  * ```typescript
- * import { SseTransport, HttpTransport, createSseTransport, createHttpTransport } from './transport/index.js';
+ * import { SseTransport, HttpTransport, createSseTransport, createHttpTransport, BaseTransport } from './transport/index.js';
  * import type { SseTransportOptions, HttpTransportOptions } from './transport/index.js';
  *
  * // SSE for real-time streaming
@@ -24,6 +24,8 @@
  * ```
  * @module transport
  */
+
+export { BaseTransport } from './BaseTransport.js';
 
 export { SseTransport, createSseTransport } from './SseTransport.js';
 export type { SseTransportOptions } from './SseTransport.js';

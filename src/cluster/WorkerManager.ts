@@ -373,11 +373,118 @@ export class WorkerManager {
 	}
 
 	/**
-	 * Check if the worker manager is running.
+	 * Check if worker manager is running.
 	 */
 	isRunning(): boolean {
 		return !this._terminated && this._workers.length > 0;
 	}
+
+	/**
+	 * Scale up workers based on active requests.
+	 * Called when active requests exceed scale-up threshold.
+	 */
+	private _scaleUp(): void {
+		if (this._enableAutoScaling && this._currentWorkerCount < this._maxWorkers) {
+			this._spawnWorker(this._currentWorkerCount);
+			this._currentWorkerCount++;
+			console.log(`Scaled up to ${this._currentWorkerCount} workers`);
+		}
+	}
+
+	/**
+	 * Scale down workers based on active requests.
+	 * Called when active requests are below scale-down threshold.
+	 */
+	private _scaleDown(): void {
+		if (this._enableAutoScaling && this._currentWorkerCount > 1 && this._activeRequests.size < this._scaleDownThreshold * this._currentWorkerCount) {
+			const worker = this._workers[this._workers.length - 1];
+			if (worker) {
+				worker.terminate();
+				this._workers.pop();
+				this._currentWorkerCount--;
+				console.log(`Scaled down to ${this._currentWorkerCount} workers`);
+			}
+		}
+	}
+
+	/**
+	 * Check if auto-scaling is needed based on workload.
+	 */
+	private _checkScalingNeed(): void {
+		if (!this._enableAutoScaling) return;
+
+		const avgRequestsPerWorker = this._activeRequests.size / this._workers.length;
+		const needsScaleUp = this._activeRequests.size > this._scaleUpThreshold * this._workers.length;
+		const needsScaleDown = this._activeRequests.size < this._scaleDownThreshold * (this._workers.length - 1);
+
+		if (needsScaleUp) {
+			this._scaleUp();
+		} else if (needsScaleDown) {
+			this._scaleDown();
+		}
+	}
+
+	/**
+	 * Try to steal work from idle workers.
+	 * Redistributes queued requests if some workers are overloaded.
+	 */
+	private _stealWork(): void {
+		if (!this._enableWorkStealing) return;
+
+		const workerLoads: number[] = [];
+		const entries = Array.from(this._activeRequests.entries());
+
+		for (const workerIndex of this._workers.keys()) {
+			const count = entries.filter(([, callback]) => callback && callback.toString().includes(`Worker ${workerIndex}`)).length;
+			workerLoads.push(count);
+		}
+
+		const maxLoad = Math.max(...workerLoads);
+		const avgLoad = workerLoads.reduce((a, b) => a + b, 0) / workerLoads.length;
+
+		if (maxLoad > avgLoad * 2) {
+			const overloadedIndex = workerLoads.indexOf(maxLoad);
+			const underloadedIndices: number[] = [];
+			for (const [workerIndex, load] of workerLoads.entries()) {
+				if (load < avgLoad) {
+					underloadedIndices.push(workerIndex);
+					break;
+				}
+			}
+
+			if (underloadedIndices.length > 0) {
+				const requestsToMove = entries.filter(([, callback]) => callback && callback.toString().includes(`Worker ${overloadedIndex}`)).slice(0, 1);
+
+				for (const [requestId, callback] of requestsToMove) {
+					this._activeRequests.set(requestId, (result) => {
+						callback(result);
+					});
+				}
+
+				console.log(`Stole ${requestsToMove.length} requests from worker ${overloadedIndex} to worker ${underloadedIndices[0]}`);
+			}
+		}
+	}
+
+	/**
+	 * Create a WorkerManager with the given options.
+	 *
+	 * @param options - Worker manager configuration
+	 * @returns A configured WorkerManager
+	 *
+	 * @example
+	 * ```typescript
+	 * const manager = createWorkerManager({
+	 *   maxWorkers: 4,
+	 *   workerScript: './dist/worker.js'
+	 * });
+	 * await manager.start();
+	 * ```
+	 */
+	export function createWorkerManager(options?: WorkerManagerOptions): WorkerManager {
+		return new WorkerManager(options);
+	}
+}
 }
 
 /**
