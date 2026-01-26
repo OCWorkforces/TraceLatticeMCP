@@ -50,7 +50,7 @@ export interface TransportOptions {
 	maxRequestsPerMinute?: number;
 }
 
-	export abstract class BaseTransport {
+export abstract class BaseTransport {
 	protected _port: number;
 	protected _host: string;
 	protected _corsOrigin: string;
@@ -72,68 +72,6 @@ export interface TransportOptions {
 		this._maxRequestsPerMinute = options.maxRequestsPerMinute ?? RATE_LIMIT_REQUESTS;
 		this._isShuttingDown = false;
 	}
-
-	/**
-	 * Get the server URL with localhost substitution for default host.
-	 */
-	get serverUrl(): string {
-		const host =
-			!this._wasHostExplicitlySet && this._host === '127.0.0.1' ? 'localhost' : this._host;
-		return `http://${host}:${this._port}`;
-	}
-
-	/**
-	 * Validate session ID format.
-	 *
-	 * @param sessionId - The session ID to validate
-	 * @returns true if valid, false otherwise
-	 */
-	protected validateSessionId(sessionId: string): boolean {
-		if (sessionId.length > MAX_SESSION_ID_LENGTH) {
-			return false;
-		}
-		return SESSION_ID_PATTERN.test(sessionId);
-	}
-
-	/**
-	 * Sanitize query parameters by removing any not in whitelist.
-	 *
-	 * @param url - The URL object containing query parameters
-	 * @returns A sanitized record of allowed query parameters
-	 */
-
-	/**
-	 * Check if transport is shutting down.
-	 * @returns true if in shutdown phase
-	 */
-	protected isShuttingDown(): boolean {
-		return this._isShuttingDown;
-	}
-
-	/**
-	 * Connect to MCP server.
-	 */
-	abstract connect(mcpServer: unknown): Promise<void>;
-
-	/**
-	 * Stop the transport server with graceful shutdown.
-	 *
-	 * This method should:
-	 * 1. Set shutdown flag to prevent new connections
-	 * 2. Wait for in-flight requests to complete (configurable timeout)
-	 * 3. Close server connections
-	 * 4. Release resources
-	 *
-	 * @param timeout - Maximum time to wait for requests to drain (default: 30 seconds)
-	 * @returns Promise that resolves when shutdown is complete
-	 */
-	abstract stop(timeout?: number): Promise<void>;
-
-	/**
-	 * Get number of clients connected.
-	 */
-	abstract get clientCount(): number;
-}
 
 	/**
 	 * Get the server URL with localhost substitution for default host.
@@ -267,14 +205,31 @@ export interface TransportOptions {
 	}
 
 	/**
+	 * Check if transport is shutting down.
+	 * @returns true if in shutdown phase
+	 */
+	protected isShuttingDown(): boolean {
+		return this._isShuttingDown;
+	}
+
+	/**
 	 * Connect to MCP server.
 	 */
 	abstract connect(mcpServer: unknown): Promise<void>;
 
 	/**
-	 * Stop the transport server.
+	 * Stop the transport server with graceful shutdown.
+	 *
+	 * This method should:
+	 * 1. Set shutdown flag to prevent new connections
+	 * 2. Wait for in-flight requests to complete (configurable timeout)
+	 * 3. Close server connections
+	 * 4. Release resources
+	 *
+	 * @param timeout - Maximum time to wait for requests to drain (default: 30 seconds)
+	 * @returns Promise that resolves when shutdown is complete
 	 */
-	abstract stop(): Promise<void>;
+	abstract stop(timeout?: number): Promise<void>;
 
 	/**
 	 * Get number of clients connected.

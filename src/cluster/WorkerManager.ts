@@ -60,6 +60,30 @@ export interface WorkerManagerOptions {
 	 * @default 3
 	 */
 	maxRetries?: number;
+
+	/**
+	 * Enable auto-scaling of workers based on load
+	 * @default false
+	 */
+	enableAutoScaling?: boolean;
+
+	/**
+	 * Scale up threshold (requests per worker)
+	 * @default 10
+	 */
+	scaleUpThreshold?: number;
+
+	/**
+	 * Scale down threshold (requests per worker)
+	 * @default 2
+	 */
+	scaleDownThreshold?: number;
+
+	/**
+	 * Enable work stealing between workers
+	 * @default false
+	 */
+	enableWorkStealing?: boolean;
 }
 
 export interface WorkerMessage {
@@ -93,16 +117,27 @@ export class WorkerManager {
 	private _workerRetryCount: Map<number, number> = new Map();
 	private _healthCheckTimer: NodeJS.Timeout | null = null;
 	private _nextWorkerIndex = 0;
+	private _currentWorkerCount = 0;
+	private _enableAutoScaling = false;
+	private _scaleUpThreshold = 10;
+	private _scaleDownThreshold = 2;
+	private _enableWorkStealing = false;
 
 	private _terminated = false;
 
 	constructor(options: WorkerManagerOptions = {}) {
 		this._maxWorkers = options.maxWorkers ?? cpus().length;
-		this._workerScript = options.workerScript ?? join(dirname(fileURLToPath(import.meta.url)), 'worker.js');
+		this._workerScript =
+			options.workerScript ?? join(dirname(fileURLToPath(import.meta.url)), 'worker.js');
 		this._workerTimeout = options.workerTimeout ?? 30000;
 		this._enableHealthCheck = options.enableHealthCheck ?? true;
 		this._healthCheckInterval = options.healthCheckInterval ?? 60000;
 		this._maxRetries = options.maxRetries ?? 3;
+		this._enableAutoScaling = options.enableAutoScaling ?? false;
+		this._scaleUpThreshold = options.scaleUpThreshold ?? 10;
+		this._scaleDownThreshold = options.scaleDownThreshold ?? 2;
+		this._enableWorkStealing = options.enableWorkStealing ?? false;
+		this._currentWorkerCount = this._maxWorkers;
 	}
 
 	/**
@@ -193,7 +228,9 @@ export class WorkerManager {
 
 		if (retryCount < this._maxRetries) {
 			this._workerRetryCount.set(workerIndex, retryCount + 1);
-			console.log(`Restarting worker ${workerIndex} (attempt ${retryCount + 1}/${this._maxRetries})`);
+			console.log(
+				`Restarting worker ${workerIndex} (attempt ${retryCount + 1}/${this._maxRetries})`
+			);
 
 			// Remove failed worker
 			const worker = this._workers[workerIndex];
@@ -207,13 +244,16 @@ export class WorkerManager {
 			}
 
 			// Spawn new worker after delay
-			setTimeout(() => {
-				if (!this._terminated) {
-					this._spawnWorker(workerIndex).catch((err) => {
-						console.error(`Failed to restart worker ${workerIndex}:`, err);
-					});
-				}
-			}, 1000 * (retryCount + 1));
+			setTimeout(
+				() => {
+					if (!this._terminated) {
+						this._spawnWorker(workerIndex).catch((err) => {
+							console.error(`Failed to restart worker ${workerIndex}:`, err);
+						});
+					}
+				},
+				1000 * (retryCount + 1)
+			);
 		} else {
 			console.error(`Worker ${workerIndex} exceeded max retries, removing from pool`);
 			const worker = this._workers[workerIndex];
@@ -361,7 +401,10 @@ export class WorkerManager {
 		// Terminate all workers
 		const terminatePromises = this._workers.map((worker) => {
 			return new Promise<void>((resolve) => {
-				worker.terminate().then(() => resolve()).catch(() => resolve());
+				worker
+					.terminate()
+					.then(() => resolve())
+					.catch(() => resolve());
 			});
 		});
 
@@ -396,7 +439,11 @@ export class WorkerManager {
 	 * Called when active requests are below scale-down threshold.
 	 */
 	private _scaleDown(): void {
-		if (this._enableAutoScaling && this._currentWorkerCount > 1 && this._activeRequests.size < this._scaleDownThreshold * this._currentWorkerCount) {
+		if (
+			this._enableAutoScaling &&
+			this._currentWorkerCount > 1 &&
+			this._activeRequests.size < this._scaleDownThreshold * this._currentWorkerCount
+		) {
 			const worker = this._workers[this._workers.length - 1];
 			if (worker) {
 				worker.terminate();
@@ -409,13 +456,16 @@ export class WorkerManager {
 
 	/**
 	 * Check if auto-scaling is needed based on workload.
+	 * @private
+	 * TODO: Integrate into processThought or call periodically
 	 */
+	// @ts-ignore - Not yet integrated
 	private _checkScalingNeed(): void {
 		if (!this._enableAutoScaling) return;
 
-		const avgRequestsPerWorker = this._activeRequests.size / this._workers.length;
 		const needsScaleUp = this._activeRequests.size > this._scaleUpThreshold * this._workers.length;
-		const needsScaleDown = this._activeRequests.size < this._scaleDownThreshold * (this._workers.length - 1);
+		const needsScaleDown =
+			this._activeRequests.size < this._scaleDownThreshold * (this._workers.length - 1);
 
 		if (needsScaleUp) {
 			this._scaleUp();
@@ -427,7 +477,10 @@ export class WorkerManager {
 	/**
 	 * Try to steal work from idle workers.
 	 * Redistributes queued requests if some workers are overloaded.
+	 * @private
+	 * TODO: Integrate into processThought or call periodically
 	 */
+	// @ts-ignore - Not yet integrated
 	private _stealWork(): void {
 		if (!this._enableWorkStealing) return;
 
@@ -435,7 +488,9 @@ export class WorkerManager {
 		const entries = Array.from(this._activeRequests.entries());
 
 		for (const workerIndex of this._workers.keys()) {
-			const count = entries.filter(([, callback]) => callback && callback.toString().includes(`Worker ${workerIndex}`)).length;
+			const count = entries.filter(
+				([, callback]) => callback && callback.toString().includes(`Worker ${workerIndex}`)
+			).length;
 			workerLoads.push(count);
 		}
 
@@ -453,7 +508,11 @@ export class WorkerManager {
 			}
 
 			if (underloadedIndices.length > 0) {
-				const requestsToMove = entries.filter(([, callback]) => callback && callback.toString().includes(`Worker ${overloadedIndex}`)).slice(0, 1);
+				const requestsToMove = entries
+					.filter(
+						([, callback]) => callback && callback.toString().includes(`Worker ${overloadedIndex}`)
+					)
+					.slice(0, 1);
 
 				for (const [requestId, callback] of requestsToMove) {
 					this._activeRequests.set(requestId, (result) => {
@@ -461,30 +520,12 @@ export class WorkerManager {
 					});
 				}
 
-				console.log(`Stole ${requestsToMove.length} requests from worker ${overloadedIndex} to worker ${underloadedIndices[0]}`);
+				console.log(
+					`Stole ${requestsToMove.length} requests from worker ${overloadedIndex} to worker ${underloadedIndices[0]}`
+				);
 			}
 		}
 	}
-
-	/**
-	 * Create a WorkerManager with the given options.
-	 *
-	 * @param options - Worker manager configuration
-	 * @returns A configured WorkerManager
-	 *
-	 * @example
-	 * ```typescript
-	 * const manager = createWorkerManager({
-	 *   maxWorkers: 4,
-	 *   workerScript: './dist/worker.js'
-	 * });
-	 * await manager.start();
-	 * ```
-	 */
-	export function createWorkerManager(options?: WorkerManagerOptions): WorkerManager {
-		return new WorkerManager(options);
-	}
-}
 }
 
 /**

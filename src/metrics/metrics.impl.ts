@@ -209,7 +209,6 @@ export class Metrics {
 		name: string,
 		value: number,
 		labels: Record<string, string> = {},
-		help?: string,
 		buckets = DEFAULT_BUCKETS
 	): void {
 		const fullName = this._fullName(name);
@@ -227,7 +226,7 @@ export class Metrics {
 					histogram.buckets.set(boundary, histogram.buckets.get(boundary) ?? 0);
 				}
 			}
-			histogram.buckets.set('+Inf', (histogram.buckets.get('+Inf') ?? 0) + 1);
+			histogram.buckets.set(Infinity, (histogram.buckets.get(Infinity) ?? 0) + 1);
 		} else {
 			const histogramData = {
 				sum: value,
@@ -237,7 +236,7 @@ export class Metrics {
 			for (const boundary of buckets) {
 				histogramData.buckets.set(boundary, value <= boundary ? 1 : 0);
 			}
-			histogramData.buckets.set('+Inf', 1);
+			histogramData.buckets.set(Infinity, 1);
 			this._histograms.set(key, histogramData);
 		}
 		this._operationsCounter++;
@@ -417,7 +416,7 @@ export class Metrics {
 	 * @private
 	 */
 	private _parseMetricKey(key: string): string[] {
-		const match = key.match(/^[^{([^}]+)}(.+)$/);
+		const match = key.match(/^\{([^{}]+)\}(.+)$/);
 		if (!match) return [key];
 		const labelsPart = match[2];
 		const labels = labelsPart ? labelsPart.split(',').map((l) => l.split('=')) : [];

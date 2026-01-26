@@ -28,7 +28,7 @@
  * ```
  */
 
-import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
+import type { PersistenceBackend } from './PersistenceBackend.js';
 import type { ThoughtData } from '../types.js';
 
 interface RedisConfig {
@@ -49,6 +49,9 @@ interface RedisConfig {
 
 	/** Time-to-live for thoughts in seconds */
 	ttl?: number;
+
+	/** Maximum number of thoughts to keep in history before pruning */
+	maxHistorySize?: number;
 }
 
 interface RedisClient {
@@ -138,7 +141,20 @@ export class RedisPersistence implements PersistenceBackend {
 		const keys = await this._client.keys(pattern);
 
 		if (keys.length > 0) {
-			await this._client.del(...keys);
+			for (const key of keys) {
+				await this._client.del(key);
+			}
+		}
+	}
+
+	async healthy(): Promise<boolean> {
+		try {
+			// Simple health check: try to get a test key
+			const testKey = this._keyPrefix + 'health';
+			await this._client.get(testKey);
+			return true;
+		} catch {
+			return false;
 		}
 	}
 
@@ -166,11 +182,5 @@ export async function create(
 	client: RedisClient,
 	options?: RedisConfig
 ): Promise<RedisPersistence> {
-	const config: PersistenceConfig = {
-		maxHistorySize: options?.maxHistorySize,
-		persistBranches: true,
-		options,
-	};
-
-	return new RedisPersistence(client, config);
+	return new RedisPersistence(client, options ?? {});
 }

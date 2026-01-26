@@ -14,9 +14,7 @@
  * ```
  */
 
-import type { McpServer, createServer, IncomingMessage, ServerResponse } from 'tmcp';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import type { Server } from 'node:http';
 import { URL } from 'node:url';
 import { safeParse } from 'valibot';
 import { JsonRpcRequestSchema } from '../schema.js';
@@ -91,6 +89,7 @@ export interface HttpTransportOptions extends TransportOptions {
  */
 export class HttpTransport extends BaseTransport {
 	private _server: ReturnType<typeof createServer>;
+	private _mcpServer: any;
 	private _path: string;
 	private _bodySizeLimitEnabled: boolean;
 	private _maxBodySize: number;
@@ -105,6 +104,13 @@ export class HttpTransport extends BaseTransport {
 		this._requestTimeout = options.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT;
 
 		this._server = createServer((req, res) => this._handleRequest(req, res));
+	}
+
+	/**
+	 * Get number of active HTTP connections.
+	 */
+	get clientCount(): number {
+		return this._requestCount;
 	}
 
 	/**
