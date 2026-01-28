@@ -5,7 +5,10 @@ import { tmpdir } from 'node:os';
 import type { ThoughtData } from '../types.js';
 import { MemoryPersistence } from '../persistence/MemoryPersistence.js';
 import { FilePersistence } from '../persistence/FilePersistence.js';
-import { createPersistenceBackend, type PersistenceConfig } from '../persistence/PersistenceBackend.js';
+import {
+	createPersistenceBackend,
+	type PersistenceConfig,
+} from '../persistence/PersistenceBackend.js';
 
 // Helper to create a test thought
 function createTestThought(overrides?: Partial<ThoughtData>): ThoughtData {

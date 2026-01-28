@@ -37,7 +37,9 @@ describe('CRUD Operations', () => {
 		});
 
 		it('should throw when removing non-existent tool', () => {
-			expect(() => server.tools.removeTool('non-existent')).toThrow("tool 'non-existent' not found");
+			expect(() => server.tools.removeTool('non-existent')).toThrow(
+				"tool 'non-existent' not found"
+			);
 		});
 
 		it('should update a tool', () => {
@@ -47,8 +49,9 @@ describe('CRUD Operations', () => {
 		});
 
 		it('should throw when updating non-existent tool', () => {
-			expect(() => server.tools.updateTool('non-existent', { description: 'New' }))
-				.toThrow("tool 'non-existent' not found");
+			expect(() => server.tools.updateTool('non-existent', { description: 'New' })).toThrow(
+				"tool 'non-existent' not found"
+			);
 		});
 
 		it('should clear all tools', () => {
@@ -87,7 +90,9 @@ describe('CRUD Operations', () => {
 		});
 
 		it('should throw when removing non-existent skill', () => {
-			expect(() => server.skills.removeSkillByName('non-existent')).toThrow("skill 'non-existent' not found");
+			expect(() => server.skills.removeSkillByName('non-existent')).toThrow(
+				"skill 'non-existent' not found"
+			);
 		});
 
 		it('should update a skill', () => {
@@ -97,13 +102,18 @@ describe('CRUD Operations', () => {
 		});
 
 		it('should throw when updating non-existent skill', () => {
-			expect(() => server.skills.updateSkill('non-existent', { description: 'New' }))
-				.toThrow("skill 'non-existent' not found");
+			expect(() => server.skills.updateSkill('non-existent', { description: 'New' })).toThrow(
+				"skill 'non-existent' not found"
+			);
 		});
 
 		it('should clear all skills', () => {
 			server.skills.addSkill(mockSkill);
-			server.skills.addSkill({ name: 'another-skill', description: 'Another', user_invocable: false });
+			server.skills.addSkill({
+				name: 'another-skill',
+				description: 'Another',
+				user_invocable: false,
+			});
 			server.skills.clear();
 			expect(server.skills.getAll().length).toBe(0);
 		});

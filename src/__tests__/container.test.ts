@@ -183,7 +183,7 @@ describe('Container', () => {
 		it('should include helpful message in error', () => {
 			expect(() => {
 				container.resolve('MyService');
-			}).toThrow("Service not found: MyService. Did you forget to register it?");
+			}).toThrow('Service not found: MyService. Did you forget to register it?');
 		});
 	});
 
@@ -266,7 +266,10 @@ describe('Container', () => {
 		it('should remove all registered services', () => {
 			container.registerInstance('Logger', new ConsoleLogger());
 			container.register('Config', () => new TestConfig({}));
-			container.registerFactory('Service', () => new ServiceWithDependencies(new ConsoleLogger(), new TestConfig({})));
+			container.registerFactory(
+				'Service',
+				() => new ServiceWithDependencies(new ConsoleLogger(), new TestConfig({}))
+			);
 
 			expect(container.size).toBe(3);
 
@@ -318,7 +321,10 @@ describe('Container', () => {
 		it('should count mixed registration types', () => {
 			container.registerInstance('Logger', new ConsoleLogger());
 			container.register('Config', () => new TestConfig({}));
-			container.registerFactory('Service', () => new ServiceWithDependencies(new ConsoleLogger(), new TestConfig({})));
+			container.registerFactory(
+				'Service',
+				() => new ServiceWithDependencies(new ConsoleLogger(), new TestConfig({}))
+			);
 
 			expect(container.size).toBe(3);
 		});
@@ -387,7 +393,10 @@ describe('Container', () => {
 		it('should return unique names when mixing types', () => {
 			container.registerInstance('Logger', new ConsoleLogger());
 			container.register('Config', () => new TestConfig({}));
-			container.registerFactory('Service', () => new ServiceWithDependencies(new ConsoleLogger(), new TestConfig({})));
+			container.registerFactory(
+				'Service',
+				() => new ServiceWithDependencies(new ConsoleLogger(), new TestConfig({}))
+			);
 
 			const services = container.registeredServices();
 

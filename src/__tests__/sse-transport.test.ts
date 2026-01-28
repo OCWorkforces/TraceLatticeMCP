@@ -1,10 +1,20 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SseTransport, createSseTransport, type SseTransportOptions } from '../transport/SseTransport.js';
+import {
+	SseTransport,
+	createSseTransport,
+	type SseTransportOptions,
+} from '../transport/SseTransport.js';
 import { request } from 'node:http';
 import { setTimeout } from 'node:timers/promises';
+import type { McpServer } from 'tmcp';
 
 // Helper to make HTTP requests with optional timeout for SSE
-function makeRequest(port: number, path: string, method = 'GET', timeoutMs = 1000): Promise<{
+function makeRequest(
+	port: number,
+	path: string,
+	method = 'GET',
+	timeoutMs = 1000
+): Promise<{
 	statusCode: number;
 	headers: Record<string, string | string[]>;
 	body: string;
@@ -40,7 +50,9 @@ function makeRequest(port: number, path: string, method = 'GET', timeoutMs = 100
 					// For SSE, resolve after getting some data
 					if (path.includes('/sse') || path.includes('/events')) {
 						// Wait a bit for the initial event then finish
-						setTimeout(50).then(finish).catch(() => {});
+						setTimeout(50)
+							.then(finish)
+							.catch(() => {});
 					}
 				});
 
@@ -50,7 +62,9 @@ function makeRequest(port: number, path: string, method = 'GET', timeoutMs = 100
 
 				// Set timeout for SSE connections
 				if (path.includes('/sse') || path.includes('/events')) {
-					setTimeout(timeoutMs).then(finish).catch(() => {});
+					setTimeout(timeoutMs)
+						.then(finish)
+						.catch(() => {});
 				}
 			}
 		);
@@ -64,7 +78,11 @@ function makeRequest(port: number, path: string, method = 'GET', timeoutMs = 100
 }
 
 // Helper to make POST request with body
-function makePostRequest(port: number, path: string, data: unknown): Promise<{
+function makePostRequest(
+	port: number,
+	path: string,
+	data: unknown
+): Promise<{
 	statusCode: number;
 	headers: Record<string, string | string[]>;
 	body: string;
@@ -153,7 +171,7 @@ describe('SseTransport', () => {
 			// Mock MCP server
 			const mockMcpServer = {
 				// Minimal mock
-			} as any;
+			} as McpServer;
 
 			await transport.connect(mockMcpServer);
 
@@ -168,7 +186,7 @@ describe('SseTransport', () => {
 			// We'll skip the actual test since it causes unhandled errors
 			// and instead verify the transport has proper error handling setup
 
-			const mockMcpServer = {} as any;
+			const mockMcpServer = {} as McpServer;
 			await transport.connect(mockMcpServer);
 
 			// Verify transport is running
@@ -183,7 +201,7 @@ describe('SseTransport', () => {
 
 	describe('health endpoint', () => {
 		beforeEach(async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 		});
 
 		it('should return healthy status', async () => {
@@ -218,7 +236,7 @@ describe('SseTransport', () => {
 
 	describe('CORS handling', () => {
 		beforeEach(async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 		});
 
 		it('should handle OPTIONS preflight request', async () => {
@@ -236,7 +254,7 @@ describe('SseTransport', () => {
 				port: testPort + 1,
 				corsOrigin: 'https://example.com',
 			});
-			await customTransport.connect({} as any);
+			await customTransport.connect({} as McpServer);
 
 			const response = await makeRequest(testPort + 1, '/health');
 
@@ -251,13 +269,12 @@ describe('SseTransport', () => {
 				port: testPort + 1,
 				enableCors: false,
 			});
-			await noCorsTransport.connect({} as any);
+			await noCorsTransport.connect({} as McpServer);
 
 			const response = await makeRequest(testPort + 1, '/health');
 
-			// Note: The current implementation still sends CORS headers even when enableCors is false
-			// This test documents the actual behavior
-			expect(response.headers['access-control-allow-origin']).toBeDefined();
+			// When enableCors is false, no CORS headers should be present
+			expect(response.headers['access-control-allow-origin']).toBeUndefined();
 
 			await noCorsTransport.stop();
 		});
@@ -265,7 +282,7 @@ describe('SseTransport', () => {
 
 	describe('message endpoint', () => {
 		beforeEach(async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 		});
 
 		it('should accept POST requests', async () => {
@@ -298,7 +315,7 @@ describe('SseTransport', () => {
 
 	describe('SSE endpoint', () => {
 		beforeEach(async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 		});
 
 		it('should accept GET requests for SSE', async () => {
@@ -341,7 +358,7 @@ describe('SseTransport', () => {
 
 	describe('404 handling', () => {
 		beforeEach(async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 		});
 
 		it('should return 404 for unknown paths', async () => {
@@ -354,7 +371,7 @@ describe('SseTransport', () => {
 
 	describe('broadcast', () => {
 		beforeEach(async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 		});
 
 		it('should broadcast to all connected clients', () => {
@@ -379,7 +396,7 @@ describe('SseTransport', () => {
 		});
 
 		it('should reflect connected clients', async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 
 			// Make an SSE connection (will increment client count)
 			const req = request(
@@ -404,8 +421,8 @@ describe('SseTransport', () => {
 	});
 
 	describe('stop', () => {
-		it('should stop the server', async () => {
-			await transport.connect({} as any);
+		it('should stop server', async () => {
+			await transport.connect({} as McpServer);
 
 			// Server should be running
 			let response = await makeRequest(testPort, '/health');
@@ -425,7 +442,7 @@ describe('SseTransport', () => {
 		});
 
 		it('should clear all clients', async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 
 			// Connect some clients
 			const connectClient = () =>
@@ -452,7 +469,7 @@ describe('SseTransport', () => {
 		});
 
 		it('should be safe to call multiple times', async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 
 			await expect(async () => await transport.stop()).not.toThrow();
 			await expect(async () => await transport.stop()).not.toThrow();
@@ -488,7 +505,7 @@ describe('SseTransport', () => {
 
 	describe('Integration scenarios', () => {
 		it('should handle multiple sequential requests', async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 
 			const requests = [
 				makeRequest(testPort, '/health'),
@@ -504,11 +521,9 @@ describe('SseTransport', () => {
 		});
 
 		it('should handle concurrent health checks', async () => {
-			await transport.connect({} as any);
+			await transport.connect({} as McpServer);
 
-			const concurrentRequests = Array.from({ length: 10 }, () =>
-				makeRequest(testPort, '/health')
-			);
+			const concurrentRequests = Array.from({ length: 10 }, () => makeRequest(testPort, '/health'));
 
 			const responses = await Promise.all(concurrentRequests);
 
@@ -535,7 +550,7 @@ describe('SseTransport edge cases', () => {
 	});
 
 	it('should handle empty POST body', async () => {
-		await transport.connect({} as any);
+		await transport.connect({} as McpServer);
 
 		const response = await makePostRequest(testPort, '/sse/message', '');
 
@@ -544,7 +559,7 @@ describe('SseTransport edge cases', () => {
 	});
 
 	it('should handle malformed POST data', async () => {
-		await transport.connect({} as any);
+		await transport.connect({} as McpServer);
 
 		const response = await makePostRequest(testPort, '/sse/message', '{broken json');
 
@@ -553,7 +568,7 @@ describe('SseTransport edge cases', () => {
 	});
 
 	it('should handle very large POST data', async () => {
-		await transport.connect({} as any);
+		await transport.connect({} as McpServer);
 
 		const largeData = { data: 'x'.repeat(100000) }; // 100KB
 

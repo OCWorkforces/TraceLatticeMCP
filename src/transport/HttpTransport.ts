@@ -14,21 +14,11 @@
  * ```
  */
 
+import type { McpServer } from 'tmcp';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import { URL } from 'node:url';
 import { safeParse } from 'valibot';
 import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
-
-/**
- * Default maximum body size (10MB).
- */
-const DEFAULT_MAX_BODY_SIZE = 10 * 1024 * 1024;
-
-/**
- * Default request timeout (30 seconds).
- */
-const DEFAULT_REQUEST_TIMEOUT = 30000;
 
 export interface HttpTransportOptions extends TransportOptions {
 	/**
@@ -89,20 +79,18 @@ export interface HttpTransportOptions extends TransportOptions {
  */
 export class HttpTransport extends BaseTransport {
 	private _server: ReturnType<typeof createServer>;
-	private _mcpServer: any;
-	private _path: string;
+	private _mcpServer: McpServer | null = null;
+	private _requestTimeout: number;
 	private _bodySizeLimitEnabled: boolean;
 	private _maxBodySize: number;
-	private _requestTimeout: number;
 	private _requestCount: number = 0;
 
 	constructor(options: HttpTransportOptions = {}) {
 		super(options);
-		this._path = options.path ?? '/messages';
-		this._bodySizeLimitEnabled = options.enableBodySizeLimit ?? true;
-		this._maxBodySize = options.maxBodySize ?? DEFAULT_MAX_BODY_SIZE;
-		this._requestTimeout = options.requestTimeout ?? DEFAULT_REQUEST_TIMEOUT;
 
+		this._requestTimeout = options.requestTimeout ?? 30000;
+		this._bodySizeLimitEnabled = options.enableBodySizeLimit ?? true;
+		this._maxBodySize = options.maxBodySize ?? 10 * 1024 * 1024;
 		this._server = createServer((req, res) => this._handleRequest(req, res));
 	}
 
@@ -110,27 +98,18 @@ export class HttpTransport extends BaseTransport {
 	 * Get number of active HTTP connections.
 	 */
 	get clientCount(): number {
-		return this._requestCount;
+		return 0;
 	}
 
 	/**
 	 * Connects MCP server to this transport.
 	 */
-	async connect(mcpServer: unknown): Promise<void> {
+	async connect(mcpServer: McpServer): Promise<void> {
 		this._mcpServer = mcpServer;
-
-		return new Promise((resolve, reject) => {
+		return new Promise((resolve) => {
 			this._server.listen(this._port, this._host, () => {
-				console.log(`HTTP transport listening on http://${this._host}:${this._port}`);
+				this.log('info', `HTTP transport listening on http://${this._host}:${this._port}`);
 				resolve();
-			});
-
-			this._server.on('error', (error: NodeJS.ErrnoException) => {
-				if (error.code === 'EADDRINUSE') {
-					reject(new Error(`Port ${this._port} is already in use`));
-				} else {
-					reject(error);
-				}
 			});
 		});
 	}
@@ -140,88 +119,6 @@ export class HttpTransport extends BaseTransport {
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		this._requestCount++;
-
-		const url = new URL(req.url || '', `http://${req.headers.host}`);
-
-		// Check rate limit first
-		const clientIp = this.getClientIp(req);
-		if (this.checkRateLimit(clientIp)) {
-			res.writeHead(429, {
-				'Content-Type': 'application/json',
-			});
-			res.end(JSON.stringify({ error: 'Too many requests' }));
-			return;
-		}
-
-		// Validate CORS origin
-		if (!this.validateCorsOrigin(req)) {
-			res.writeHead(403, { 'Content-Type': 'application/json' });
-			res.end(JSON.stringify({ error: 'Forbidden' }));
-			return;
-		}
-
-		// Set CORS headers for all responses
-		this.setCorsHeaders(res);
-
-		// Sanitize query parameters
-		const sanitizedParams = this.sanitizeQueryParams(url);
-
-		// Validate session ID if present
-		if (sanitizedParams.session || sanitizedParams.sessionId) {
-			const sessionId = sanitizedParams.session || sanitizedParams.sessionId;
-			if (!this.validateSessionId(sessionId)) {
-				res.writeHead(400, { 'Content-Type': 'application/json' });
-				res.end(JSON.stringify({ error: 'Invalid session ID format' }));
-				return;
-			}
-		}
-
-		// Handle CORS preflight
-		if (this._enableCors && req.method === 'OPTIONS') {
-			res.writeHead(204);
-			res.end();
-			return;
-		}
-
-		// Handle messages endpoint (JSON-RPC method calls)
-		if (url.pathname === this._path && req.method === 'POST') {
-			await this._handleMessage(req, res);
-			return;
-		}
-
-		// Handle health check
-		if (url.pathname === '/health' && req.method === 'GET') {
-			res.writeHead(200, { 'Content-Type': 'application/json' });
-			res.end(JSON.stringify({ status: 'healthy', requests: this._requestCount }));
-			return;
-		}
-
-		// Handle root endpoint (server info)
-		if (url.pathname === '/' && req.method === 'GET') {
-			res.writeHead(200, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					name: 'MCP HTTP Transport',
-					version: '1.0.0',
-					status: 'running',
-					endpoints: {
-						messages: this._path,
-						health: '/health',
-					},
-				})
-			);
-			return;
-		}
-
-		// 404 for unknown paths
-		res.writeHead(404, { 'Content-Type': 'text/plain' });
-		res.end('Not Found');
-	}
-
-	/**
-	 * Handles incoming message (JSON-RPC method call).
-	 */
-	private async _handleMessage(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		// Set up request timeout
 		const timeout = setTimeout(() => {
 			res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -348,7 +245,7 @@ export class HttpTransport extends BaseTransport {
 		return new Promise((resolve) => {
 			// Close server
 			this._server.close(() => {
-				console.log('HTTP transport stopped');
+				this.log('info', 'HTTP transport stopped');
 				resolve();
 			});
 		});

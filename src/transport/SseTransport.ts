@@ -17,70 +17,13 @@
 import type { McpServer } from 'tmcp';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
+import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 
 /**
- * Allowed query parameter names (whitelist for security).
+ * SSE-specific transport options extending base TransportOptions.
  */
-const ALLOWED_QUERY_PARAMS = new Set(['session', 'sessionId', 'client', 'clientId']);
-
-/**
- * Maximum session ID length.
- */
-const MAX_SESSION_ID_LENGTH = 64;
-
-/**
- * Session ID validation pattern (alphanumeric, hyphens, underscores).
- */
-const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
-
-/**
- * Rate limit settings (requests per minute per IP).
- */
-const RATE_LIMIT_REQUESTS = 100;
-const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-
-export interface SseTransportOptions {
-	/**
-	 * Port to listen on
-	 * @default 9108
-	 */
-	port?: number;
-
-	/**
-	 * Host to bind to
-	 * @default '127.0.0.1'
-	 */
-	host?: string;
-
-	/**
-	 * CORS origin to allow
-	 * @default '*'
-	 */
-	corsOrigin?: string;
-
-	/**
-	 * Enable CORS preflight
-	 * @default true
-	 */
-	enableCors?: boolean;
-
-	/**
-	 * Path for the SSE endpoint
-	 * @default '/sse'
-	 */
+export interface SseTransportOptions extends TransportOptions {
 	path?: string;
-
-	/**
-	 * Enable rate limiting
-	 * @default true
-	 */
-	enableRateLimit?: boolean;
-
-	/**
-	 * Max requests per minute per IP
-	 * @default 100
-	 */
-	maxRequestsPerMinute?: number;
 }
 
 /**
@@ -101,33 +44,21 @@ export interface SseTransportOptions {
  * - Returns 429 Too Many Requests when limit exceeded
  * - Can be disabled via `enableRateLimit: false`
  */
-export class SseTransport {
+export class SseTransport extends BaseTransport {
 	private _server: ReturnType<typeof createServer>;
-	private _port: number;
-	private _host: string;
-	private _corsOrigin: string;
-	private _enableCors: boolean;
 	private _path: string;
 	private _clients: Set<ServerResponse> = new Set();
-	private _messageQueue: Map<string, any[]> = new Map();
-	private _rateLimitEnabled: boolean;
-	private _maxRequestsPerMinute: number;
-	private _rateLimitMap: Map<string, { count: number; resetTime: number }> = new Map();
+	private _messageQueue: Map<string, unknown[]> = new Map();
 
 	constructor(options: SseTransportOptions = {}) {
-		this._port = options.port ?? 9108;
-		this._host = options.host ?? '127.0.0.1';
-		this._corsOrigin = options.corsOrigin ?? '*';
-		this._enableCors = options.enableCors ?? true;
+		super(options);
 		this._path = options.path ?? '/sse';
-		this._rateLimitEnabled = options.enableRateLimit ?? true;
-		this._maxRequestsPerMinute = options.maxRequestsPerMinute ?? RATE_LIMIT_REQUESTS;
 
 		this._server = createServer((req, res) => this._handleRequest(req, res));
 	}
 
 	/**
-	 * Connect the MCP server to this transport.
+	 * Connect MCP server to this transport.
 	 *
 	 * @param mcpServer - The MCP server instance
 	 */
@@ -136,7 +67,7 @@ export class SseTransport {
 
 		return new Promise((resolve) => {
 			this._server.listen(this._port, this._host, () => {
-				console.log(`SSE transport listening on http://${this._host}:${this._port}`);
+				this.log('info', `SSE transport listening on http://${this._host}:${this._port}`);
 				resolve();
 			});
 		});
@@ -145,128 +76,14 @@ export class SseTransport {
 	private _mcpServer: McpServer | null = null;
 
 	/**
-	 * Validate session ID format.
-	 *
-	 * @param sessionId - The session ID to validate
-	 * @returns true if valid, false otherwise
-	 * @private
-	 */
-	private _validateSessionId(sessionId: string): boolean {
-		if (sessionId.length > MAX_SESSION_ID_LENGTH) {
-			return false;
-		}
-		return SESSION_ID_PATTERN.test(sessionId);
-	}
-
-	/**
-	 * Sanitize query parameters by removing any not in the whitelist.
-	 *
-	 * @param url - The URL object containing query parameters
-	 * @returns A sanitized record of allowed query parameters
-	 * @private
-	 */
-	private _sanitizeQueryParams(url: URL): Record<string, string> {
-		const sanitized: Record<string, string> = {};
-
-		for (const [key, value] of url.searchParams.entries()) {
-			if (ALLOWED_QUERY_PARAMS.has(key)) {
-				sanitized[key] = value;
-			}
-		}
-
-		return sanitized;
-	}
-
-	/**
-	 * Check rate limit for a given IP address.
-	 *
-	 * @param ip - The IP address to check
-	 * @returns true if rate limit exceeded, false otherwise
-	 * @private
-	 */
-	private _checkRateLimit(ip: string): boolean {
-		if (!this._rateLimitEnabled) {
-			return false;
-		}
-
-		const now = Date.now();
-		const record = this._rateLimitMap.get(ip);
-
-		if (!record || now > record.resetTime) {
-			// Create new rate limit record
-			this._rateLimitMap.set(ip, {
-				count: 1,
-				resetTime: now + RATE_LIMIT_WINDOW_MS,
-			});
-			return false;
-		}
-
-		if (record.count >= this._maxRequestsPerMinute) {
-			return true; // Rate limit exceeded
-		}
-
-		record.count++;
-		return false;
-	}
-
-	/**
-	 * Get client IP address from request.
-	 *
-	 * @param req - The incoming request
-	 * @returns The client IP address
-	 * @private
-	 */
-	private _getClientIp(req: IncomingMessage): string {
-		const forwardedFor = req.headers['x-forwarded-for'];
-		if (forwardedFor && typeof forwardedFor === 'string') {
-			return forwardedFor.split(',')[0].trim();
-		}
-		const remoteAddress = req.socket.remoteAddress;
-		return remoteAddress || 'unknown';
-	}
-
-	/**
-	 * Validate CORS origin from request headers.
-	 *
-	 * @param req - The incoming request
-	 * @returns true if origin is valid, false otherwise
-	 * @private
-	 */
-	private _validateCorsOrigin(req: IncomingMessage): boolean {
-		// If corsOrigin is '*', allow all origins
-		if (this._corsOrigin === '*') {
-			return true;
-		}
-
-		const origin = req.headers.origin;
-		if (!origin) {
-			return true; // No origin header is acceptable
-		}
-
-		// Exact match
-		if (this._corsOrigin === origin) {
-			return true;
-		}
-
-		// Check if the configured origin is a wildcard pattern
-		if (this._corsOrigin.includes('*')) {
-			const pattern = this._corsOrigin.replace(/\*/g, '.*');
-			const regex = new RegExp(`^${pattern}$`);
-			return regex.test(origin);
-		}
-
-		return false;
-	}
-
-	/**
 	 * Handle incoming HTTP requests
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		const url = new URL(req.url || '', `http://${req.headers.host}`);
 
 		// Check rate limit first
-		const clientIp = this._getClientIp(req);
-		if (this._checkRateLimit(clientIp)) {
+		const clientIp = this.getClientIp(req);
+		if (this.checkRateLimit(clientIp)) {
 			res.writeHead(429, {
 				'Content-Type': 'application/json',
 				'Retry-After': '60',
@@ -276,19 +93,22 @@ export class SseTransport {
 		}
 
 		// Validate CORS origin
-		if (!this._validateCorsOrigin(req)) {
+		if (!this.validateCorsOrigin(req)) {
 			res.writeHead(403, { 'Content-Type': 'application/json' });
 			res.end(JSON.stringify({ error: 'Forbidden - invalid origin' }));
 			return;
 		}
 
+		// Set CORS headers
+		this.setCorsHeaders(res);
+
 		// Sanitize query parameters
-		const sanitizedParams = this._sanitizeQueryParams(url);
+		const sanitizedParams = this.sanitizeQueryParams(url);
 
 		// Validate session ID if present
 		if (sanitizedParams.session || sanitizedParams.sessionId) {
 			const sessionId = sanitizedParams.session || sanitizedParams.sessionId;
-			if (!this._validateSessionId(sessionId)) {
+			if (!this.validateSessionId(sessionId)) {
 				res.writeHead(400, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Invalid session ID format' }));
 				return;
@@ -297,11 +117,7 @@ export class SseTransport {
 
 		// Handle CORS preflight
 		if (this._enableCors && req.method === 'OPTIONS') {
-			res.writeHead(204, {
-				'Access-Control-Allow-Origin': this._corsOrigin,
-				'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-				'Access-Control-Allow-Headers': 'Content-Type',
-			});
+			res.writeHead(204);
 			res.end();
 			return;
 		}
@@ -321,7 +137,6 @@ export class SseTransport {
 		// Handle health check
 		if (url.pathname === '/health') {
 			res.writeHead(200, {
-				'Access-Control-Allow-Origin': this._corsOrigin,
 				'Content-Type': 'application/json',
 			});
 			res.end(JSON.stringify({ status: 'healthy', clients: this._clients.size }));
@@ -342,7 +157,6 @@ export class SseTransport {
 			'Content-Type': 'text/event-stream',
 			'Cache-Control': 'no-cache',
 			Connection: 'keep-alive',
-			'Access-Control-Allow-Origin': this._corsOrigin,
 		});
 
 		// Send initial connection event
@@ -380,12 +194,11 @@ export class SseTransport {
 		try {
 			JSON.parse(body); // Validate JSON
 
-			// Process the message through the MCP server
+			// Process message through MCP server
 			if (this._mcpServer) {
-				// This would normally call the MCP server's tool handler
+				// This would normally call to MCP server's tool handler
 				// For now, we'll just acknowledge
 				res.writeHead(200, {
-					'Access-Control-Allow-Origin': this._corsOrigin,
 					'Content-Type': 'application/json',
 				});
 				res.end(JSON.stringify({ success: true }));
@@ -429,16 +242,21 @@ export class SseTransport {
 	}
 
 	/**
-	 * Get the number of connected clients
+	 * Get number of connected clients
 	 */
 	get clientCount(): number {
 		return this._clients.size;
 	}
 
 	/**
-	 * Stop the transport server
+	 * Stop the transport server with graceful shutdown.
+	 *
+	 * @param timeout - Maximum time to wait for requests to drain (not used for SSE)
+	 * @returns Promise that resolves when shutdown is complete
 	 */
-	async stop(): Promise<void> {
+	async stop(_timeout?: number): Promise<void> {
+		this._isShuttingDown = true;
+
 		return new Promise((resolve) => {
 			// Close all client connections
 			for (const client of this._clients) {
@@ -450,9 +268,9 @@ export class SseTransport {
 			}
 			this._clients.clear();
 
-			// Close the server
+			// Close server
 			this._server.close(() => {
-				console.log('SSE transport stopped');
+				this.log('info', 'SSE transport stopped');
 				resolve();
 			});
 		});
@@ -460,7 +278,7 @@ export class SseTransport {
 }
 
 /**
- * Create an SSE transport with the given options.
+ * Create an SSE transport with given options.
  *
  * @param options - Transport configuration
  * @returns A configured SSE transport

@@ -19,6 +19,13 @@
 
 import type { ThoughtData } from '../types.js';
 import type { ToolAwareSequentialThinkingServer } from '../index.js';
+import type { Logger } from '../logger/StructuredLogger.js';
+import {
+	SessionNotActiveError,
+	SessionNotFoundError,
+	MaxSessionsReachedError,
+	PoolTerminatedError,
+} from '../errors.js';
 
 export interface SessionOptions {
 	/**
@@ -26,6 +33,11 @@ export interface SessionOptions {
 	 * @default 100
 	 */
 	maxSessions?: number;
+
+	/**
+	 * Logger instance
+	 */
+	logger?: Logger;
 
 	/**
 	 * Session timeout in milliseconds
@@ -73,14 +85,21 @@ export class Session {
 	private _isActiveValue: boolean;
 	private _timeout: number;
 	private _cleanupTimer: NodeJS.Timeout | null = null;
+	private _logger: Logger;
 
-	constructor(id: string, server: ToolAwareSequentialThinkingServer, timeout: number) {
+	constructor(
+		id: string,
+		server: ToolAwareSequentialThinkingServer,
+		timeout: number,
+		logger: Logger
+	) {
 		this._server = server;
 		this._id = id;
 		this._createdAt = Date.now();
 		this._lastActivityAt = this._createdAt;
 		this._isActiveValue = true;
 		this._timeout = timeout;
+		this._logger = logger;
 
 		// Start session timeout timer
 		this._startTimeout();
@@ -98,7 +117,7 @@ export class Session {
 	 */
 	async process(input: ThoughtData): Promise<ProcessResult> {
 		if (!this.isActive) {
-			throw new Error('Session is not active');
+			throw new SessionNotActiveError(this._id);
 		}
 
 		// Update last activity
@@ -157,9 +176,9 @@ export class Session {
 
 		this._cleanupTimer = setTimeout(() => {
 			if (this.isTimedOut()) {
-				console.warn(`Session ${this._id} timed out, closing`);
+				this._logger.warn(`Session ${this._id} timed out, closing`);
 				this.close().catch((err) => {
-					console.error(`Error closing timed out session ${this._id}:`, err);
+					this._logger.error(`Error closing timed out session ${this._id}:`, err);
 				});
 			}
 		}, this._timeout);
@@ -187,12 +206,28 @@ export class ConnectionPool {
 	private _cleanupInterval: number;
 	private _cleanupTimerId: number | null = null;
 	private _terminated = false;
+	private _logger: Logger;
 
 	constructor(options: SessionOptions = {}) {
 		this._maxSessions = options.maxSessions ?? 100;
 		this._sessionTimeout = options.sessionTimeout ?? 300000; // 5 minutes
 		this._autoCleanup = options.autoCleanup ?? true;
 		this._cleanupInterval = options.cleanupInterval ?? 60000; // 1 minute
+		this._logger = options.logger ?? this._createNoopLogger();
+	}
+
+	/**
+	 * Create a no-op logger when none is provided.
+	 */
+	private _createNoopLogger(): Logger {
+		return {
+			info: () => {},
+			warn: () => {},
+			error: () => {},
+			debug: () => {},
+			setLevel: () => {},
+			getLevel: () => 'info',
+		};
 
 		// Start automatic cleanup if enabled
 		if (this._autoCleanup) {
@@ -208,13 +243,11 @@ export class ConnectionPool {
 	 */
 	async createSession(): Promise<string> {
 		if (this._terminated) {
-			throw new Error('ConnectionPool has been terminated');
+			throw new PoolTerminatedError();
 		}
 
 		if (this._sessions.size >= this._maxSessions) {
-			throw new Error(
-				`Max sessions (${this._maxSessions}) reached. Wait for a session to close or increase maxSessions.`
-			);
+			throw new MaxSessionsReachedError(this._maxSessions);
 		}
 
 		// Generate unique session ID
@@ -230,10 +263,10 @@ export class ConnectionPool {
 		});
 
 		// Create session
-		const session = new Session(sessionId, server, this._sessionTimeout);
+		const session = new Session(sessionId, server, this._sessionTimeout, this._logger);
 		this._sessions.set(sessionId, session);
 
-		console.log(
+		this._logger.info(
 			`Created session ${sessionId} (${this._sessions.size}/${this._maxSessions} active sessions)`
 		);
 		return sessionId;
@@ -251,7 +284,7 @@ export class ConnectionPool {
 		const session = this._sessions.get(sessionId);
 
 		if (!session) {
-			throw new Error(`Session not found: ${sessionId}`);
+			throw new SessionNotFoundError(sessionId);
 		}
 
 		return session.process(input);
@@ -267,13 +300,13 @@ export class ConnectionPool {
 		const session = this._sessions.get(sessionId);
 
 		if (!session) {
-			throw new Error(`Session not found: ${sessionId}`);
+			throw new SessionNotFoundError(sessionId);
 		}
 
 		await session.close();
 		this._sessions.delete(sessionId);
 
-		console.log(
+		this._logger.info(
 			`Closed session ${sessionId} (${this._sessions.size}/${this._maxSessions} active sessions)`
 		);
 	}
@@ -342,7 +375,7 @@ export class ConnectionPool {
 		for (const [sessionId, session] of this._sessions.entries()) {
 			if (session.isTimedOut()) {
 				session.close().catch((err) => {
-					console.error(`Error closing timed out session ${sessionId}:`, err);
+					this._logger.error(`Error closing timed out session ${sessionId}:`, err);
 				});
 				this._sessions.delete(sessionId);
 				cleaned++;
@@ -350,7 +383,7 @@ export class ConnectionPool {
 		}
 
 		if (cleaned > 0) {
-			console.log(
+			this._logger.info(
 				`Cleaned ${cleaned} timed-out sessions (${this._sessions.size}/${this._maxSessions} active sessions)`
 			);
 		}
@@ -375,14 +408,14 @@ export class ConnectionPool {
 		// Close all sessions
 		const closePromises = Array.from(this._sessions.values()).map((session) =>
 			session.close().catch((err) => {
-				console.error(`Error closing session ${session.getInfo().id}:`, err);
+				this._logger.error(`Error closing session ${session.getInfo().id}:`, err);
 			})
 		);
 
 		await Promise.all(closePromises);
 		this._sessions.clear();
 
-		console.log('ConnectionPool terminated');
+		this._logger.info('ConnectionPool terminated');
 	}
 
 	/**

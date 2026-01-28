@@ -69,7 +69,9 @@ export class SqlitePersistence implements PersistenceBackend {
 	 */
 	static async create(options?: PersistenceConfig['options']): Promise<SqlitePersistence> {
 		// Default to .claude/data in current directory or home directory
-		const defaultDataDir = existsSync('.claude/data') ? '.claude/data' : join(homedir(), '.claude/data');
+		const defaultDataDir = existsSync('.claude/data')
+			? '.claude/data'
+			: join(homedir(), '.claude/data');
 		const dbPath = options?.dbPath ?? join(defaultDataDir, 'history.db');
 
 		// Load better-sqlite3 dynamically (optional dependency)
@@ -144,13 +146,15 @@ export class SqlitePersistence implements PersistenceBackend {
 		const stmt = this._db.prepare('SELECT data FROM thoughts ORDER BY id ASC');
 		const rows = stmt.all() as { data: string }[];
 
-		return rows.map((row) => {
-			try {
-				return JSON.parse(row.data) as ThoughtData;
-			} catch {
-				return null;
-			}
-		}).filter((t): t is ThoughtData => t !== null);
+		return rows
+			.map((row) => {
+				try {
+					return JSON.parse(row.data) as ThoughtData;
+				} catch {
+					return null;
+				}
+			})
+			.filter((t): t is ThoughtData => t !== null);
 	}
 
 	public async saveBranch(branchId: string, thoughts: ThoughtData[]): Promise<void> {

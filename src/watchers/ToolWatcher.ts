@@ -13,6 +13,7 @@ import { watch, type FSWatcher } from 'chokidar';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { basename } from 'node:path';
+import type { Logger } from '../logger/StructuredLogger.js';
 
 /**
  * File system watcher for tool directories.
@@ -55,27 +56,28 @@ import { basename } from 'node:path';
 export class ToolWatcher {
 	/** The underlying chokidar file system watcher. */
 	private _watcher: FSWatcher | null = null;
-
 	/** The tool registry to update when tools change. */
 	private readonly _toolRegistry: ToolRegistry;
+	private _logger: Logger;
+
+	constructor(toolRegistry: ToolRegistry, logger?: Logger) {
+		this._toolRegistry = toolRegistry;
+		this._logger = logger ?? this._createNoopLogger();
+		this.setupWatcher();
+	}
 
 	/**
-	 * Creates a new ToolWatcher and starts watching tool directories.
-	 *
-	 * The watcher automatically starts monitoring `.claude/tools` and
-	 * `~/.claude/tools` directories upon construction.
-	 *
-	 * @param toolRegistry - The tool registry to update when tools change
-	 *
-	 * @example
-	 * ```typescript
-	 * const registry = new ToolRegistry();
-	 * const watcher = new ToolWatcher(registry);
-	 * ```
+	 * Create a no-op logger when none is provided.
 	 */
-	constructor(toolRegistry: ToolRegistry) {
-		this._toolRegistry = toolRegistry;
-		this.setupWatcher();
+	private _createNoopLogger(): Logger {
+		return {
+			info: () => {},
+			warn: () => {},
+			error: () => {},
+			debug: () => {},
+			setLevel: () => {},
+			getLevel: () => 'info',
+		};
 	}
 
 	/**
@@ -123,7 +125,7 @@ export class ToolWatcher {
 		try {
 			await this._toolRegistry.discoverAsync();
 		} catch (error) {
-			this.log(`Failed to discover tools: ${error instanceof Error ? error.message : String(error)}`);
+			this._logger.error(`Failed to discover tools:`, { error });
 		}
 	}
 
@@ -151,22 +153,10 @@ export class ToolWatcher {
 			try {
 				this._toolRegistry.removeTool(toolName);
 			} catch (error) {
-				// Tool might not have been registered, that's okay
-				this.log(`Tool '${toolName}' not registered: ${error instanceof Error ? error.message : String(error)}`);
+				this._logger.error(
+					`Tool '${toolName}' not registered: ${error instanceof Error ? error.message : String(error)}`
+				);
 			}
-		}
-	}
-
-	/**
-	 * Internal logging method.
-	 * Only logs when WATCHER_VERBOSE environment variable is set.
-	 * @param message - The message to log
-	 * @private
-	 */
-	private log(message: string): void {
-		// Optional: check environment variable to enable watcher logs
-		if (process.env.WATCHER_VERBOSE === 'true') {
-			console.error(`[Watcher] ${message}`);
 		}
 	}
 

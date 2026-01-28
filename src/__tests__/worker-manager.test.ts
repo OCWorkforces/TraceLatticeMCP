@@ -115,7 +115,9 @@ describe('WorkerManager', () => {
 			await manager.start();
 			await manager.terminate();
 
-			await expect(async () => await manager.start()).rejects.toThrow('WorkerManager has been terminated');
+			await expect(async () => await manager.start()).rejects.toThrow(
+				'WorkerManager has been terminated'
+			);
 		});
 
 		it('should spawn configured number of workers', async () => {
@@ -197,7 +199,9 @@ describe('WorkerManager', () => {
 				next_thought_needed: false,
 			};
 
-			await expect(async () => await manager.processThought(thought)).rejects.toThrow('No workers available');
+			await expect(async () => await manager.processThought(thought)).rejects.toThrow(
+				'No workers available'
+			);
 		});
 
 		it('should throw error if terminated', async () => {
@@ -211,7 +215,9 @@ describe('WorkerManager', () => {
 				next_thought_needed: false,
 			};
 
-			await expect(async () => await manager.processThought(thought)).rejects.toThrow('WorkerManager has been terminated');
+			await expect(async () => await manager.processThought(thought)).rejects.toThrow(
+				'WorkerManager has been terminated'
+			);
 		});
 
 		it('should throw error when worker timeout occurs', async () => {
@@ -232,7 +238,9 @@ describe('WorkerManager', () => {
 			};
 
 			// The mocked Worker won't respond, so it should timeout
-			await expect(async () => await shortTimeoutManager.processThought(thought)).rejects.toThrow('Worker timeout');
+			await expect(async () => await shortTimeoutManager.processThought(thought)).rejects.toThrow(
+				'Worker timeout'
+			);
 
 			await shortTimeoutManager.terminate();
 		});

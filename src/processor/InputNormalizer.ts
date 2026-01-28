@@ -202,10 +202,7 @@ export function normalizeInput(input: unknown): ThoughtData {
 	}
 
 	// Normalize all items in previous_steps if present (lenient mode - with defaults)
-	if (
-		Array.isArray(normalized.previous_steps) &&
-		normalized.previous_steps.length > 0
-	) {
+	if (Array.isArray(normalized.previous_steps) && normalized.previous_steps.length > 0) {
 		normalized.previous_steps = normalized.previous_steps.map((step) =>
 			typeof step === 'object' && step !== null
 				? normalizeStepRecommendation(step as Record<string, unknown>, true) // lenient mode

@@ -28,7 +28,9 @@ export class FilePersistence implements PersistenceBackend {
 
 	constructor(options?: PersistenceConfig['options']) {
 		// Default to .claude/data in current directory or home directory
-		const defaultDataDir = existsSync('.claude/data') ? '.claude/data' : join(homedir(), '.claude/data');
+		const defaultDataDir = existsSync('.claude/data')
+			? '.claude/data'
+			: join(homedir(), '.claude/data');
 		this._dataDir = options?.dataDir ?? defaultDataDir;
 		this._historyPath = join(this._dataDir, 'history.json');
 		this._branchesDir = join(this._dataDir, 'branches');
@@ -166,9 +168,7 @@ export class FilePersistence implements PersistenceBackend {
 
 		try {
 			const files = await readdir(this._branchesDir);
-			return files
-				.filter((f) => f.endsWith('.json'))
-				.map((f) => f.replace('.json', ''));
+			return files.filter((f) => f.endsWith('.json')).map((f) => f.replace('.json', ''));
 		} catch {
 			return [];
 		}

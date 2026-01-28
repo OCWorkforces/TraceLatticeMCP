@@ -84,17 +84,13 @@ export class ThoughtFormatter {
 
 		// Add tools if present
 		if (step.recommended_tools?.length) {
-			const toolNames = step.recommended_tools
-				.map(t => t.tool_name)
-				.join(', ');
+			const toolNames = step.recommended_tools.map((t) => t.tool_name).join(', ');
 			parts.push(chalk.cyan(`Tools: ${toolNames}`));
 		}
 
 		// Add skills if present
 		if (step.recommended_skills?.length) {
-			const skillNames = step.recommended_skills
-				.map(s => s.skill_name)
-				.join(', ');
+			const skillNames = step.recommended_skills.map((s) => s.skill_name).join(', ');
 			parts.push(chalk.green(`Skills: ${skillNames}`));
 		}
 

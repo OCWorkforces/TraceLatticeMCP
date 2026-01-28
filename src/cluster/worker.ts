@@ -30,7 +30,7 @@ interface WorkerInput {
 	requestId?: string;
 
 	/** The input data for processing (varies by type). */
-	input?: any;
+	input?: unknown;
 }
 
 /**
@@ -53,7 +53,7 @@ interface WorkerResponse {
 	requestId?: string;
 
 	/** The result data (present for successful results). */
-	result?: any;
+	result?: unknown;
 
 	/** Error message (present for errors). */
 	error?: string;
@@ -87,10 +87,10 @@ interface WorkerResponse {
  *
  * worker.on('message', (response: WorkerResponse) => {
  *   if (response.type === 'result') {
-	 *     console.log('Result:', response.result);
-	 *   } else if (response.type === 'ready') {
-	 *     console.log('Worker ready');
-	 *   }
+ *     console.log('Result:', response.result);
+ *   } else if (response.type === 'ready') {
+ *     console.log('Worker ready');
+ *   }
  * });
  *
  * // Send a thought for processing
@@ -102,8 +102,8 @@ interface WorkerResponse {
  *     thought_number: 1,
  *     total_thoughts: 3,
  *     next_thought_needed: true
-	 *   }
-	 * });
+ *   }
+ * });
  * ```
  */
 if (parentPort !== null) {
@@ -168,7 +168,7 @@ if (parentPort !== null) {
  * // Result: { success: true, timestamp: 1705550000000, input: {...} }
  * ```
  */
-async function handleProcessThought(input: any): Promise<any> {
+async function handleProcessThought(input: unknown): Promise<unknown> {
 	// This is a placeholder implementation
 	// In a real scenario, this would use the ThoughtProcessor and other components
 

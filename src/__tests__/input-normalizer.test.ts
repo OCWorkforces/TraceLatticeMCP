@@ -75,12 +75,14 @@ describe('InputNormalizer', () => {
 				current_step: {
 					step_description: 'Test step',
 					recommended_tools: [createToolRecommendation()],
-					recommended_skill: [{
-						skill_name: 'test-skill',
-						confidence: 0.9,
-						rationale: 'Test rationale',
-						priority: 1,
-					}],
+					recommended_skill: [
+						{
+							skill_name: 'test-skill',
+							confidence: 0.9,
+							rationale: 'Test rationale',
+							priority: 1,
+						},
+					],
 					expected_outcome: 'Test outcome',
 				},
 			} as unknown;
@@ -103,12 +105,14 @@ describe('InputNormalizer', () => {
 				current_step: {
 					step_description: 'Test step',
 					recommended_tools: [createToolRecommendation()],
-					recommended_skills: [{
-						skill_name: 'test-skill',
-						confidence: 0.9,
-						rationale: 'Test rationale',
-						priority: 1,
-					}],
+					recommended_skills: [
+						{
+							skill_name: 'test-skill',
+							confidence: 0.9,
+							rationale: 'Test rationale',
+							priority: 1,
+						},
+					],
 					expected_outcome: 'Test outcome',
 				},
 			} as unknown;
