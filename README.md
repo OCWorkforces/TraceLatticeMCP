@@ -24,20 +24,23 @@ import { McpServer } from 'tmcp';
 import { ToolAwareSequentialThinkingServer } from 'sequentialthinking-tools';
 
 const thinkingServer = new ToolAwareSequentialThinkingServer({
-	maxHistorySize: 1000
+	maxHistorySize: 1000,
 });
 
 // Discover Claude Code skills automatically
 thinkingServer.discoverSkills();
 
 // Register with MCP server
-server.tool({
-	name: 'sequentialthinking_tools',
-	description: 'Sequential thinking with tool recommendations',
-	schema: SequentialThinkingSchema
-}, async (input) => {
-	return thinkingServer.processThought(input);
-});
+server.tool(
+	{
+		name: 'sequentialthinking_tools',
+		description: 'Sequential thinking with tool recommendations',
+		schema: SequentialThinkingSchema,
+	},
+	async (input) => {
+		return thinkingServer.processThought(input);
+	}
+);
 ```
 
 ## Usage
@@ -53,20 +56,23 @@ await thinkingServer.processThought({
 	available_mcp_tools: ['mcp-omnisearch', 'mcp-turso-cloud'],
 	current_step: {
 		step_description: 'Explore project structure',
-		recommended_tools: [{
-			tool_name: 'mcp-omnisearch',
-			confidence: 0.9,
-			rationale: 'Best for file discovery and code search',
-			priority: 1
-		}],
-		expected_outcome: 'List of main project directories and files'
-	}
+		recommended_tools: [
+			{
+				tool_name: 'mcp-omnisearch',
+				confidence: 0.9,
+				rationale: 'Best for file discovery and code search',
+				priority: 1,
+			},
+		],
+		expected_outcome: 'List of main project directories and files',
+	},
 });
 ```
 
 ### Skill Discovery
 
 The server automatically discovers skills from:
+
 - `.claude/skills/` (project-local, highest priority)
 - `~/.claude/skills/` (user-global)
 
@@ -79,7 +85,6 @@ description: Handles git commit workflow
 user-invocable: true
 allowed-tools: [git]
 ---
-
 # Commit Skill
 
 Guidelines for git commits...
@@ -89,15 +94,15 @@ Guidelines for git commits...
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MAX_HISTORY_SIZE` | `1000` | Maximum number of thoughts to keep in history |
+| Variable           | Default | Description                                   |
+| ------------------ | ------- | --------------------------------------------- |
+| `MAX_HISTORY_SIZE` | `1000`  | Maximum number of thoughts to keep in history |
 
 ### Constructor Options
 
 ```typescript
 interface ServerOptions {
-	maxHistorySize?: number;  // Default: 1000
+	maxHistorySize?: number; // Default: 1000
 }
 ```
 
@@ -106,36 +111,47 @@ interface ServerOptions {
 ### Methods
 
 #### `addTool(tool: Tool): void`
+
 Register an MCP tool with the server.
 
 #### `addSkill(skill: Skill): void`
+
 Register a Claude Code skill with the server.
 
 #### `removeTool(name: string): boolean`
+
 Remove a tool by name. Returns `true` if successful.
 
 #### `removeSkill(name: string): boolean`
+
 Remove a skill by name. Returns `true` if successful.
 
 #### `updateTool(name: string, updates: Partial<Tool>): boolean`
+
 Update tool properties. Returns `true` if successful.
 
 #### `updateSkill(name: string, updates: Partial<Skill>): boolean`
+
 Update skill properties. Returns `true` if successful.
 
 #### `getAvailableTools(): Tool[]`
+
 Get all registered tools.
 
 #### `getAvailableSkills(): Skill[]`
+
 Get all registered skills.
 
 #### `discoverSkills(): number`
+
 Scan for skills in standard locations. Returns the number of skills discovered.
 
 #### `clearHistory(): void`
+
 Clear thought history and branches.
 
 #### `processThought(input): Promise<ToolResponse>`
+
 Process a thought step in the sequential thinking chain.
 
 ## Development

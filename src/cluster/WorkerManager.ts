@@ -23,6 +23,7 @@ import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { cpus } from 'node:os';
 import type { ThoughtData } from '../types.js';
+import type { Logger } from '../logger/StructuredLogger.js';
 
 export interface WorkerManagerOptions {
 	/**
@@ -84,18 +85,23 @@ export interface WorkerManagerOptions {
 	 * @default false
 	 */
 	enableWorkStealing?: boolean;
+
+	/**
+	 * Logger instance
+	 */
+	logger?: Logger;
 }
 
 export interface WorkerMessage {
 	type: 'process-thought' | 'health-check' | 'terminate';
 	requestId?: string;
-	input?: any;
+	input?: unknown;
 }
 
 export interface WorkerResponse {
 	type: 'result' | 'error' | 'health';
 	requestId?: string;
-	result?: any;
+	result?: unknown;
 	error?: string;
 }
 
@@ -113,7 +119,7 @@ export class WorkerManager {
 	private _enableHealthCheck: boolean;
 	private _healthCheckInterval: number;
 	private _maxRetries: number;
-	private _activeRequests: Map<string, (result: any) => void> = new Map();
+	private _activeRequests: Map<string, (result: unknown) => void> = new Map();
 	private _workerRetryCount: Map<number, number> = new Map();
 	private _healthCheckTimer: NodeJS.Timeout | null = null;
 	private _nextWorkerIndex = 0;
@@ -124,6 +130,7 @@ export class WorkerManager {
 	private _enableWorkStealing = false;
 
 	private _terminated = false;
+	private _logger: Logger;
 
 	constructor(options: WorkerManagerOptions = {}) {
 		this._maxWorkers = options.maxWorkers ?? cpus().length;
@@ -138,6 +145,21 @@ export class WorkerManager {
 		this._scaleDownThreshold = options.scaleDownThreshold ?? 2;
 		this._enableWorkStealing = options.enableWorkStealing ?? false;
 		this._currentWorkerCount = this._maxWorkers;
+		this._logger = options.logger ?? this._createNoopLogger();
+	}
+
+	/**
+	 * Create a no-op logger when none is provided.
+	 */
+	private _createNoopLogger(): Logger {
+		return {
+			info: () => {},
+			warn: () => {},
+			error: () => {},
+			debug: () => {},
+			setLevel: () => {},
+			getLevel: () => 'info',
+		};
 	}
 
 	/**
@@ -163,7 +185,7 @@ export class WorkerManager {
 			this._startHealthCheck();
 		}
 
-		console.log(`WorkerManager started with ${this._workers.length} workers`);
+		this._logger.info(`WorkerManager started with ${this._workers.length} workers`);
 	}
 
 	/**
@@ -177,7 +199,7 @@ export class WorkerManager {
 		});
 
 		worker.on('online', () => {
-			console.log(`Worker ${index} is online`);
+			this._logger.info(`Worker ${index} is online`);
 			this._workerRetryCount.delete(index);
 		});
 
@@ -186,12 +208,12 @@ export class WorkerManager {
 		});
 
 		worker.on('error', () => {
-			console.error(`Worker ${index} error`);
+			this._logger.error(`Worker ${index} error`);
 			this._handleWorkerError(index);
 		});
 
 		worker.on('exit', (code) => {
-			console.log(`Worker ${index} exited with code ${code}`);
+			this._logger.info(`Worker ${index} exited with code ${code}`);
 			this._handleWorkerExit(index, code);
 		});
 
@@ -228,7 +250,7 @@ export class WorkerManager {
 
 		if (retryCount < this._maxRetries) {
 			this._workerRetryCount.set(workerIndex, retryCount + 1);
-			console.log(
+			this._logger.info(
 				`Restarting worker ${workerIndex} (attempt ${retryCount + 1}/${this._maxRetries})`
 			);
 
@@ -247,15 +269,15 @@ export class WorkerManager {
 			setTimeout(
 				() => {
 					if (!this._terminated) {
-						this._spawnWorker(workerIndex).catch((err) => {
-							console.error(`Failed to restart worker ${workerIndex}:`, err);
+						this._spawnWorker(workerIndex).catch((spawnErr) => {
+							this._logger.error(`Failed to restart worker ${workerIndex}`, { error: spawnErr });
 						});
 					}
 				},
 				1000 * (retryCount + 1)
 			);
 		} else {
-			console.error(`Worker ${workerIndex} exceeded max retries, removing from pool`);
+			this._logger.error(`Worker ${workerIndex} exceeded max retries, removing from pool`);
 			const worker = this._workers[workerIndex];
 			if (worker) {
 				try {
@@ -279,9 +301,9 @@ export class WorkerManager {
 
 		// Spawn replacement worker if not terminated
 		if (!this._terminated && code !== 0) {
-			console.log(`Spawning replacement worker ${workerIndex}`);
+			this._logger.info(`Spawning replacement worker ${workerIndex}`);
 			this._spawnWorker(workerIndex).catch((err) => {
-				console.error(`Failed to spawn replacement worker:`, err);
+				this._logger.error(`Failed to spawn replacement worker`, err);
 			});
 		}
 	}
@@ -310,7 +332,7 @@ export class WorkerManager {
 	 * @param input - The thought data to process
 	 * @returns Promise with the processing result
 	 */
-	async processThought(input: ThoughtData): Promise<any> {
+	async processThought(input: ThoughtData): Promise<unknown> {
 		if (this._terminated) {
 			throw new Error('WorkerManager has been terminated');
 		}
@@ -412,7 +434,7 @@ export class WorkerManager {
 		this._workers = [];
 		this._activeRequests.clear();
 
-		console.log('WorkerManager terminated');
+		this._logger.info('WorkerManager terminated');
 	}
 
 	/**
@@ -430,7 +452,7 @@ export class WorkerManager {
 		if (this._enableAutoScaling && this._currentWorkerCount < this._maxWorkers) {
 			this._spawnWorker(this._currentWorkerCount);
 			this._currentWorkerCount++;
-			console.log(`Scaled up to ${this._currentWorkerCount} workers`);
+			this._logger.info(`Scaled up to ${this._currentWorkerCount} workers`);
 		}
 	}
 
@@ -449,7 +471,7 @@ export class WorkerManager {
 				worker.terminate();
 				this._workers.pop();
 				this._currentWorkerCount--;
-				console.log(`Scaled down to ${this._currentWorkerCount} workers`);
+				this._logger.info(`Scaled down to ${this._currentWorkerCount} workers`);
 			}
 		}
 	}
@@ -520,7 +542,7 @@ export class WorkerManager {
 					});
 				}
 
-				console.log(
+				this._logger.info(
 					`Stole ${requestsToMove.length} requests from worker ${overloadedIndex} to worker ${underloadedIndices[0]}`
 				);
 			}

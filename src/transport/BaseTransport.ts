@@ -19,6 +19,25 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
+import type { Logger, LogLevel } from '../logger/StructuredLogger.js';
+
+/**
+ * No-op logger that does nothing. Used when no logger is provided.
+ */
+class NoopLogger implements Logger {
+	private _level: LogLevel = 'info';
+
+	info(_message: string, _meta?: Record<string, unknown>): void {}
+	warn(_message: string, _meta?: Record<string, unknown>): void {}
+	error(_message: string, _meta?: Record<string, unknown>): void {}
+	debug(_message: string, _meta?: Record<string, unknown>): void {}
+	setLevel(level: LogLevel): void {
+		this._level = level;
+	}
+	getLevel(): LogLevel {
+		return this._level;
+	}
+}
 
 /**
  * Allowed query parameter names (whitelist for security).
@@ -48,6 +67,7 @@ export interface TransportOptions {
 	enableCors?: boolean;
 	enableRateLimit?: boolean;
 	maxRequestsPerMinute?: number;
+	logger?: Logger;
 }
 
 export abstract class BaseTransport {
@@ -61,6 +81,7 @@ export abstract class BaseTransport {
 	protected _wasHostExplicitlySet: boolean;
 	/** Shutdown state for graceful shutdown. */
 	protected _isShuttingDown: boolean = false;
+	private _logger: Logger | NoopLogger;
 
 	constructor(options: TransportOptions = {}) {
 		this._port = options.port ?? 9108;
@@ -71,6 +92,7 @@ export abstract class BaseTransport {
 		this._rateLimitEnabled = options.enableRateLimit ?? true;
 		this._maxRequestsPerMinute = options.maxRequestsPerMinute ?? RATE_LIMIT_REQUESTS;
 		this._isShuttingDown = false;
+		this._logger = options.logger ?? new NoopLogger();
 	}
 
 	/**
@@ -128,7 +150,6 @@ export abstract class BaseTransport {
 		const record = this._rateLimitMap.get(ip);
 
 		if (!record || now > record.resetTime) {
-			// Create new rate limit record
 			this._rateLimitMap.set(ip, {
 				count: 1,
 				resetTime: now + RATE_LIMIT_WINDOW_MS,
@@ -166,7 +187,6 @@ export abstract class BaseTransport {
 	 * @returns true if origin is valid, false otherwise
 	 */
 	protected validateCorsOrigin(req: IncomingMessage): boolean {
-		// If corsOrigin is '*', allow all origins
 		if (this._corsOrigin === '*') {
 			return true;
 		}
@@ -205,6 +225,27 @@ export abstract class BaseTransport {
 	}
 
 	/**
+	 * Log a message using the configured logger.
+	 *
+	 * @param level - Log level
+	 * @param message - Message to log
+	 * @param meta - Optional metadata
+	 */
+	protected log(
+		level: 'info' | 'warn' | 'error',
+		message: string,
+		meta?: Record<string, unknown>
+	): void {
+		if (level === 'info') {
+			this._logger.info(message, meta);
+		} else if (level === 'warn') {
+			this._logger.warn(message, meta);
+		} else {
+			this._logger.error(message, meta);
+		}
+	}
+
+	/**
 	 * Check if transport is shutting down.
 	 * @returns true if in shutdown phase
 	 */
@@ -218,7 +259,7 @@ export abstract class BaseTransport {
 	abstract connect(mcpServer: unknown): Promise<void>;
 
 	/**
-	 * Stop the transport server with graceful shutdown.
+	 * Stop transport server with graceful shutdown.
 	 *
 	 * This method should:
 	 * 1. Set shutdown flag to prevent new connections

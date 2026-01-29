@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
+import { InvalidToolError, DuplicateToolError, ToolNotFoundError } from '../errors.js';
 
 /**
  * Configuration options for creating a `ToolRegistry` instance.
@@ -196,10 +197,10 @@ export class ToolRegistry {
 	 */
 	public addTool(tool: Tool): void {
 		if (!tool.name) {
-			throw new Error('Tool must have a valid name');
+			throw new InvalidToolError('Tool must have a valid name');
 		}
 		if (this._tools.has(tool.name)) {
-			throw new Error(`tool '${tool.name}' already exists`);
+			throw new DuplicateToolError(tool.name);
 		}
 		this._tools.set(tool.name, tool);
 		this.log(`Added tool: ${tool.name}`, { toolName: tool.name });
@@ -220,7 +221,7 @@ export class ToolRegistry {
 	 */
 	public removeTool(name: string): void {
 		if (!this._tools.has(name)) {
-			throw new Error(`tool '${name}' not found, cannot remove`);
+			throw new ToolNotFoundError(name, 'remove');
 		}
 		this._tools.delete(name);
 		this.log(`Removed tool: ${name}`, { toolName: name });
@@ -245,7 +246,7 @@ export class ToolRegistry {
 	 */
 	public updateTool(name: string, updates: Partial<Tool>): void {
 		if (!this._tools.has(name)) {
-			throw new Error(`tool '${name}' not found, cannot update`);
+			throw new ToolNotFoundError(name, 'update');
 		}
 		const existing = this._tools.get(name)!;
 		const updated = { ...existing, ...updates };

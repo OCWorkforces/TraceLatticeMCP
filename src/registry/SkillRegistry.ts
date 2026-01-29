@@ -17,6 +17,7 @@ import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { existsSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
+import { InvalidSkillError, DuplicateSkillError, SkillNotFoundError } from '../errors.js';
 
 /**
  * Configuration options for creating a `SkillRegistry` instance.
@@ -185,10 +186,10 @@ export class SkillRegistry {
 	 */
 	public addSkill(skill: Skill): void {
 		if (!skill.name) {
-			throw new Error('Skill must have a valid name');
+			throw new InvalidSkillError('Skill must have a valid name');
 		}
 		if (this._skills.has(skill.name)) {
-			throw new Error(`skill '${skill.name}' already exists`);
+			throw new DuplicateSkillError(skill.name);
 		}
 		this._skills.set(skill.name, skill);
 		this.log(`Added skill: ${skill.name}`, { skillName: skill.name });
@@ -209,7 +210,7 @@ export class SkillRegistry {
 	 */
 	public removeSkillByName(name: string): void {
 		if (!this._skills.has(name)) {
-			throw new Error(`skill '${name}' not found, cannot remove`);
+			throw new SkillNotFoundError(name, 'remove');
 		}
 		this._skills.delete(name);
 		this.log(`Removed skill: ${name}`, { skillName: name });
@@ -234,7 +235,7 @@ export class SkillRegistry {
 	 */
 	public updateSkill(name: string, updates: Partial<Skill>): void {
 		if (!this._skills.has(name)) {
-			throw new Error(`skill '${name}' not found, cannot update`);
+			throw new SkillNotFoundError(name, 'update');
 		}
 		const existing = this._skills.get(name)!;
 		const updated = { ...existing, ...updates };

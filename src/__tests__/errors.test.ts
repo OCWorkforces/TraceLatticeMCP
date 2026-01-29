@@ -6,6 +6,10 @@ import {
 	InvalidThoughtError,
 	SkillDiscoveryError,
 	HistoryLimitExceededError,
+	SessionNotActiveError,
+	SessionNotFoundError,
+	MaxSessionsReachedError,
+	PoolTerminatedError,
 } from '../errors.js';
 
 describe('Custom Error Types', () => {
@@ -68,5 +72,43 @@ describe('Custom Error Types', () => {
 			expect(error.code).toBe('HISTORY_LIMIT_EXCEEDED');
 			expect(error.name).toBe('HistoryLimitExceededError');
 		});
+	});
+});
+
+describe('SessionNotActiveError', () => {
+	it('should create session not active error', () => {
+		const error = new SessionNotActiveError('test-session');
+		expect(error.message).toBe("Session 'test-session' is not active");
+		expect(error.code).toBe('SESSION_NOT_ACTIVE');
+		expect(error.name).toBe('SessionNotActiveError');
+	});
+});
+
+describe('SessionNotFoundError', () => {
+	it('should create session not found error', () => {
+		const error = new SessionNotFoundError('missing-session');
+		expect(error.message).toBe('Session not found: missing-session');
+		expect(error.code).toBe('SESSION_NOT_FOUND');
+		expect(error.name).toBe('SessionNotFoundError');
+	});
+});
+
+describe('MaxSessionsReachedError', () => {
+	it('should create max sessions error with limit', () => {
+		const error = new MaxSessionsReachedError(100);
+		expect(error.message).toBe(
+			'Max sessions (100) reached. Wait for a session to close or increase maxSessions.'
+		);
+		expect(error.code).toBe('MAX_SESSIONS_REACHED');
+		expect(error.name).toBe('MaxSessionsReachedError');
+	});
+});
+
+describe('PoolTerminatedError', () => {
+	it('should create pool terminated error', () => {
+		const error = new PoolTerminatedError();
+		expect(error.message).toBe('ConnectionPool has been terminated');
+		expect(error.code).toBe('POOL_TERMINATED');
+		expect(error.name).toBe('PoolTerminatedError');
 	});
 });

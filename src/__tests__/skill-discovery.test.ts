@@ -71,7 +71,7 @@ This should be discovered when both files exist.`;
 		writeFileSync(join(skillPath, 'skill.md'), SKILL_LOWERCASE);
 
 		// Wait for filesystem to flush
-		await new Promise(resolve => setTimeout(resolve, 10));
+		await new Promise((resolve) => setTimeout(resolve, 10));
 
 		// Test that lowercase file is readable
 		expect(existsSync(join(skillPath, 'skill.md'))).toBe(true);
@@ -88,7 +88,7 @@ This should be discovered when both files exist.`;
 		writeFileSync(join(skillPath, 'skill.md'), SKILL_LOWERCASE);
 
 		// Wait for filesystem to flush
-		await new Promise(resolve => setTimeout(resolve, 10));
+		await new Promise((resolve) => setTimeout(resolve, 10));
 
 		// Test the priority logic
 		const skillFileUpper = join(skillPath, 'SKILL.md');

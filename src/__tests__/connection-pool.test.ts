@@ -90,7 +90,9 @@ describe('ConnectionPool', () => {
 			await smallPool.createSession();
 			await smallPool.createSession();
 
-			await expect(async () => await smallPool.createSession()).rejects.toThrow('Max sessions (2) reached');
+			await expect(async () => await smallPool.createSession()).rejects.toThrow(
+				'Max sessions (2) reached'
+			);
 
 			await smallPool.terminate();
 		});
@@ -98,7 +100,9 @@ describe('ConnectionPool', () => {
 		it('should throw error when terminated', async () => {
 			await pool.terminate();
 
-			await expect(async () => await pool.createSession()).rejects.toThrow('ConnectionPool has been terminated');
+			await expect(async () => await pool.createSession()).rejects.toThrow(
+				'ConnectionPool has been terminated'
+			);
 		});
 
 		it('should create unique session IDs', async () => {
@@ -134,7 +138,9 @@ describe('ConnectionPool', () => {
 				next_thought_needed: false,
 			};
 
-			await expect(async () => await pool.process('non-existent', thought)).rejects.toThrow('Session not found');
+			await expect(async () => await pool.process('non-existent', thought)).rejects.toThrow(
+				'Session not found'
+			);
 		});
 	});
 
@@ -150,7 +156,9 @@ describe('ConnectionPool', () => {
 		});
 
 		it('should throw error for non-existent session', async () => {
-			await expect(async () => await pool.closeSession('non-existent')).rejects.toThrow('Session not found');
+			await expect(async () => await pool.closeSession('non-existent')).rejects.toThrow(
+				'Session not found'
+			);
 		});
 
 		it('should allow reusing session slot after closing', async () => {
@@ -297,7 +305,9 @@ describe('ConnectionPool', () => {
 		it('should prevent operations after terminate', async () => {
 			await pool.terminate();
 
-			await expect(async () => await pool.createSession()).rejects.toThrow('ConnectionPool has been terminated');
+			await expect(async () => await pool.createSession()).rejects.toThrow(
+				'ConnectionPool has been terminated'
+			);
 		});
 	});
 
@@ -337,7 +347,9 @@ describe('ConnectionPool edge cases', () => {
 			autoCleanup: false,
 		});
 
-		await expect(async () => await zeroPool.createSession()).rejects.toThrow('Max sessions (0) reached');
+		await expect(async () => await zeroPool.createSession()).rejects.toThrow(
+			'Max sessions (0) reached'
+		);
 
 		await zeroPool.terminate();
 	});

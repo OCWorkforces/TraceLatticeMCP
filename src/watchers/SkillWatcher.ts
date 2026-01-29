@@ -12,6 +12,7 @@ import { watch, type FSWatcher } from 'chokidar';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import type { SkillRegistry } from '../registry/SkillRegistry.js';
+import type { Logger } from '../logger/StructuredLogger.js';
 
 /**
  * File system watcher for skill directories with registry integration.
@@ -59,24 +60,28 @@ import type { SkillRegistry } from '../registry/SkillRegistry.js';
 export class SkillWatcher {
 	/** The underlying chokidar file system watcher. */
 	private _watcher: FSWatcher | null = null;
+	private _logger: Logger;
+
+	constructor(
+		private skillRegistry: SkillRegistry,
+		logger?: Logger
+	) {
+		this._logger = logger ?? this._createNoopLogger();
+		this.setupWatcher();
+	}
 
 	/**
-	 * Creates a new SkillWatcher and starts watching skill directories.
-	 *
-	 * The watcher automatically starts monitoring `.claude/skills` and
-	 * `~/.claude/skills` directories upon construction. When skill files
-	 * are added or modified, it triggers re-discovery on the associated registry.
-	 *
-	 * @param skillRegistry - The skill registry to sync with
-	 *
-	 * @example
-	 * ```typescript
-	 * const registry = new SkillRegistry();
-	 * const watcher = new SkillWatcher(registry);
-	 * ```
+	 * Create a no-op logger when none is provided.
 	 */
-	constructor(private skillRegistry: SkillRegistry) {
-		this.setupWatcher();
+	private _createNoopLogger(): Logger {
+		return {
+			info: () => {},
+			warn: () => {},
+			error: () => {},
+			debug: () => {},
+			setLevel: () => {},
+			getLevel: () => 'info',
+		};
 	}
 
 	/**
@@ -161,7 +166,7 @@ export class SkillWatcher {
 		if (process.env.WATCHER_VERBOSE !== 'true') {
 			return;
 		}
-		console.error(`[Watcher] ${message}`);
+		this._logger.error(`[Watcher] ${message}`);
 	}
 
 	/**

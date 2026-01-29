@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolAwareSequentialThinkingServer } from '../index.js';
-import type { ThoughtData, ToolRecommendation, SkillRecommendation, StepRecommendation } from '../types.js';
+import type {
+	ThoughtData,
+	ToolRecommendation,
+	SkillRecommendation,
+	StepRecommendation,
+} from '../types.js';
 
 /**
  * Helper function for creating test thoughts with minimal required fields
@@ -111,9 +116,7 @@ describe('sequentialthinking-tools MCP Tool', () => {
 						createToolRecommendation({ tool_name: 'tool1' }),
 						createToolRecommendation({ tool_name: 'tool2' }),
 					],
-					recommended_skills: [
-						createSkillRecommendation({ skill_name: 'skill1' }),
-					],
+					recommended_skills: [createSkillRecommendation({ skill_name: 'skill1' })],
 				}),
 				previous_steps: [createStepRecommendation()],
 				remaining_steps: ['Step 1', 'Step 2'],
@@ -272,17 +275,17 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			const result = await server.processThought(thought);
 			const response = parseProcessThoughtResult(result);
 
-			expect(response.current_step?.recommended_skills?.[0].allowed_tools).toEqual(['Bash', 'Read']);
+			expect(response.current_step?.recommended_skills?.[0].allowed_tools).toEqual([
+				'Bash',
+				'Read',
+			]);
 			expect(response.current_step?.recommended_skills?.[0].user_invocable).toBe(true);
 		});
 
 		it('2.5 Step Conditions Tracking - should validate next_step_conditions field', async () => {
 			const thought = createTestThought({
 				current_step: createStepRecommendation({
-					next_step_conditions: [
-						'Check if files were found',
-						'If empty, try alternative search',
-					],
+					next_step_conditions: ['Check if files were found', 'If empty, try alternative search'],
 				}),
 			});
 
@@ -386,9 +389,24 @@ describe('sequentialthinking-tools MCP Tool', () => {
 		it('3.3 History Persistence Across Thoughts - should validate history state maintained across multiple calls', async () => {
 			// Process multiple thoughts
 			const thoughts = [
-				createTestThought({ thought: 'First thought', thought_number: 1, total_thoughts: 3, next_thought_needed: true }),
-				createTestThought({ thought: 'Second thought', thought_number: 2, total_thoughts: 3, next_thought_needed: true }),
-				createTestThought({ thought: 'Third thought', thought_number: 3, total_thoughts: 3, next_thought_needed: false }),
+				createTestThought({
+					thought: 'First thought',
+					thought_number: 1,
+					total_thoughts: 3,
+					next_thought_needed: true,
+				}),
+				createTestThought({
+					thought: 'Second thought',
+					thought_number: 2,
+					total_thoughts: 3,
+					next_thought_needed: true,
+				}),
+				createTestThought({
+					thought: 'Third thought',
+					thought_number: 3,
+					total_thoughts: 3,
+					next_thought_needed: false,
+				}),
 			];
 
 			for (const thought of thoughts) {

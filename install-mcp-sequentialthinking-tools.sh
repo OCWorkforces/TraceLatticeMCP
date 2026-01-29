@@ -68,11 +68,7 @@ check_node_version() {
 print_banner() {
     cat << "EOF"
 
-╔═══════════════════════════════════════════════════════════════╗
-║                                                               ║
-║   MCP Sequential Thinking Tools - Global Installation        ║
-║                                                               ║
-╚═══════════════════════════════════════════════════════════════╝
+--- MCP Sequential Thinking Tools - Global Installation ---
 
 EOF
 }
