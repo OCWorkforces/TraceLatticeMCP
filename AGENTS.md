@@ -1,8 +1,8 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-01-26
-**Commit:** (see git)
-**Branch:** (see git)
+**Generated:** 2026-01-29
+**Commit:** 19f2e0f
+**Branch:** develop
 
 ## OVERVIEW
 
@@ -18,6 +18,13 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 │   ├── di/               # DI container (see src/di/AGENTS.md)
 │   ├── registry/         # Tool/Skill registries (see src/registry/AGENTS.md)
 │   ├── cluster/          # Worker pool (see src/cluster/AGENTS.md)
+│   ├── cache/            # LRU cache (see src/cache/AGENTS.md)
+│   ├── logger/           # Structured logging (see src/logger/AGENTS.md)
+│   ├── pool/             # Session pooling (see src/pool/AGENTS.md)
+│   ├── config/           # Config loading (see src/config/AGENTS.md)
+│   ├── formatter/         # Output formatting (see src/formatter/AGENTS.md)
+│   ├── watchers/         # File system watchers (see src/watchers/AGENTS.md)
+│   ├── processor/         # Thought processing (see src/processor/AGENTS.md)
 │   └── __tests__/        # Tests (see src/__tests__/AGENTS.md)
 ├── .claude/              # Skills + tools directories
 └── docs/                 # Documentation assets
@@ -32,6 +39,26 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 | **Dependency Injection** | `src/di/`                               | IoC container implementation   |
 | **Transports**           | `src/transport/`                        | SSE & Stdio implementations    |
 | **Metrics**              | `src/metrics/`                          | Prometheus telemetry           |
+| **Config**               | `src/config/`                           | YAML + env var loading         |
+| **Caching**              | `src/cache/`                            | Discovery LRU + TTL            |
+| **Pool**                 | `src/pool/`                             | Multi-user session isolation   |
+
+## CODE MAP
+
+| Symbol                              | Type  | Location                          | Refs                            | Role |
+| ----------------------------------- | ----- | --------------------------------- | ------------------------------- | ---- |
+| `ToolAwareSequentialThinkingServer` | class | src/index.ts                      | Main server entry point         |
+| `HistoryManager`                    | class | src/HistoryManager.ts             | State & branch management       |
+| `ThoughtProcessor`                  | class | src/processor/ThoughtProcessor.ts | Request validation & processing |
+| `SseTransport`                      | class | src/transport/SseTransport.ts     | SSE transport implementation    |
+| `HttpTransport`                     | class | src/transport/HttpTransport.ts    | HTTP transport implementation   |
+| `WorkerManager`                     | class | src/cluster/WorkerManager.ts      | Worker pool management          |
+| `ToolRegistry`                      | class | src/registry/ToolRegistry.ts      | MCP tool lifecycle              |
+| `SkillRegistry`                     | class | src/registry/SkillRegistry.ts     | Claude skill lifecycle          |
+| `DIContainer`                       | class | src/di/DIContainer.ts             | Dependency injection            |
+| `DiscoveryCache`                    | class | src/cache/DiscoveryCache.ts       | LRU cache for discovery         |
+| `ConnectionPool`                    | class | src/pool/ConnectionPool.ts        | Multi-user session pool         |
+| `ConfigLoader`                      | class | src/config/ConfigLoader.ts        | YAML + env config               |
 
 ## CONVENTIONS
 
@@ -50,7 +77,8 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 
 ## SETUP NOTES
 
-- **Missing CI**: No GitHub workflows present.
+- **CI**: GitHub workflow at `.github/workflows/ci.yml` (runs npm ci + type-check, missing tests)
+- **Missing CI**: No GitHub workflows for tests or full build validation.
 - **Missing Helpers**: Test suite lacks shared helpers/fixtures.
 - **Empty Modules**: `telemetry` directory is currently empty.
 
