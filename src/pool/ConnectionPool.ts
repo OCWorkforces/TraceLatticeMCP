@@ -17,15 +17,15 @@
  * ```
  */
 
-import type { ThoughtData } from '../types.js';
-import type { ToolAwareSequentialThinkingServer } from '../index.js';
-import type { Logger } from '../logger/StructuredLogger.js';
 import {
-	SessionNotActiveError,
-	SessionNotFoundError,
 	MaxSessionsReachedError,
 	PoolTerminatedError,
+	SessionNotActiveError,
+	SessionNotFoundError,
 } from '../errors.js';
+import type { ToolAwareSequentialThinkingServer } from '../index.js';
+import type { Logger } from '../logger/StructuredLogger.js';
+import type { ThoughtData } from '../types.js';
 
 export interface SessionOptions {
 	/**
@@ -205,7 +205,7 @@ export class ConnectionPool {
 	private _autoCleanup: boolean;
 	private _cleanupInterval: number;
 	private _cleanupTimerId: number | null = null;
-	private _terminated = false;
+	private _terminated: boolean = false;
 	private _logger: Logger;
 
 	constructor(options: SessionOptions = {}) {
@@ -221,12 +221,12 @@ export class ConnectionPool {
 	 */
 	private _createNoopLogger(): Logger {
 		return {
-			info: () => {},
-			warn: () => {},
-			error: () => {},
-			debug: () => {},
-			setLevel: () => {},
-			getLevel: () => 'info',
+			info: (): void => {},
+			warn: (): void => {},
+			error: (): void => {},
+			debug: (): void => {},
+			setLevel: (): void => {},
+			getLevel: (): 'info' => 'info',
 		};
 
 		// Start automatic cleanup if enabled
