@@ -214,6 +214,10 @@ export class ConnectionPool {
 		this._autoCleanup = options.autoCleanup ?? true;
 		this._cleanupInterval = options.cleanupInterval ?? 60000; // 1 minute
 		this._logger = options.logger ?? this._createNoopLogger();
+
+		if (this._autoCleanup) {
+			this._startCleanup();
+		}
 	}
 
 	/**
@@ -228,11 +232,6 @@ export class ConnectionPool {
 			setLevel: (): void => {},
 			getLevel: (): 'info' => 'info',
 		};
-
-		// Start automatic cleanup if enabled
-		if (this._autoCleanup) {
-			this._startCleanup();
-		}
 	}
 
 	/**

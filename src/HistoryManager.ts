@@ -70,6 +70,8 @@ export interface HistoryManagerConfig {
 
 	/** Optional persistence backend for saving/loading history. */
 	persistence?: PersistenceBackend | null;
+	tools?: ToolRegistry;
+	skills?: SkillRegistry;
 }
 
 /**
@@ -177,16 +179,20 @@ export class HistoryManager implements IHistoryManager {
 		this._logger = config.logger ?? new NullLogger();
 		this._persistence = config.persistence ?? null;
 		this._persistenceEnabled = this._persistence !== null;
-		this.tools = new ToolRegistry({
-			logger: config.logger,
-			cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
-		});
-		this.skills = new SkillRegistry({
-			logger: config.logger,
-			cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
-			skillDirs: config.skillDirs,
-			lazyDiscovery: config.lazyDiscovery,
-		});
+		this.tools =
+			config.tools ??
+			new ToolRegistry({
+				logger: config.logger,
+				cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
+			});
+		this.skills =
+			config.skills ??
+			new SkillRegistry({
+				logger: config.logger,
+				cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
+				skillDirs: config.skillDirs,
+				lazyDiscovery: config.lazyDiscovery,
+			});
 	}
 
 	/**

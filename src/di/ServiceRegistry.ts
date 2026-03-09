@@ -4,6 +4,9 @@ import type { HistoryManager } from '../HistoryManager.js';
 import type { ThoughtProcessor } from '../processor/ThoughtProcessor.js';
 import type { ThoughtFormatter } from '../formatter/ThoughtFormatter.js';
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
+import type { ToolRegistry } from '../registry/ToolRegistry.js';
+import type { SkillRegistry } from '../registry/SkillRegistry.js';
+import type { Metrics } from '../metrics/metrics.impl.js';
 
 export interface ServiceRegistry {
 	Logger: StructuredLogger;
@@ -13,6 +16,9 @@ export interface ServiceRegistry {
 	ThoughtProcessor: ThoughtProcessor;
 	ThoughtFormatter: ThoughtFormatter;
 	Persistence: PersistenceBackend | null;
+	ToolRegistry: ToolRegistry;
+	SkillRegistry: SkillRegistry;
+	Metrics: Metrics;
 }
 
 export type ServiceKey = keyof ServiceRegistry;

@@ -27,6 +27,8 @@ import { ToolWatcher } from './watchers/ToolWatcher.js';
 import { Container } from './di/index.js';
 import { ToolRegistry } from './registry/ToolRegistry.js';
 import { SkillRegistry } from './registry/SkillRegistry.js';
+import { DiscoveryCache } from './cache/DiscoveryCache.js';
+import { Metrics } from './metrics/metrics.impl.js';
 import {
 	createPersistenceBackend,
 	type PersistenceBackend,
@@ -157,6 +159,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 	private _logger: StructuredLogger;
 	private _historyManager: HistoryManager;
 	private _thoughtProcessor: ThoughtProcessor;
+	private _metrics: Metrics;
 	private _skillWatcher: SkillWatcher | null = null;
 	private _toolWatcher: ToolWatcher | null = null;
 	private _config: ServerConfig;
@@ -210,6 +213,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 		this._logger = this._container.resolve<StructuredLogger>('Logger');
 		this._historyManager = this._container.resolve<HistoryManager>('HistoryManager');
 		this._thoughtProcessor = this._container.resolve<ThoughtProcessor>('ThoughtProcessor');
+		this._metrics = this._container.resolve<Metrics>('Metrics');
 		this._config = this._container.resolve<ServerConfig>('Config');
 
 		// Expose managers as public properties (recommended API)
@@ -246,6 +250,9 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 		persistence: PersistenceBackend | null
 	): Container {
 		const container = new Container();
+		const metrics = new Metrics({
+			prefix: 'sequentialthinking',
+		});
 
 		// Initialize config with file defaults overridden by constructor options
 		const config = new ServerConfig({
@@ -271,12 +278,33 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 		container.registerInstance('Config', config);
 		container.registerInstance('FileConfig', fileConfig || {});
 		container.registerInstance('Persistence', persistence);
+		container.registerInstance('Metrics', metrics);
+		container.register(
+			'ToolRegistry',
+			() =>
+				new ToolRegistry({
+					logger,
+					cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
+				})
+		);
+		container.register(
+			'SkillRegistry',
+			() =>
+				new SkillRegistry({
+					logger,
+					cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
+					skillDirs: config.skillDirs,
+					lazyDiscovery: options.lazyDiscovery,
+				})
+		);
 
 		// Register HistoryManager with lazy initialization
 		container.register('HistoryManager', () => {
 			const cfg = container.resolve<ServerConfig>('Config');
 			const log = container.resolve<StructuredLogger>('Logger');
 			const pers = container.resolve('Persistence') as PersistenceBackend | null;
+			const tools = container.resolve<ToolRegistry>('ToolRegistry');
+			const skills = container.resolve<SkillRegistry>('SkillRegistry');
 			return new HistoryManager({
 				maxHistorySize: cfg.maxHistorySize,
 				maxBranches: cfg.maxBranches,
@@ -286,6 +314,8 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 				discoveryCache: cfg.discoveryCache,
 				lazyDiscovery: options.lazyDiscovery,
 				persistence: pers,
+				tools,
+				skills,
 			});
 		});
 
@@ -358,8 +388,17 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 
 	// Main processing method - delegate to ThoughtProcessor
 	public async processThought(input: v.InferInput<typeof SequentialThinkingSchema>) {
-		const result = await this._thoughtProcessor.process(input as ThoughtData);
+		const startTime = Date.now();
+		const thoughtInput = input as ThoughtData;
+		this._metrics.counter('thought_requests_total', 1, {}, 'Total thought processing requests');
+		const result = await this._thoughtProcessor.process(thoughtInput);
+		const durationSeconds = (Date.now() - startTime) / 1000;
+		this._metrics.histogram('thought_processing_duration_seconds', durationSeconds, {});
 		return result;
+	}
+
+	public getMetricsSnapshot(): string {
+		return this._metrics.export();
 	}
 
 	/**
@@ -450,11 +489,8 @@ export function createServerSync(options: ServerOptions = {}): ToolAwareSequenti
 	return new ToolAwareSequentialThinkingServer(options);
 }
 
-// Global server initialization
-let thinkingServer: ToolAwareSequentialThinkingServer;
-
 // Initialize server
-async function initializeServer() {
+async function initializeServer(): Promise<ToolAwareSequentialThinkingServer> {
 	// Create logger for initialization
 	const configLoader = new ConfigLoader();
 	const fileConfig = configLoader.load();
@@ -466,29 +502,29 @@ async function initializeServer() {
 	});
 
 	// Create server instance
-	thinkingServer = await createServer({
+	const thinkingServer = await createServer({
 		logger,
 		enableWatcher: true,
 	});
 
 	logger.info('Server initialized successfully');
+	return thinkingServer;
 }
-
-// Register the sequential thinking tool
-server.tool(
-	{
-		name: 'sequentialthinking_tools',
-		description: SEQUENTIAL_THINKING_TOOL.description,
-		schema: SequentialThinkingSchema,
-	},
-	async (input) => {
-		return thinkingServer.processThought(input);
-	}
-);
 
 async function main() {
 	// Initialize the server
-	await initializeServer();
+	const thinkingServer = await initializeServer();
+
+	server.tool(
+		{
+			name: 'sequentialthinking_tools',
+			description: SEQUENTIAL_THINKING_TOOL.description,
+			schema: SequentialThinkingSchema,
+		},
+		async (input) => {
+			return thinkingServer.processThought(input);
+		}
+	);
 
 	// Get transport type from environment variable or default to stdio
 	const transportType = process.env.TRANSPORT_TYPE || 'stdio';
@@ -504,10 +540,28 @@ async function main() {
 			host,
 			corsOrigin: process.env.CORS_ORIGIN || '*',
 			enableCors: process.env.ENABLE_CORS !== 'false',
+			allowedHosts: process.env.ALLOWED_HOSTS?.split(',').map((hostValue) => hostValue.trim()),
 		});
 
 		// Connect the SSE transport
 		await sseTransport.connect(server);
+
+		const shutdown = async (): Promise<void> => {
+			await sseTransport.stop();
+			thinkingServer.stop();
+		};
+
+		process.once('SIGINT', () => {
+			shutdown()
+				.then(() => process.exit(0))
+				.catch(() => process.exit(1));
+		});
+
+		process.once('SIGTERM', () => {
+			shutdown()
+				.then(() => process.exit(0))
+				.catch(() => process.exit(1));
+		});
 
 		thinkingServer['_logger'].info(
 			`Sequential Thinking MCP Server running on SSE transport at http://${host}:${port}`
@@ -516,6 +570,15 @@ async function main() {
 		// Use stdio transport (default, single-user)
 		const transport = new StdioTransport(server);
 		transport.listen();
+
+		const shutdown = (): void => {
+			thinkingServer.stop();
+			process.exit(0);
+		};
+
+		process.once('SIGINT', shutdown);
+		process.once('SIGTERM', shutdown);
+
 		thinkingServer['_logger'].info('Sequential Thinking MCP Server running on stdio');
 	}
 }

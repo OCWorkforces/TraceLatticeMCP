@@ -509,6 +509,17 @@ describe('Complex Scenarios', () => {
 		expect(container.resolve<ConsoleLogger>('Logger').prefix).toBe('v2');
 	});
 
+	it('should throw descriptive error on circular dependency resolution', () => {
+		const container = new Container();
+
+		container.register('A', () => ({ b: container.resolve('B') }));
+		container.register('B', () => ({ a: container.resolve('A') }));
+
+		expect(() => {
+			container.resolve('A');
+		}).toThrow('Circular dependency detected while resolving service: A');
+	});
+
 	it('should handle multiple containers independently', () => {
 		const container1 = new Container();
 		const container2 = new Container();

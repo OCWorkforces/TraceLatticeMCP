@@ -1,0 +1,163 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { request } from 'node:http';
+import { McpServer } from 'tmcp';
+import { ValibotJsonSchemaAdapter } from '@tmcp/adapter-valibot';
+import { HttpTransport } from '../transport/HttpTransport.js';
+
+function httpRequest(options: {
+	port: number;
+	method?: string;
+	path?: string;
+	headers?: Record<string, string>;
+	body?: string;
+}): Promise<{
+	statusCode: number;
+	body: string;
+	headers: Record<string, string | string[] | undefined>;
+}> {
+	return new Promise((resolve, reject) => {
+		const req = request(
+			{
+				hostname: '127.0.0.1',
+				port: options.port,
+				path: options.path ?? '/messages',
+				method: options.method ?? 'POST',
+				headers: options.headers,
+			},
+			(res) => {
+				let body = '';
+				res.on('data', (chunk) => {
+					body += chunk.toString();
+				});
+				res.on('end', () => {
+					resolve({
+						statusCode: res.statusCode ?? 0,
+						body,
+						headers: res.headers,
+					});
+				});
+			}
+		);
+
+		req.on('error', reject);
+		if (options.body) {
+			req.write(options.body);
+		}
+		req.end();
+	});
+}
+
+describe('HttpTransport', () => {
+	let transport: HttpTransport;
+	let port: number;
+
+	beforeEach(async () => {
+		port = 7000 + Math.floor(Math.random() * 1000);
+		transport = new HttpTransport({
+			port,
+			host: '127.0.0.1',
+			corsOrigin: 'https://allowed.example.com',
+			maxRequestsPerMinute: 1,
+			metricsProvider: () =>
+				'# HELP test_metric Test metric\n# TYPE test_metric counter\ntest_metric 1\n',
+		});
+
+		const mockMcpServer = new McpServer(
+			{ name: 'test-http-transport', version: '1.0.0' },
+			{
+				adapter: new ValibotJsonSchemaAdapter(),
+				capabilities: {
+					tools: { listChanged: true },
+				},
+			}
+		);
+
+		await transport.connect(mockMcpServer);
+	});
+
+	afterEach(async () => {
+		await transport.stop();
+	});
+
+	it('returns 403 for invalid CORS origin', async () => {
+		const response = await httpRequest({
+			port,
+			headers: {
+				origin: 'https://blocked.example.com',
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+		});
+
+		expect(response.statusCode).toBe(403);
+		expect(response.body).toContain('Forbidden - invalid origin');
+	});
+
+	it('returns 429 when rate limit exceeded', async () => {
+		const firstResponse = await httpRequest({
+			port,
+			headers: {
+				origin: 'https://allowed.example.com',
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+		});
+
+		expect(firstResponse.statusCode).toBe(200);
+
+		const secondResponse = await httpRequest({
+			port,
+			headers: {
+				origin: 'https://allowed.example.com',
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} }),
+		});
+
+		expect(secondResponse.statusCode).toBe(429);
+		expect(secondResponse.body).toContain('Too many requests');
+	});
+
+	it('handles OPTIONS preflight with CORS headers', async () => {
+		const response = await httpRequest({
+			port,
+			method: 'OPTIONS',
+			path: '/messages',
+			headers: {
+				origin: 'https://allowed.example.com',
+			},
+		});
+
+		expect(response.statusCode).toBe(204);
+		expect(response.headers['access-control-allow-origin']).toBe('https://allowed.example.com');
+		expect(response.headers['access-control-allow-methods']).toBe('GET, POST, OPTIONS');
+	});
+
+	it('returns metrics from /metrics endpoint', async () => {
+		const response = await httpRequest({
+			port,
+			method: 'GET',
+			path: '/metrics',
+			headers: { origin: 'https://allowed.example.com' },
+		});
+
+		expect(response.statusCode).toBe(200);
+		expect(response.body).toContain('test_metric 1');
+		expect(response.headers['content-type']).toContain('text/plain');
+	});
+
+	it('returns 403 for invalid host header', async () => {
+		const response = await httpRequest({
+			port,
+			headers: {
+				host: 'evil.example.com',
+				origin: 'https://allowed.example.com',
+				'content-type': 'application/json',
+			},
+			body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+		});
+
+		expect(response.statusCode).toBe(403);
+		expect(response.body).toContain('invalid host header');
+	});
+});

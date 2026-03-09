@@ -17,6 +17,8 @@
 import type { McpServer } from 'tmcp';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
+import { safeParse } from 'valibot';
+import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 
 /**
@@ -79,6 +81,12 @@ export class SseTransport extends BaseTransport {
 	 * Handle incoming HTTP requests
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+		if (!this.validateHostHeader(req)) {
+			res.writeHead(403, { 'Content-Type': 'application/json' });
+			res.end(JSON.stringify({ error: 'Forbidden - invalid host header' }));
+			return;
+		}
+
 		const url = new URL(req.url || '', `http://${req.headers.host}`);
 
 		// Check rate limit first
@@ -192,16 +200,38 @@ export class SseTransport extends BaseTransport {
 		}
 
 		try {
-			JSON.parse(body); // Validate JSON
+			const jsonRpcRequest = JSON.parse(body);
+			const parseResult = safeParse(JsonRpcRequestSchema, jsonRpcRequest);
+			if (!parseResult.success) {
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: jsonRpcRequest?.id ?? null,
+						error: {
+							code: -32600,
+							message: 'Invalid Request',
+							data: parseResult.issues,
+						},
+					})
+				);
+				return;
+			}
 
 			// Process message through MCP server
 			if (this._mcpServer) {
-				// This would normally call to MCP server's tool handler
-				// For now, we'll just acknowledge
+				const response = await this._mcpServer.receive(jsonRpcRequest, {
+					sessionInfo: {},
+				});
 				res.writeHead(200, {
 					'Content-Type': 'application/json',
 				});
-				res.end(JSON.stringify({ success: true }));
+
+				if (response) {
+					res.end(JSON.stringify(response));
+				} else {
+					res.end(JSON.stringify({ jsonrpc: '2.0', id: jsonRpcRequest?.id ?? null, result: null }));
+				}
 			} else {
 				res.writeHead(503, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Server not ready' }));
@@ -256,6 +286,7 @@ export class SseTransport extends BaseTransport {
 	 */
 	async stop(_timeout?: number): Promise<void> {
 		this._isShuttingDown = true;
+		this._stopRateLimitCleanup();
 
 		return new Promise((resolve) => {
 			// Close all client connections

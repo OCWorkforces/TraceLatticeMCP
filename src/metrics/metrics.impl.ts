@@ -149,6 +149,9 @@ export class Metrics {
 
 		if (existing) {
 			existing.value += value;
+			if (help && !existing.help) {
+				existing.help = help;
+			}
 		} else {
 			this._metrics.set(key, {
 				name: fullName,
@@ -180,12 +183,13 @@ export class Metrics {
 		const fullName = this._fullName(name);
 		const allLabels = { ...this._defaultLabels, ...labels };
 		const key = this._metricKey(fullName, allLabels);
+		const existing = this._metrics.get(key);
 		this._metrics.set(key, {
 			name: fullName,
 			type: MetricType.Gauge,
 			value,
 			labels: allLabels,
-			help,
+			help: help ?? existing?.help,
 		});
 		this._operationsCounter++;
 	}
@@ -347,9 +351,10 @@ export class Metrics {
 		const typeEntries = new Map<string, MetricType>();
 
 		for (const metric of metrics) {
-			if (metric.help && !helpEntries.has(metric.name)) {
-				lines.push(`# HELP ${metric.name} ${metric.help}`);
-				helpEntries.set(metric.name, metric.help);
+			if (!helpEntries.has(metric.name)) {
+				const helpText = metric.help ?? `${metric.name} metric`;
+				lines.push(`# HELP ${metric.name} ${helpText}`);
+				helpEntries.set(metric.name, helpText);
 			}
 			if (!typeEntries.has(metric.name)) {
 				lines.push(`# TYPE ${metric.name} ${metric.type}`);
@@ -363,20 +368,37 @@ export class Metrics {
 		}
 
 		for (const [key, histogram] of histograms) {
-			const labels = this._parseMetricKey(key);
-			const fullName = labels.shift() ?? '';
+			const { name: fullName, labels } = this._parseMetricKey(key);
 			if (histogram.count > 0) {
 				if (!typeEntries.has(fullName)) {
 					lines.push(`# TYPE ${fullName} histogram`);
 					typeEntries.set(fullName, MetricType.Histogram);
 				}
 
-				const labelStr = labels.map(([k, v]) => `${k}="${v}"`).join(',');
-				lines.push(`${fullName}_sum{${labelStr}} ${histogram.sum}`);
-				lines.push(`${fullName}_count{${labelStr}} ${histogram.count}`);
+				const labelStr = Object.entries(labels)
+					.map(([k, v]) => `${k}="${v}"`)
+					.join(',');
+				const formatMetricLine = (suffix: string, value: number): string => {
+					if (labelStr.length === 0) {
+						return `${fullName}${suffix} ${value}`;
+					}
+
+					return `${fullName}${suffix}{${labelStr}} ${value}`;
+				};
+
+				lines.push(formatMetricLine('_sum', histogram.sum));
+				lines.push(formatMetricLine('_count', histogram.count));
 
 				for (const [boundary, count] of histogram.buckets.entries()) {
-					lines.push(`${fullName}_bucket{${labelStr},le="${boundary}"} ${count}`);
+					const boundaryLabel =
+						boundary === Infinity
+							? '+Inf'
+							: Number.isFinite(boundary)
+								? String(boundary)
+								: String(boundary);
+					const bucketLabels =
+						labelStr.length === 0 ? `le="${boundaryLabel}"` : `${labelStr},le="${boundaryLabel}"`;
+					lines.push(`${fullName}_bucket{${bucketLabels}} ${count}`);
 				}
 			}
 		}
@@ -391,7 +413,12 @@ export class Metrics {
 	 * @private
 	 */
 	private _fullName(name: string): string {
-		return this._prefix ? `${this._prefix}_${name}` : name;
+		if (!this._prefix) {
+			return name;
+		}
+
+		const prefix = `${this._prefix}_`;
+		return name.startsWith(prefix) ? name : `${prefix}${name}`;
 	}
 
 	/**
@@ -415,11 +442,29 @@ export class Metrics {
 	 * @returns Name and labels
 	 * @private
 	 */
-	private _parseMetricKey(key: string): string[] {
-		const match = key.match(/^\{([^{}]+)\}(.+)$/);
-		if (!match) return [key];
-		const labelsPart = match[2];
-		const labels = labelsPart ? labelsPart.split(',').map((l) => l.split('=')) : [];
-		return labels.flat();
+	private _parseMetricKey(key: string): { name: string; labels: Record<string, string> } {
+		const match = key.match(/^([^{}]+)\{([^{}]*)\}$/);
+		if (!match) {
+			return { name: key, labels: {} };
+		}
+
+		const [, name, labelsPart] = match;
+		if (!labelsPart) {
+			return { name, labels: {} };
+		}
+
+		const labels: Record<string, string> = {};
+		for (const label of labelsPart.split(',')) {
+			const separatorIndex = label.indexOf('=');
+			if (separatorIndex <= 0) {
+				continue;
+			}
+
+			const labelKey = label.slice(0, separatorIndex);
+			const labelValue = label.slice(separatorIndex + 1);
+			labels[labelKey] = labelValue;
+		}
+
+		return { name, labels };
 	}
 }

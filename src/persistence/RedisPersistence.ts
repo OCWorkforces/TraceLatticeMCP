@@ -106,7 +106,7 @@ export class RedisPersistence implements PersistenceBackend {
 		thoughts.sort((a, b) => a.thought_number - b.thought_number);
 
 		if (thoughts.length > this._maxHistorySize) {
-			thoughts.slice(-this._maxHistorySize);
+			return thoughts.slice(-this._maxHistorySize);
 		}
 
 		return thoughts;

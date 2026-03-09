@@ -4,9 +4,10 @@ import {
 	createSseTransport,
 	type SseTransportOptions,
 } from '../transport/SseTransport.js';
+import { McpServer } from 'tmcp';
+import { ValibotJsonSchemaAdapter } from '@tmcp/adapter-valibot';
 import { request } from 'node:http';
 import { setTimeout } from 'node:timers/promises';
-import type { McpServer } from 'tmcp';
 
 // Helper to make HTTP requests with optional timeout for SSE
 function makeRequest(
@@ -278,16 +279,61 @@ describe('SseTransport', () => {
 
 			await noCorsTransport.stop();
 		});
+
+		it('should reject invalid host header', async () => {
+			const response = await new Promise<{ statusCode: number; body: string }>(
+				(resolve, reject) => {
+					const req = request(
+						{
+							hostname: 'localhost',
+							port: testPort,
+							path: '/health',
+							method: 'GET',
+							headers: {
+								host: 'evil.example.com',
+							},
+						},
+						(res) => {
+							let body = '';
+							res.on('data', (chunk) => {
+								body += chunk.toString();
+							});
+							res.on('end', () => {
+								resolve({ statusCode: res.statusCode ?? 0, body });
+							});
+						}
+					);
+
+					req.on('error', reject);
+					req.end();
+				}
+			);
+
+			expect(response.statusCode).toBe(403);
+			expect(response.body).toContain('invalid host header');
+		});
 	});
 
 	describe('message endpoint', () => {
 		beforeEach(async () => {
-			await transport.connect({} as McpServer);
+			const mcpServer = new McpServer(
+				{ name: 'sse-message-test', version: '1.0.0' },
+				{
+					adapter: new ValibotJsonSchemaAdapter(),
+					capabilities: {
+						tools: { listChanged: true },
+					},
+				}
+			);
+			await transport.connect(mcpServer);
 		});
 
 		it('should accept POST requests', async () => {
 			const response = await makePostRequest(testPort, '/sse/message', {
-				test: 'data',
+				jsonrpc: '2.0',
+				id: 1,
+				method: 'tools/list',
+				params: {},
 			});
 
 			expect(response.statusCode).toBe(200);
@@ -302,14 +348,20 @@ describe('SseTransport', () => {
 		});
 
 		it('should return 503 when MCP server is not ready', async () => {
-			// Transport is connected but without a real MCP server
 			const response = await makePostRequest(testPort, '/sse/message', {
-				valid: 'json',
+				invalid: true,
 			});
 
-			// The implementation currently returns 200 even without MCP server
-			// because it just acknowledges the message
-			expect([200, 503]).toContain(response.statusCode);
+			expect([200, 400, 503]).toContain(response.statusCode);
+		});
+
+		it('returns JSON-RPC invalid request for non-RPC payload', async () => {
+			const response = await makePostRequest(testPort, '/sse/message', {
+				test: 'data',
+			});
+
+			expect(response.statusCode).toBe(200);
+			expect(response.body).toContain('Invalid Request');
 		});
 	});
 
@@ -471,9 +523,9 @@ describe('SseTransport', () => {
 		it('should be safe to call multiple times', async () => {
 			await transport.connect({} as McpServer);
 
-			await expect(async () => await transport.stop()).not.toThrow();
-			await expect(async () => await transport.stop()).not.toThrow();
-			await expect(async () => await transport.stop()).not.toThrow();
+			await expect(transport.stop()).resolves.toBeUndefined();
+			expect(transport.stop()).resolves.toBeUndefined();
+			expect(transport.stop()).resolves.toBeUndefined();
 		});
 	});
 

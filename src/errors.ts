@@ -112,8 +112,8 @@ export class ToolNotFoundError extends SequentialThinkingError {
 	 */
 	constructor(toolName: string, action?: string) {
 		const message = action
-			? `tool '${toolName}' not found, cannot ${action}`
-			: `tool '${toolName}' not found`;
+			? `Tool '${toolName}' not found, cannot ${action}`
+			: `Tool '${toolName}' not found`;
 		super(message, 'TOOL_NOT_FOUND');
 		this.name = 'ToolNotFoundError';
 	}
@@ -152,8 +152,8 @@ export class SkillNotFoundError extends SequentialThinkingError {
 	 */
 	constructor(skillName: string, action?: string) {
 		const message = action
-			? `skill '${skillName}' not found, cannot ${action}`
-			: `skill '${skillName}' not found`;
+			? `Skill '${skillName}' not found, cannot ${action}`
+			: `Skill '${skillName}' not found`;
 		super(message, 'SKILL_NOT_FOUND');
 		this.name = 'SkillNotFoundError';
 	}
