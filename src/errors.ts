@@ -112,8 +112,8 @@ export class ToolNotFoundError extends SequentialThinkingError {
 	 */
 	constructor(toolName: string, action?: string) {
 		const message = action
-			? `tool '${toolName}' not found, cannot ${action}`
-			: `tool '${toolName}' not found`;
+			? `Tool '${toolName}' not found, cannot ${action}`
+			: `Tool '${toolName}' not found`;
 		super(message, 'TOOL_NOT_FOUND');
 		this.name = 'ToolNotFoundError';
 	}
@@ -152,8 +152,8 @@ export class SkillNotFoundError extends SequentialThinkingError {
 	 */
 	constructor(skillName: string, action?: string) {
 		const message = action
-			? `skill '${skillName}' not found, cannot ${action}`
-			: `skill '${skillName}' not found`;
+			? `Skill '${skillName}' not found, cannot ${action}`
+			: `Skill '${skillName}' not found`;
 		super(message, 'SKILL_NOT_FOUND');
 		this.name = 'SkillNotFoundError';
 	}
@@ -214,7 +214,7 @@ export class InvalidThoughtError extends SequentialThinkingError {
  */
 export class SkillDiscoveryError extends SequentialThinkingError {
 	/** The underlying error that caused the discovery failure. */
-	public readonly cause: Error;
+	public override readonly cause: Error;
 
 	/**
 	 * Creates a new SkillDiscoveryError.
@@ -526,5 +526,29 @@ export class PoolTerminatedError extends SequentialThinkingError {
 	constructor() {
 		super('ConnectionPool has been terminated', 'POOL_TERMINATED');
 		this.name = 'PoolTerminatedError';
+	}
+}
+
+/**
+ * Error thrown when input validation fails due to invalid or malicious data.
+ *
+ * This error is thrown when user input fails security or format validation,
+ * such as path traversal attempts or invalid identifier formats.
+ *
+ * @example
+ * ```typescript
+ * if (!BRANCH_ID_PATTERN.test(branchId)) {
+ *   throw new ValidationError('branchId', 'Invalid format');
+ * }
+ * ```
+ */
+export class ValidationError extends SequentialThinkingError {
+	/** The field that failed validation. */
+	public readonly field: string;
+
+	constructor(field: string, reason: string) {
+		super(`Validation failed for '${field}': ${reason}`, 'VALIDATION_ERROR');
+		this.name = 'ValidationError';
+		this.field = field;
 	}
 }

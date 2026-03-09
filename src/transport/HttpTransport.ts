@@ -18,6 +18,7 @@ import type { McpServer } from 'tmcp';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { safeParse } from 'valibot';
 import { JsonRpcRequestSchema } from '../schema.js';
+import type { Metrics } from '../metrics/metrics.impl.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 
 export interface HttpTransportOptions extends TransportOptions {
@@ -26,6 +27,8 @@ export interface HttpTransportOptions extends TransportOptions {
 	 * @default '/messages'
 	 */
 	path?: string;
+	metrics?: Metrics;
+	metricsProvider?: () => string;
 
 	/**
 	 * Enable request body size limit
@@ -84,6 +87,9 @@ export class HttpTransport extends BaseTransport {
 	private _bodySizeLimitEnabled: boolean;
 	private _maxBodySize: number;
 	private _requestCount: number = 0;
+	private _path: string;
+	private _metrics?: Metrics;
+	private _metricsProvider: (() => string) | null;
 
 	constructor(options: HttpTransportOptions = {}) {
 		super(options);
@@ -91,6 +97,9 @@ export class HttpTransport extends BaseTransport {
 		this._requestTimeout = options.requestTimeout ?? 30000;
 		this._bodySizeLimitEnabled = options.enableBodySizeLimit ?? true;
 		this._maxBodySize = options.maxBodySize ?? 10 * 1024 * 1024;
+		this._path = options.path ?? '/messages';
+		this._metrics = options.metrics;
+		this._metricsProvider = options.metricsProvider ?? null;
 		this._server = createServer((req, res) => this._handleRequest(req, res));
 	}
 
@@ -118,6 +127,97 @@ export class HttpTransport extends BaseTransport {
 	 * Handles incoming HTTP requests.
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+		const startTime = Date.now();
+		this._metrics?.counter('http_requests_total', 1, {}, 'Total HTTP transport requests');
+		res.once('finish', () => {
+			const durationSeconds = (Date.now() - startTime) / 1000;
+			this._metrics?.histogram('http_request_duration_seconds', durationSeconds, {});
+		});
+
+		if (!this.validateHostHeader(req)) {
+			res.writeHead(403, { 'Content-Type': 'application/json' });
+			res.end(
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: null,
+					error: { code: -32000, message: 'Forbidden - invalid host header' },
+				})
+			);
+			return;
+		}
+
+		if (this.isShuttingDown()) {
+			res.writeHead(503, { 'Content-Type': 'application/json' });
+			res.end(
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: null,
+					error: { code: -32603, message: 'Server is shutting down' },
+				})
+			);
+			return;
+		}
+
+		const clientIp = this.getClientIp(req);
+		if (this.checkRateLimit(clientIp)) {
+			res.writeHead(429, {
+				'Content-Type': 'application/json',
+				'Retry-After': '60',
+			});
+			res.end(
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: null,
+					error: { code: -32000, message: 'Too many requests' },
+				})
+			);
+			return;
+		}
+
+		if (!this.validateCorsOrigin(req)) {
+			res.writeHead(403, { 'Content-Type': 'application/json' });
+			res.end(
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: null,
+					error: { code: -32000, message: 'Forbidden - invalid origin' },
+				})
+			);
+			return;
+		}
+
+		this.setCorsHeaders(res);
+
+		if (req.method === 'GET' && req.url === '/metrics') {
+			if (!this._metricsProvider) {
+				res.writeHead(404, { 'Content-Type': 'text/plain' });
+				res.end('Not Found');
+				return;
+			}
+
+			res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' });
+			res.end(this._metricsProvider());
+			return;
+		}
+
+		if (req.method === 'OPTIONS') {
+			res.writeHead(204);
+			res.end();
+			return;
+		}
+
+		if (req.method !== 'POST' || req.url !== this._path) {
+			res.writeHead(404, { 'Content-Type': 'application/json' });
+			res.end(
+				JSON.stringify({
+					jsonrpc: '2.0',
+					id: null,
+					error: { code: -32601, message: 'Not Found' },
+				})
+			);
+			return;
+		}
+
 		this._requestCount++;
 		// Set up request timeout
 		const timeout = setTimeout(() => {
@@ -242,6 +342,9 @@ export class HttpTransport extends BaseTransport {
 	 * Stops transport server.
 	 */
 	async stop(): Promise<void> {
+		this._isShuttingDown = true;
+		this._stopRateLimitCleanup();
+
 		return new Promise((resolve) => {
 			// Close server
 			this._server.close(() => {

@@ -47,7 +47,6 @@ export interface PersistenceBackend {
 
 	/**
 	 * Check if backend is healthy.
-	 *
 	 * @returns Promise that resolves to true if healthy, false otherwise
 	 */
 	healthy(): Promise<boolean>;
@@ -57,6 +56,12 @@ export interface PersistenceBackend {
 	 * Use with caution - this cannot be undone.
 	 */
 	clear(): Promise<void>;
+
+	/**
+	 * Close the backend and release resources.
+	 * Should be called during graceful shutdown to ensure data is flushed.
+	 */
+	close(): Promise<void>;
 }
 
 /**

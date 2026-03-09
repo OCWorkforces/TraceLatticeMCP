@@ -94,6 +94,13 @@ export class SqlitePersistence implements PersistenceBackend {
 			db.pragma('journal_mode = WAL');
 		}
 
+		// Performance and safety PRAGMAs
+		db.pragma('synchronous = NORMAL');
+		db.pragma('foreign_keys = ON');
+		db.pragma('busy_timeout = 5000');
+		db.pragma('cache_size = -64000'); // 64MB
+		db.pragma('temp_store = MEMORY');
+
 		return new SqlitePersistence(db, options);
 	}
 
@@ -216,11 +223,19 @@ export class SqlitePersistence implements PersistenceBackend {
 	}
 
 	/**
-	 * Close the database connection.
-	 * Call this when shutting down the application.
+	 * Close the database connection with proper cleanup.
+	 * Runs WAL checkpoint before closing to ensure all data is persisted.
 	 */
-	public close(): void {
-		this._db.close();
+	public async close(): Promise<void> {
+		if (this._db) {
+			try {
+				// Run WAL checkpoint to ensure all data is persisted
+				this._db.pragma('wal_checkpoint(TRUNCATE)');
+			} catch {
+				// Ignore checkpoint errors - still try to close
+			}
+			this._db.close();
+		}
 	}
 
 	/**

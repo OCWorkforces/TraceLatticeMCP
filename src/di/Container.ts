@@ -40,6 +40,7 @@ export class Container {
 	private _services: Map<string, unknown> = new Map();
 	private _factories: Map<string, () => unknown> = new Map();
 	private _transientFactories: Map<string, () => unknown> = new Map();
+	private _resolving: Set<string> = new Set();
 
 	/**
 	 * Register a singleton instance that will be returned for all resolutions.
@@ -147,28 +148,38 @@ export class Container {
 	resolve<K extends ServiceKey>(name: K): ServiceRegistry[K];
 	resolve<T>(name: string): T;
 	resolve(name: string): unknown {
-		// Check for registered instance first
-		if (this._services.has(name)) {
-			return this._services.get(name);
+		if (this._resolving.has(name)) {
+			throw new Error(`Circular dependency detected while resolving service: ${name}`);
 		}
 
-		// Check for cached factory result
-		if (this._factories.has(name)) {
-			const factory = this._factories.get(name)!;
-			const instance = factory();
-			// Cache the result for future calls (singleton behavior)
-			this._services.set(name, instance);
-			this._factories.delete(name);
-			return instance;
-		}
+		this._resolving.add(name);
 
-		// Check for transient factory (call every time)
-		if (this._transientFactories.has(name)) {
-			const factory = this._transientFactories.get(name)!;
-			return factory();
-		}
+		try {
+			// Check for registered instance first
+			if (this._services.has(name)) {
+				return this._services.get(name);
+			}
 
-		throw new Error(`Service not found: ${name}. Did you forget to register it?`);
+			// Check for cached factory result
+			if (this._factories.has(name)) {
+				const factory = this._factories.get(name)!;
+				const instance = factory();
+				// Cache the result for future calls (singleton behavior)
+				this._services.set(name, instance);
+				this._factories.delete(name);
+				return instance;
+			}
+
+			// Check for transient factory (call every time)
+			if (this._transientFactories.has(name)) {
+				const factory = this._transientFactories.get(name)!;
+				return factory();
+			}
+
+			throw new Error(`Service not found: ${name}. Did you forget to register it?`);
+		} finally {
+			this._resolving.delete(name);
+		}
 	}
 
 	/**
@@ -220,6 +231,7 @@ export class Container {
 		this._services.clear();
 		this._factories.clear();
 		this._transientFactories.clear();
+		this._resolving.clear();
 	}
 
 	/**

@@ -62,7 +62,7 @@ describe('SequentialThinkingSchema', () => {
 	it('should validate confidence range 0-1', () => {
 		const invalidTool = { ...validInput };
 		if (invalidTool.current_step && invalidTool.current_step.recommended_tools) {
-			invalidTool.current_step.recommended_tools[0].confidence = 1.5;
+			invalidTool.current_step.recommended_tools[0]!.confidence = 1.5;
 		}
 		const result = safeParse(SequentialThinkingSchema, invalidTool);
 		expect(result.success).toBe(false);

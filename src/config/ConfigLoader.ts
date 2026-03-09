@@ -233,13 +233,22 @@ export class ConfigLoader {
 		const result: ConfigFileOptions = { ...config };
 
 		if (process.env.MAX_HISTORY_SIZE) {
-			result.maxHistorySize = parseInt(process.env.MAX_HISTORY_SIZE, 10);
+			const parsed = parseInt(process.env.MAX_HISTORY_SIZE, 10);
+			if (Number.isFinite(parsed)) {
+				result.maxHistorySize = parsed;
+			}
 		}
 		if (process.env.MAX_BRANCHES) {
-			result.maxBranches = parseInt(process.env.MAX_BRANCHES, 10);
+			const parsed = parseInt(process.env.MAX_BRANCHES, 10);
+			if (Number.isFinite(parsed)) {
+				result.maxBranches = parsed;
+			}
 		}
 		if (process.env.MAX_BRANCH_SIZE) {
-			result.maxBranchSize = parseInt(process.env.MAX_BRANCH_SIZE, 10);
+			const parsed = parseInt(process.env.MAX_BRANCH_SIZE, 10);
+			if (Number.isFinite(parsed)) {
+				result.maxBranchSize = parsed;
+			}
 		}
 		if (
 			process.env.LOG_LEVEL &&
@@ -254,14 +263,18 @@ export class ConfigLoader {
 			result.skillDirs = process.env.SKILL_DIRS.split(':');
 		}
 		if (process.env.DISCOVERY_CACHE_TTL) {
-			const ttl = parseInt(process.env.DISCOVERY_CACHE_TTL, 10) * 1000;
-			result.discoveryCache = result.discoveryCache || {};
-			result.discoveryCache.ttl = ttl;
+			const parsed = parseInt(process.env.DISCOVERY_CACHE_TTL, 10);
+			if (Number.isFinite(parsed)) {
+				result.discoveryCache = result.discoveryCache || {};
+				result.discoveryCache.ttl = parsed * 1000;
+			}
 		}
 		if (process.env.DISCOVERY_CACHE_MAX_SIZE) {
-			const maxSize = parseInt(process.env.DISCOVERY_CACHE_MAX_SIZE, 10);
-			result.discoveryCache = result.discoveryCache || {};
-			result.discoveryCache.maxSize = maxSize;
+			const parsed = parseInt(process.env.DISCOVERY_CACHE_MAX_SIZE, 10);
+			if (Number.isFinite(parsed)) {
+				result.discoveryCache = result.discoveryCache || {};
+				result.discoveryCache.maxSize = parsed;
+			}
 		}
 
 		return result;

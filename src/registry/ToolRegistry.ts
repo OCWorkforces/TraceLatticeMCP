@@ -525,7 +525,7 @@ export class ToolRegistry {
 		}
 
 		try {
-			const frontmatter = parseYaml(match[1]) as Record<string, unknown>;
+			const frontmatter = parseYaml(match[1]!) as Record<string, unknown>;
 
 			const result: Partial<Tool> = {
 				name: typeof frontmatter.name === 'string' ? frontmatter.name : undefined,

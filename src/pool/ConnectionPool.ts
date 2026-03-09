@@ -23,7 +23,6 @@ import {
 	SessionNotActiveError,
 	SessionNotFoundError,
 } from '../errors.js';
-import type { ToolAwareSequentialThinkingServer } from '../index.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { ThoughtData } from '../types.js';
 
@@ -38,6 +37,8 @@ export interface SessionOptions {
 	 * Logger instance
 	 */
 	logger?: Logger;
+
+	serverFactory?: () => Promise<SessionServer>;
 
 	/**
 	 * Session timeout in milliseconds
@@ -60,10 +61,15 @@ export interface SessionOptions {
 
 export interface SessionInfo {
 	id: string;
-	server: ToolAwareSequentialThinkingServer;
+	server: SessionServer;
 	createdAt: number;
 	lastActivityAt: number;
 	isActive: boolean;
+}
+
+export interface SessionServer {
+	processThought(input: ThoughtData): Promise<ProcessResult>;
+	stop(): void | Promise<void>;
 }
 
 export interface ProcessResult {
@@ -78,7 +84,7 @@ export interface ProcessResult {
  * Represents a user session with its own server instance.
  */
 export class Session {
-	private _server: ToolAwareSequentialThinkingServer;
+	private _server: SessionServer;
 	private _id: string;
 	private _createdAt: number;
 	private _lastActivityAt: number;
@@ -87,12 +93,7 @@ export class Session {
 	private _cleanupTimer: NodeJS.Timeout | null = null;
 	private _logger: Logger;
 
-	constructor(
-		id: string,
-		server: ToolAwareSequentialThinkingServer,
-		timeout: number,
-		logger: Logger
-	) {
+	constructor(id: string, server: SessionServer, timeout: number, logger: Logger) {
 		this._server = server;
 		this._id = id;
 		this._createdAt = Date.now();
@@ -207,13 +208,19 @@ export class ConnectionPool {
 	private _cleanupTimerId: number | null = null;
 	private _terminated: boolean = false;
 	private _logger: Logger;
+	private _serverFactory: (() => Promise<SessionServer>) | null;
 
 	constructor(options: SessionOptions = {}) {
 		this._maxSessions = options.maxSessions ?? 100;
 		this._sessionTimeout = options.sessionTimeout ?? 300000; // 5 minutes
 		this._autoCleanup = options.autoCleanup ?? true;
 		this._cleanupInterval = options.cleanupInterval ?? 60000; // 1 minute
+		this._serverFactory = options.serverFactory ?? null;
 		this._logger = options.logger ?? this._createNoopLogger();
+
+		if (this._autoCleanup) {
+			this._startCleanup();
+		}
 	}
 
 	/**
@@ -228,11 +235,6 @@ export class ConnectionPool {
 			setLevel: (): void => {},
 			getLevel: (): 'info' => 'info',
 		};
-
-		// Start automatic cleanup if enabled
-		if (this._autoCleanup) {
-			this._startCleanup();
-		}
 	}
 
 	/**
@@ -250,17 +252,15 @@ export class ConnectionPool {
 			throw new MaxSessionsReachedError(this._maxSessions);
 		}
 
+		if (!this._serverFactory) {
+			throw new Error('ConnectionPool requires a serverFactory option to create sessions');
+		}
+
 		// Generate unique session ID
 		const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
 		// Create a new server instance for this session
-		// Note: In production, you might want to reuse server instances or use a different strategy
-		const { ToolAwareSequentialThinkingServer: Server } = await import('../index.js');
-		const server = await Server.create({
-			autoDiscover: true,
-			lazyDiscovery: false,
-			loadFromPersistence: true,
-		});
+		const server = await this._serverFactory();
 
 		// Create session
 		const session = new Session(sessionId, server, this._sessionTimeout, this._logger);

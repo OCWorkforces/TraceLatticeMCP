@@ -16,6 +16,7 @@ import type { IHistoryManager } from './IHistoryManager.js';
 import { ToolRegistry } from './registry/ToolRegistry.js';
 import { SkillRegistry } from './registry/SkillRegistry.js';
 import { DiscoveryCache } from './cache/DiscoveryCache.js';
+import type { Metrics } from './metrics/metrics.impl.js';
 
 /**
  * Configuration options for creating a `HistoryManager` instance.
@@ -70,6 +71,9 @@ export interface HistoryManagerConfig {
 
 	/** Optional persistence backend for saving/loading history. */
 	persistence?: PersistenceBackend | null;
+	metrics?: Metrics;
+	tools?: ToolRegistry;
+	skills?: SkillRegistry;
 }
 
 /**
@@ -149,6 +153,8 @@ export class HistoryManager implements IHistoryManager {
 	/** Whether persistence is enabled. */
 	private _persistenceEnabled: boolean;
 
+	private _metrics?: Metrics;
+
 	/** Tool registry for managing available tools. */
 	public tools: ToolRegistry;
 
@@ -177,16 +183,25 @@ export class HistoryManager implements IHistoryManager {
 		this._logger = config.logger ?? new NullLogger();
 		this._persistence = config.persistence ?? null;
 		this._persistenceEnabled = this._persistence !== null;
-		this.tools = new ToolRegistry({
-			logger: config.logger,
-			cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
-		});
-		this.skills = new SkillRegistry({
-			logger: config.logger,
-			cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
-			skillDirs: config.skillDirs,
-			lazyDiscovery: config.lazyDiscovery,
-		});
+		this._metrics = config.metrics;
+		this.tools =
+			config.tools ??
+			new ToolRegistry({
+				logger: config.logger,
+				cache: config.discoveryCache
+					? new DiscoveryCache({ ...config.discoveryCache, metrics: config.metrics })
+					: undefined,
+			});
+		this.skills =
+			config.skills ??
+			new SkillRegistry({
+				logger: config.logger,
+				cache: config.discoveryCache
+					? new DiscoveryCache({ ...config.discoveryCache, metrics: config.metrics })
+					: undefined,
+				skillDirs: config.skillDirs,
+				lazyDiscovery: config.lazyDiscovery,
+			});
 	}
 
 	/**
@@ -221,6 +236,12 @@ export class HistoryManager implements IHistoryManager {
 	 * ```
 	 */
 	public addThought(thought: ThoughtData): void {
+		this._metrics?.counter(
+			'thought_requests_total',
+			1,
+			{},
+			'Total thought requests added to history'
+		);
 		this._thought_history.push(thought);
 
 		if (this._thought_history.length > this._maxHistorySize) {
@@ -306,9 +327,9 @@ export class HistoryManager implements IHistoryManager {
 	 * @private
 	 */
 	private trimBranchSize(branchId: string): void {
-		if (this._branches[branchId].length > this._maxBranchSize) {
-			const removed = this._branches[branchId].length - this._maxBranchSize;
-			this._branches[branchId] = this._branches[branchId].slice(-this._maxBranchSize);
+		if ((this._branches[branchId] ?? []).length > this._maxBranchSize) {
+			const removed = this._branches[branchId]!.length - this._maxBranchSize;
+			this._branches[branchId] = this._branches[branchId]!.slice(-this._maxBranchSize);
 			this.log(`Trimmed branch '${branchId}': removed ${removed} old thoughts`, {
 				branchId,
 				removed,

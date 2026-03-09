@@ -1,9 +1,8 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-01-29
-**Commit:** 19f2e0f
+**Generated:** 2026-03-09
+**Commit:** 060d98b
 **Branch:** develop
-
 ## OVERVIEW
 
 MCP Sequential Thinking Server - TypeScript/Node.js server providing structured thinking with tool/skill recommendations. Supports stdio, SSE, and HTTP transports with DI, persistence, and worker pool patterns.
@@ -22,13 +21,15 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 │   ├── logger/           # Structured logging (see src/logger/AGENTS.md)
 │   ├── pool/             # Session pooling (see src/pool/AGENTS.md)
 │   ├── config/           # Config loading (see src/config/AGENTS.md)
-│   ├── formatter/         # Output formatting (see src/formatter/AGENTS.md)
+│   ├── formatter/        # Output formatting (see src/formatter/AGENTS.md)
 │   ├── watchers/         # File system watchers (see src/watchers/AGENTS.md)
-│   ├── processor/         # Thought processing (see src/processor/AGENTS.md)
+│   ├── processor/        # Thought processing (see src/processor/AGENTS.md)
+│   ├── metrics/          # Prometheus metrics (see src/metrics/AGENTS.md)
+│   ├── telemetry/        # OpenTelemetry tracing (see src/telemetry/AGENTS.md)
+│   ├── context/          # Request context via AsyncLocalStorage
 │   └── __tests__/        # Tests (see src/__tests__/AGENTS.md)
 ├── .claude/              # Skills + tools directories
 └── docs/                 # Documentation assets
-```
 
 ## WHERE TO LOOK
 
@@ -66,22 +67,25 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 - **Factory Pattern**: Use `create*` functions in `index.ts` files.
 - **DI**: Inject dependencies via `src/di` container; avoid global state.
 - **Error Handling**: Use `SequentialThinkingError` hierarchy; never swallow errors.
+- **Dual Documentation**: Each module has `AGENTS.md` (auto-generated) + `CLAUDE.md` (human-written).
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
 - **No `as any`**: Strict type safety required.
+- **No `@ts-ignore` / `@ts-expect-error`**: Fix type issues properly.
 - **No Global State**: Use the DI container.
 - **No Sync I/O**: Use async equivalents (except in strictly sync startup context).
-- **Gitignore**: The project currently uses a Python .gitignore template. Be aware of node_modules/ inclusion.
+- **No Empty Catch**: Never swallow errors.
+- **Gitignore**: Uses Python .gitignore template — verify node_modules/ exclusion.
 - **Entry Points**: Avoid mixing CLI logic with library exports in `index.ts`.
 
 ## SETUP NOTES
 
-- **CI**: GitHub workflow at `.github/workflows/ci.yml` (runs npm ci + type-check, missing tests)
-- **Missing CI**: No GitHub workflows for tests or full build validation.
-- **Missing Helpers**: Test suite lacks shared helpers/fixtures.
-- **Empty Modules**: `telemetry` directory is currently empty.
-
+- **CI**: GitHub workflow at `.github/workflows/ci.yml` (type-check, lint, test, build)
+- **Lint/Security**: CI has `continue-on-error: true` for lint + audit — failures won't block merges.
+- **Coverage Thresholds**: Branches 55%, Functions 60%, Lines 65%, Statements 65%.
+- **Test Helpers**: `src/__tests__/helpers/` exists but is currently empty — helpers are inline.
+- **Large Files**: `index.ts` (602L), `ToolRegistry.ts` (579L), `SkillRegistry.ts` (578L) — consider decomposition.
 ## COMMANDS
 
 ```bash

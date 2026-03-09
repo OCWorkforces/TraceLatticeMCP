@@ -551,7 +551,7 @@ export class SkillRegistry {
 		}
 
 		try {
-			const frontmatter = parseYaml(match[1]) as Record<string, unknown>;
+			const frontmatter = parseYaml(match[1]!) as Record<string, unknown>;
 
 			const result: Partial<Skill> = {
 				name: typeof frontmatter.name === 'string' ? frontmatter.name : undefined,

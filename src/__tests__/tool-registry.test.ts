@@ -29,7 +29,7 @@ describe('Tool Registration', () => {
 	it('should throw error for removing non-existent tool', () => {
 		const toolRegistry = new ToolRegistry();
 		expect(() => toolRegistry.removeTool('non-existent')).toThrow(
-			"tool 'non-existent' not found, cannot remove"
+			"Tool 'non-existent' not found, cannot remove"
 		);
 	});
 

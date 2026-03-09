@@ -17,8 +17,8 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 			available_mcp_tools: ['test-tool'],
 		})) as { content: Array<{ type: string; text: string }> };
 
-		expect(result.content[0].type).toBe('text');
-		const response = JSON.parse(result.content[0].text);
+		expect(result.content[0]!.type).toBe('text');
+		const response = JSON.parse(result.content[0]!.text);
 		expect(response.thought_number).toBe(1);
 		expect(response.next_thought_needed).toBe(true);
 	});
@@ -61,7 +61,7 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 			revises_thought: 1,
 		})) as { content: Array<{ type: string; text: string }> };
 
-		const response = JSON.parse(result.content[0].text);
+		const response = JSON.parse(result.content[0]!.text);
 		expect(response.thought_number).toBe(2);
 	});
 
@@ -85,7 +85,7 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 			},
 		})) as { content: Array<{ type: string; text: string }> };
 
-		const response = JSON.parse(result.content[0].text);
+		const response = JSON.parse(result.content[0]!.text);
 		expect(response.current_step).toBeDefined();
 		expect(response.current_step?.step_description).toBe('Search for files');
 	});

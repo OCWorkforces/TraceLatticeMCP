@@ -63,6 +63,7 @@ const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 export interface TransportOptions {
 	port?: number;
 	host?: string;
+	allowedHosts?: string[];
 	corsOrigin?: string;
 	enableCors?: boolean;
 	enableRateLimit?: boolean;
@@ -77,7 +78,9 @@ export abstract class BaseTransport {
 	protected _enableCors: boolean;
 	protected _rateLimitEnabled: boolean;
 	protected _maxRequestsPerMinute: number;
+	protected _allowedHosts: Set<string>;
 	protected _rateLimitMap: Map<string, { count: number; resetTime: number }> = new Map();
+	protected _rateLimitCleanupIntervalId: NodeJS.Timeout | null = null;
 	protected _wasHostExplicitlySet: boolean;
 	/** Shutdown state for graceful shutdown. */
 	protected _isShuttingDown: boolean = false;
@@ -91,8 +94,13 @@ export abstract class BaseTransport {
 		this._enableCors = options.enableCors ?? true;
 		this._rateLimitEnabled = options.enableRateLimit ?? true;
 		this._maxRequestsPerMinute = options.maxRequestsPerMinute ?? RATE_LIMIT_REQUESTS;
+		this._allowedHosts = this._buildAllowedHosts(options.allowedHosts);
 		this._isShuttingDown = false;
 		this._logger = options.logger ?? new NoopLogger();
+
+		if (this._rateLimitEnabled) {
+			this._startRateLimitCleanup();
+		}
 	}
 
 	/**
@@ -147,6 +155,7 @@ export abstract class BaseTransport {
 		}
 
 		const now = Date.now();
+		this._cleanupExpiredRateLimitEntries(now);
 		const record = this._rateLimitMap.get(ip);
 
 		if (!record || now > record.resetTime) {
@@ -165,6 +174,31 @@ export abstract class BaseTransport {
 		return false;
 	}
 
+	protected _cleanupExpiredRateLimitEntries(now = Date.now()): void {
+		for (const [ip, record] of this._rateLimitMap.entries()) {
+			if (record.resetTime <= now) {
+				this._rateLimitMap.delete(ip);
+			}
+		}
+	}
+
+	protected _startRateLimitCleanup(): void {
+		if (this._rateLimitCleanupIntervalId !== null) {
+			clearInterval(this._rateLimitCleanupIntervalId);
+		}
+
+		this._rateLimitCleanupIntervalId = setInterval(() => {
+			this._cleanupExpiredRateLimitEntries();
+		}, RATE_LIMIT_WINDOW_MS);
+	}
+
+	protected _stopRateLimitCleanup(): void {
+		if (this._rateLimitCleanupIntervalId !== null) {
+			clearInterval(this._rateLimitCleanupIntervalId);
+			this._rateLimitCleanupIntervalId = null;
+		}
+	}
+
 	/**
 	 * Get client IP address from request.
 	 *
@@ -174,7 +208,7 @@ export abstract class BaseTransport {
 	protected getClientIp(req: IncomingMessage): string {
 		const forwardedFor = req.headers['x-forwarded-for'];
 		if (forwardedFor && typeof forwardedFor === 'string') {
-			return forwardedFor.split(',')[0].trim();
+			return forwardedFor.split(',')[0]!.trim();
 		}
 		const remoteAddress = req.socket.remoteAddress;
 		return remoteAddress || 'unknown';
@@ -203,8 +237,12 @@ export abstract class BaseTransport {
 
 		// Check if configured origin is a wildcard pattern
 		if (this._corsOrigin.includes('*')) {
-			const pattern = this._corsOrigin.replace(/\*/g, '.*');
-			const regex = new RegExp(`^${pattern}$`);
+			// Escape all regex metacharacters EXCEPT *,
+			// then replace * with a hostname-safe pattern (alphanumeric, hyphens, dots)
+			const escaped = this._corsOrigin
+				.replace(/[.+?^${}()|[\]\\]/g, '\\$&') // escape metacharacters (not *)
+				.replace(/\*/g, '[a-zA-Z0-9.-]*');    // * matches valid hostname chars only
+			const regex = new RegExp(`^${escaped}$`);
 			return regex.test(origin);
 		}
 
@@ -222,6 +260,43 @@ export abstract class BaseTransport {
 			res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 			res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 		}
+	}
+
+	protected validateHostHeader(req: IncomingMessage): boolean {
+		const rawHost = req.headers.host;
+		if (!rawHost) {
+			return true;
+		}
+
+		const hostWithoutPort = rawHost.split(':')[0]!.trim().toLowerCase();
+		if (!hostWithoutPort) {
+			return false;
+		}
+
+		if (this._allowedHosts.size === 0) {
+			return true;
+		}
+
+		return this._allowedHosts.has(hostWithoutPort);
+	}
+
+	private _buildAllowedHosts(configuredHosts?: string[]): Set<string> {
+		if (configuredHosts && configuredHosts.length > 0) {
+			return new Set(configuredHosts.map((host) => host.toLowerCase().trim()).filter(Boolean));
+		}
+
+		const boundHost = this._host.toLowerCase();
+		const localHosts = ['localhost', '127.0.0.1', '::1'];
+
+		if (localHosts.includes(boundHost)) {
+			return new Set(localHosts);
+		}
+
+		if (boundHost === '0.0.0.0' || boundHost === '::') {
+			return new Set(localHosts);
+		}
+
+		return new Set([boundHost]);
 	}
 
 	/**

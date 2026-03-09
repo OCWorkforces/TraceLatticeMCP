@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, rmSync, existsSync } from 'node:fs';
+import { mkdirSync, rmSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { ThoughtData } from '../types.js';
@@ -53,9 +53,9 @@ describe('MemoryPersistence', () => {
 			const history = await backend.loadHistory();
 
 			expect(history).toHaveLength(3);
-			expect(history[0].thought).toBe('First');
-			expect(history[1].thought).toBe('Second');
-			expect(history[2].thought).toBe('Third');
+			expect(history[0]!.thought).toBe('First');
+			expect(history[1]!.thought).toBe('Second');
+			expect(history[2]!.thought).toBe('Third');
 		});
 
 		it('should return empty array when no thoughts saved', async () => {
@@ -242,12 +242,12 @@ describe('MemoryPersistence', () => {
 			// History should only contain history thoughts
 			const history = await backend.loadHistory();
 			expect(history).toHaveLength(1);
-			expect(history[0].thought).toBe('History thought');
+			expect(history[0]!.thought).toBe('History thought');
 
 			// Branch should only contain branch thoughts
 			const branch = await backend.loadBranch('branch-1');
 			expect(branch).toHaveLength(1);
-			expect(branch?.[0].thought).toBe('Branch thought');
+			expect(branch?.[0]?.thought).toBe('Branch thought');
 		});
 	});
 });
@@ -409,8 +409,8 @@ describe('FilePersistence', () => {
 
 			// Should only have the last 5 thoughts
 			expect(history).toHaveLength(5);
-			expect(history[0].thought_number).toBe(6);
-			expect(history[4].thought_number).toBe(10);
+			expect(history[0]!.thought_number).toBe(6);
+			expect(history[4]!.thought_number).toBe(10);
 		});
 	});
 
@@ -478,6 +478,63 @@ describe('FilePersistence', () => {
 			// Should succeed without error
 			const history = await backend2.loadHistory();
 			expect(history).toHaveLength(1);
+		});
+
+	// P0-A: Path traversal security tests
+	describe('Path traversal prevention', () => {
+		it('should reject branch IDs with path traversal patterns', async () => {
+			const maliciousBranchIds = [
+				'../../../etc/passwd',
+				'..\\..\\..\\etc\\passwd', // Windows-style
+				'../sibling-dir/file',
+				'./current-dir/file',
+				'/absolute/path',
+				'branch/with/slashes',
+				'branch.with.dots',
+				'branch with spaces',
+				'', // empty
+				'a'.repeat(100), // too long
+			];
+
+			for (const branchId of maliciousBranchIds) {
+				await expect(backend.saveBranch(branchId, [createTestThought()])).rejects.toThrow();
+				await expect(backend.loadBranch(branchId)).rejects.toThrow();
+			}
+		});
+
+		it('should accept valid branch IDs', async () => {
+			const validBranchIds = [
+				'valid-branch',
+				'valid_branch',
+				'Branch123',
+				'branch-01_test',
+				'a', // single char
+				'x'.repeat(64), // max length
+			];
+
+			for (const branchId of validBranchIds) {
+				await backend.saveBranch(branchId, [createTestThought()]);
+				const loaded = await backend.loadBranch(branchId);
+				expect(loaded).toBeDefined();
+				expect(loaded?.[0]?.thought).toBe('Test thought');
+			}
+		});
+
+		it('should not create files outside branches directory', async () => {
+			const initialFiles = existsSync(join(testDir, 'branches'))
+				? readdirSync(join(testDir, 'branches'))
+				: [];
+
+			// Try path traversal - should throw
+			await expect(backend.saveBranch('../../malicious', [createTestThought()])).rejects.toThrow();
+
+			// Verify no new files outside branches
+			const afterFiles = existsSync(join(testDir, 'branches'))
+				? readdirSync(join(testDir, 'branches'))
+				: [];
+
+			expect(afterFiles.length).toBe(initialFiles.length);
+			expect(existsSync(join(testDir, 'malicious.json'))).toBe(false);
 		});
 	});
 });
@@ -579,4 +636,5 @@ describe('PersistenceBackend Interface Compliance', () => {
 		// Cleanup
 		rmSync(testDir, { recursive: true, force: true });
 	});
+});
 });

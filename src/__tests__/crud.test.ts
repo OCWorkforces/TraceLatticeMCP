@@ -38,7 +38,7 @@ describe('CRUD Operations', () => {
 
 		it('should throw when removing non-existent tool', () => {
 			expect(() => server.tools.removeTool('non-existent')).toThrow(
-				"tool 'non-existent' not found"
+				"Tool 'non-existent' not found, cannot remove"
 			);
 		});
 
@@ -50,7 +50,7 @@ describe('CRUD Operations', () => {
 
 		it('should throw when updating non-existent tool', () => {
 			expect(() => server.tools.updateTool('non-existent', { description: 'New' })).toThrow(
-				"tool 'non-existent' not found"
+				"Tool 'non-existent' not found, cannot update"
 			);
 		});
 
@@ -91,7 +91,7 @@ describe('CRUD Operations', () => {
 
 		it('should throw when removing non-existent skill', () => {
 			expect(() => server.skills.removeSkillByName('non-existent')).toThrow(
-				"skill 'non-existent' not found"
+				"Skill 'non-existent' not found, cannot remove"
 			);
 		});
 
@@ -103,7 +103,7 @@ describe('CRUD Operations', () => {
 
 		it('should throw when updating non-existent skill', () => {
 			expect(() => server.skills.updateSkill('non-existent', { description: 'New' })).toThrow(
-				"skill 'non-existent' not found"
+				"Skill 'non-existent' not found, cannot update"
 			);
 		});
 

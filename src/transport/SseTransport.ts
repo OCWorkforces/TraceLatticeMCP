@@ -17,6 +17,9 @@
 import type { McpServer } from 'tmcp';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
+import { safeParse } from 'valibot';
+import { JsonRpcRequestSchema } from '../schema.js';
+import type { Metrics } from '../metrics/metrics.impl.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 
 /**
@@ -24,6 +27,7 @@ import { BaseTransport, type TransportOptions } from './BaseTransport.js';
  */
 export interface SseTransportOptions extends TransportOptions {
 	path?: string;
+	metrics?: Metrics;
 }
 
 /**
@@ -49,10 +53,13 @@ export class SseTransport extends BaseTransport {
 	private _path: string;
 	private _clients: Set<ServerResponse> = new Set();
 	private _messageQueue: Map<string, unknown[]> = new Map();
+	private _metrics?: Metrics;
 
 	constructor(options: SseTransportOptions = {}) {
 		super(options);
 		this._path = options.path ?? '/sse';
+		this._metrics = options.metrics;
+		this._updateActiveConnectionsMetric();
 
 		this._server = createServer((req, res) => this._handleRequest(req, res));
 	}
@@ -79,6 +86,12 @@ export class SseTransport extends BaseTransport {
 	 * Handle incoming HTTP requests
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+		if (!this.validateHostHeader(req)) {
+			res.writeHead(403, { 'Content-Type': 'application/json' });
+			res.end(JSON.stringify({ error: 'Forbidden - invalid host header' }));
+			return;
+		}
+
 		const url = new URL(req.url || '', `http://${req.headers.host}`);
 
 		// Check rate limit first
@@ -107,7 +120,7 @@ export class SseTransport extends BaseTransport {
 
 		// Validate session ID if present
 		if (sanitizedParams.session || sanitizedParams.sessionId) {
-			const sessionId = sanitizedParams.session || sanitizedParams.sessionId;
+			const sessionId = (sanitizedParams.session ?? sanitizedParams.sessionId)!;
 			if (!this.validateSessionId(sessionId)) {
 				res.writeHead(400, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Invalid session ID format' }));
@@ -164,10 +177,12 @@ export class SseTransport extends BaseTransport {
 
 		// Add to clients
 		this._clients.add(res);
+		this._updateActiveConnectionsMetric();
 
 		// Handle client disconnect
 		req.on('close', () => {
 			this._clients.delete(res);
+			this._updateActiveConnectionsMetric();
 		});
 
 		// Send any queued messages
@@ -192,16 +207,38 @@ export class SseTransport extends BaseTransport {
 		}
 
 		try {
-			JSON.parse(body); // Validate JSON
+			const jsonRpcRequest = JSON.parse(body);
+			const parseResult = safeParse(JsonRpcRequestSchema, jsonRpcRequest);
+			if (!parseResult.success) {
+				res.writeHead(200, { 'Content-Type': 'application/json' });
+				res.end(
+					JSON.stringify({
+						jsonrpc: '2.0',
+						id: jsonRpcRequest?.id ?? null,
+						error: {
+							code: -32600,
+							message: 'Invalid Request',
+							data: parseResult.issues,
+						},
+					})
+				);
+				return;
+			}
 
 			// Process message through MCP server
 			if (this._mcpServer) {
-				// This would normally call to MCP server's tool handler
-				// For now, we'll just acknowledge
+				const response = await this._mcpServer.receive(jsonRpcRequest, {
+					sessionInfo: {},
+				});
 				res.writeHead(200, {
 					'Content-Type': 'application/json',
 				});
-				res.end(JSON.stringify({ success: true }));
+
+				if (response) {
+					res.end(JSON.stringify(response));
+				} else {
+					res.end(JSON.stringify({ jsonrpc: '2.0', id: jsonRpcRequest?.id ?? null, result: null }));
+				}
 			} else {
 				res.writeHead(503, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Server not ready' }));
@@ -222,7 +259,17 @@ export class SseTransport extends BaseTransport {
 		} catch {
 			// Client disconnected
 			this._clients.delete(res);
+			this._updateActiveConnectionsMetric();
 		}
+	}
+
+	private _updateActiveConnectionsMetric(): void {
+		this._metrics?.gauge(
+			'sse_active_connections',
+			this._clients.size,
+			{},
+			'Current active SSE connections'
+		);
 	}
 
 	/**
@@ -256,6 +303,7 @@ export class SseTransport extends BaseTransport {
 	 */
 	async stop(_timeout?: number): Promise<void> {
 		this._isShuttingDown = true;
+		this._stopRateLimitCleanup();
 
 		return new Promise((resolve) => {
 			// Close all client connections
@@ -267,6 +315,7 @@ export class SseTransport extends BaseTransport {
 				}
 			}
 			this._clients.clear();
+			this._updateActiveConnectionsMetric();
 
 			// Close server
 			this._server.close(() => {

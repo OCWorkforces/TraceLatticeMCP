@@ -61,10 +61,10 @@ describe('Metrics', () => {
 			metrics.histogram('test_ms', 1.235);
 
 			const exported = metrics.export();
-			expect(exported).toContain('test_ms_bucket{le="0.005"} 2');
-			expect(exported).toContain('test_ms_bucket{le="0.025"} 2');
-			expect(exported).toContain('test_ms_bucket{le="0.1"} 1');
-			expect(exported).toContain('test_ms_bucket{le="+Inf"} 2');
+			expect(exported).toContain('test_ms_bucket{le="0.005"} 0');
+			expect(exported).toContain('test_ms_bucket{le="0.025"} 1');
+			expect(exported).toContain('test_ms_bucket{le="0.1"} 2');
+			expect(exported).toContain('test_ms_bucket{le="+Inf"} 4');
 		});
 	});
 
@@ -114,7 +114,7 @@ describe('Metrics', () => {
 			metrics.histogram('latency_ms', 0.047);
 
 			const exported = metrics.export();
-			expect(exported).toContain('latency_ms_bucket{le="0.005"} 1');
+			expect(exported).toContain('latency_ms_bucket{le="0.005"} 0');
 			expect(exported).toContain('latency_ms_bucket{le="0.05"} 2');
 			expect(exported).toContain('latency_ms_bucket{le="+Inf"} 2');
 		});
