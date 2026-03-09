@@ -94,6 +94,13 @@ export class SqlitePersistence implements PersistenceBackend {
 			db.pragma('journal_mode = WAL');
 		}
 
+		// Performance and safety PRAGMAs
+		db.pragma('synchronous = NORMAL');
+		db.pragma('foreign_keys = ON');
+		db.pragma('busy_timeout = 5000');
+		db.pragma('cache_size = -64000'); // 64MB
+		db.pragma('temp_store = MEMORY');
+
 		return new SqlitePersistence(db, options);
 	}
 

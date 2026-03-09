@@ -8,6 +8,8 @@
  * @module logger
  */
 
+import { getRequestId } from '../context/RequestContext.js';
+
 /**
  * Log level severity ordering.
  *
@@ -239,7 +241,8 @@ export class StructuredLogger {
 	private format(entry: LogEntry): string {
 		if (this._pretty) {
 			const metaStr = entry.meta ? ` ${JSON.stringify(entry.meta)}` : '';
-			return `[${entry.timestamp}] [${entry.level.toUpperCase()}]${entry.context ? ` [${entry.context}]` : ''} ${entry.message}${metaStr}`;
+			const requestIdStr = entry.requestId ? ` [${entry.requestId}]` : '';
+			return `[${entry.timestamp}] [${entry.level.toUpperCase()}]${entry.context ? ` [${entry.context}]` : ''}${requestIdStr} ${entry.message}${metaStr}`;
 		}
 		return JSON.stringify(entry);
 	}
@@ -254,12 +257,15 @@ export class StructuredLogger {
 	private log(level: LogLevel, message: string, meta?: Record<string, unknown>): void {
 		if (!this.shouldLog(level)) return;
 
+		const requestId = getRequestId();
+
 		const entry: LogEntry = {
 			level,
 			message,
 			timestamp: new Date().toISOString(),
 			context: this._context,
 			meta,
+			...(requestId ? { requestId } : {}),
 		};
 
 		const formatted = this.format(entry);
