@@ -53,9 +53,9 @@ describe('MemoryPersistence', () => {
 			const history = await backend.loadHistory();
 
 			expect(history).toHaveLength(3);
-			expect(history[0].thought).toBe('First');
-			expect(history[1].thought).toBe('Second');
-			expect(history[2].thought).toBe('Third');
+			expect(history[0]!.thought).toBe('First');
+			expect(history[1]!.thought).toBe('Second');
+			expect(history[2]!.thought).toBe('Third');
 		});
 
 		it('should return empty array when no thoughts saved', async () => {
@@ -242,12 +242,12 @@ describe('MemoryPersistence', () => {
 			// History should only contain history thoughts
 			const history = await backend.loadHistory();
 			expect(history).toHaveLength(1);
-			expect(history[0].thought).toBe('History thought');
+			expect(history[0]!.thought).toBe('History thought');
 
 			// Branch should only contain branch thoughts
 			const branch = await backend.loadBranch('branch-1');
 			expect(branch).toHaveLength(1);
-			expect(branch?.[0].thought).toBe('Branch thought');
+			expect(branch?.[0]?.thought).toBe('Branch thought');
 		});
 	});
 });
@@ -409,8 +409,8 @@ describe('FilePersistence', () => {
 
 			// Should only have the last 5 thoughts
 			expect(history).toHaveLength(5);
-			expect(history[0].thought_number).toBe(6);
-			expect(history[4].thought_number).toBe(10);
+			expect(history[0]!.thought_number).toBe(6);
+			expect(history[4]!.thought_number).toBe(10);
 		});
 	});
 

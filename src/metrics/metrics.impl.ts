@@ -448,7 +448,7 @@ export class Metrics {
 			return { name: key, labels: {} };
 		}
 
-		const [, name, labelsPart] = match;
+		const [, name, labelsPart] = match as [string, string, string | undefined];
 		if (!labelsPart) {
 			return { name, labels: {} };
 		}

@@ -91,6 +91,9 @@ export interface LogEntry {
 	/** Optional context/module name for categorization. */
 	context?: string;
 
+	/** Optional request correlation ID for tracing. */
+	requestId?: string;
+
 	/** Additional structured metadata to include with the log. */
 	meta?: Record<string, unknown>;
 }

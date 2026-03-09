@@ -76,7 +76,7 @@ function parseProcessThoughtResult(result: unknown): {
 	status?: string;
 } {
 	const content = (result as { content: Array<{ type: string; text: string }> }).content;
-	return JSON.parse(content[0].text);
+	return JSON.parse(content[0]!.text);
 }
 
 describe('sequentialthinking-tools MCP Tool', () => {
@@ -249,11 +249,11 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			const result = await server.processThought(thought);
 			const response = parseProcessThoughtResult(result);
 
-			expect(response.current_step?.recommended_tools[0].suggested_inputs).toEqual({
+			expect(response.current_step?.recommended_tools[0]?.suggested_inputs).toEqual({
 				query: 'test',
 				limit: 10,
 			});
-			expect(response.current_step?.recommended_tools[0].alternatives).toEqual([
+			expect(response.current_step?.recommended_tools[0]?.alternatives).toEqual([
 				'alt-tool-1',
 				'alt-tool-2',
 			]);
@@ -275,11 +275,11 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			const result = await server.processThought(thought);
 			const response = parseProcessThoughtResult(result);
 
-			expect(response.current_step?.recommended_skills?.[0].allowed_tools).toEqual([
+			expect(response.current_step?.recommended_skills?.[0]?.allowed_tools).toEqual([
 				'Bash',
 				'Read',
 			]);
-			expect(response.current_step?.recommended_skills?.[0].user_invocable).toBe(true);
+			expect(response.current_step?.recommended_skills?.[0]?.user_invocable).toBe(true);
 		});
 
 		it('2.5 Step Conditions Tracking - should validate next_step_conditions field', async () => {
@@ -313,7 +313,7 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			const response = parseProcessThoughtResult(result);
 
 			expect(response.previous_steps).toHaveLength(1);
-			expect(response.previous_steps?.[0].step_description).toBe('Previous step');
+			expect(response.previous_steps?.[0]?.step_description).toBe('Previous step');
 		});
 
 		it('2.7 Remaining Steps Tracking - should validate remaining_steps high-level descriptions', async () => {
@@ -356,9 +356,9 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			expect(server.history.getHistoryLength()).toBe(3);
 
 			const history = server.history.getHistory();
-			expect(history[0].thought).toBe('Thought 1');
-			expect(history[1].thought).toBe('Thought 2');
-			expect(history[2].thought).toBe('Thought 3');
+			expect(history[0]!.thought).toBe('Thought 1');
+			expect(history[1]!.thought).toBe('Thought 2');
+			expect(history[2]!.thought).toBe('Thought 3');
 		});
 
 		it('3.2 History Size Limit - should validate history trimming when exceeding maxHistorySize', async () => {
@@ -381,9 +381,9 @@ describe('sequentialthinking-tools MCP Tool', () => {
 
 			// The oldest thoughts should be removed, keeping the 3 most recent
 			const history = smallServer.history.getHistory();
-			expect(history[0].thought).toBe('Thought 3');
-			expect(history[1].thought).toBe('Thought 4');
-			expect(history[2].thought).toBe('Thought 5');
+			expect(history[0]!.thought).toBe('Thought 3');
+			expect(history[1]!.thought).toBe('Thought 4');
+			expect(history[2]!.thought).toBe('Thought 5');
 		});
 
 		it('3.3 History Persistence Across Thoughts - should validate history state maintained across multiple calls', async () => {
@@ -416,9 +416,9 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			// All thoughts should be accessible via history manager
 			const history = server.history.getHistory();
 			expect(history).toHaveLength(3);
-			expect(history[0].thought).toBe('First thought');
-			expect(history[1].thought).toBe('Second thought');
-			expect(history[2].thought).toBe('Third thought');
+			expect(history[0]!.thought).toBe('First thought');
+			expect(history[1]!.thought).toBe('Second thought');
+			expect(history[2]!.thought).toBe('Third thought');
 		});
 	});
 
@@ -452,7 +452,7 @@ describe('sequentialthinking-tools MCP Tool', () => {
 
 			const branches = server.history.getBranches();
 			expect(branches['branch-a']).toHaveLength(1);
-			expect(branches['branch-a'][0].thought).toBe('Branch thought');
+			expect(branches['branch-a']![0]!.thought).toBe('Branch thought');
 		});
 
 		it('4.2 Multiple Branches - should validate creating multiple branches from different points', async () => {
@@ -492,8 +492,8 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			const branches = server.history.getBranches();
 			expect(branches['branch-a']).toHaveLength(1);
 			expect(branches['branch-b']).toHaveLength(1);
-			expect(branches['branch-a'][0].thought).toBe('Branch A thought');
-			expect(branches['branch-b'][0].thought).toBe('Branch B thought');
+			expect(branches['branch-a']![0]!.thought).toBe('Branch A thought');
+			expect(branches['branch-b']![0]!.thought).toBe('Branch B thought');
 		});
 
 		it('4.3 Branch ID Validation - Valid - should validate branch_id accepts valid characters', async () => {
@@ -629,7 +629,7 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			const history = server.history.getHistory();
 
 			// The revision metadata should be preserved in history
-			expect(history[1].is_revision).toBe(true);
+			expect(history[1]!.is_revision).toBe(true);
 		});
 
 		it('5.2 Revision with Thought Reference - should validate revises_thought points to correct thought', async () => {
@@ -654,8 +654,8 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			);
 
 			const history = server.history.getHistory();
-			expect(history[1].is_revision).toBe(true);
-			expect(history[1].revises_thought).toBe(1);
+			expect(history[1]!.is_revision).toBe(true);
+			expect(history[1]!.revises_thought).toBe(1);
 		});
 
 		it('5.3 Combined Branch and Revision - should validate combining branching with revision', async () => {
@@ -685,10 +685,10 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			const branches = server.history.getBranches();
 
 			// Both sets of metadata should be preserved
-			expect(history[1].branch_from_thought).toBe(1);
-			expect(history[1].branch_id).toBe('revision-branch');
-			expect(history[1].is_revision).toBe(true);
-			expect(history[1].revises_thought).toBe(1);
+			expect(history[1]!.branch_from_thought).toBe(1);
+			expect(history[1]!.branch_id).toBe('revision-branch');
+			expect(history[1]!.is_revision).toBe(true);
+			expect(history[1]!.revises_thought).toBe(1);
 
 			// Branch should exist
 			expect(branches['revision-branch']).toHaveLength(1);
@@ -740,7 +740,7 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			const history = server.history.getHistory();
 
 			// Thought should be preserved without truncation
-			expect(history[0].thought).toHaveLength(10000);
+			expect(history[0]!.thought).toHaveLength(10000);
 		});
 
 		it('6.4 Next Thought Needed Default - should validate next_thought_needed defaults to true when omitted', async () => {
@@ -767,7 +767,7 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			const history = server.history.getHistory();
 
 			// Flag should be preserved in history
-			expect(history[0].needs_more_thoughts).toBe(true);
+			expect(history[0]!.needs_more_thoughts).toBe(true);
 		});
 	});
 
@@ -834,9 +834,9 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			const result = await server.processThought(thought);
 			const response = parseProcessThoughtResult(result);
 
-			expect(response.current_step?.recommended_tools[0].confidence).toBe(0);
-			expect(response.current_step?.recommended_tools[1].confidence).toBe(0.5);
-			expect(response.current_step?.recommended_tools[2].confidence).toBe(1);
+			expect(response.current_step?.recommended_tools[0]?.confidence).toBe(0);
+			expect(response.current_step?.recommended_tools[1]?.confidence).toBe(0.5);
+			expect(response.current_step?.recommended_tools[2]?.confidence).toBe(1);
 		});
 
 		it('7.5 Missing Required Fields - should validate response to missing required fields', async () => {
@@ -989,8 +989,8 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			// Verify state isolation
 			expect(server1.history.getHistoryLength()).toBe(1);
 			expect(server2.history.getHistoryLength()).toBe(1);
-			expect(server1.history.getHistory()[0].thought).toBe('Server 1 thought');
-			expect(server2.history.getHistory()[0].thought).toBe('Server 2 thought');
+			expect(server1.history.getHistory()[0]!.thought).toBe('Server 1 thought');
+			expect(server2.history.getHistory()[0]!.thought).toBe('Server 2 thought');
 
 			// Create branches on each server
 			await server1.processThought(
@@ -1069,8 +1069,8 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			// Available tools/skills should be reflected in response
 			expect(response.available_mcp_tools).toContain('custom-tool');
 			expect(response.available_skills).toContain('custom-skill');
-			expect(response.current_step?.recommended_tools[0].tool_name).toBe('custom-tool');
-			expect(response.current_step?.recommended_skills?.[0].skill_name).toBe('custom-skill');
+			expect(response.current_step?.recommended_tools[0]?.tool_name).toBe('custom-tool');
+			expect(response.current_step?.recommended_skills?.[0]?.skill_name).toBe('custom-skill');
 		});
 	});
 });

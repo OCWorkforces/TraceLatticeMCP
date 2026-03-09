@@ -115,7 +115,7 @@ export class SseTransport extends BaseTransport {
 
 		// Validate session ID if present
 		if (sanitizedParams.session || sanitizedParams.sessionId) {
-			const sessionId = sanitizedParams.session || sanitizedParams.sessionId;
+			const sessionId = (sanitizedParams.session ?? sanitizedParams.sessionId)!;
 			if (!this.validateSessionId(sessionId)) {
 				res.writeHead(400, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Invalid session ID format' }));

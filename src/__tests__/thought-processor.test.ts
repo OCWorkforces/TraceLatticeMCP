@@ -75,7 +75,7 @@ describe('ThoughtProcessor', () => {
 			};
 
 			const result = await processor.process(input);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 
 			expect(parsed.total_thoughts).toBe(10);
 			expect(parsed.thought_number).toBe(10);
@@ -90,7 +90,7 @@ describe('ThoughtProcessor', () => {
 			};
 
 			const result = await processor.process(input);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 
 			expect(parsed.total_thoughts).toBe(5);
 			expect(parsed.thought_number).toBe(3);
@@ -105,7 +105,7 @@ describe('ThoughtProcessor', () => {
 			};
 
 			const result = await processor.process(input);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 
 			expect(parsed.total_thoughts).toBe(5);
 			expect(parsed.thought_number).toBe(5);
@@ -160,7 +160,7 @@ describe('ThoughtProcessor', () => {
 				next_thought_needed: false,
 			});
 
-			const parsed = JSON.parse(result1.content[0].text);
+			const parsed = JSON.parse(result1.content[0]!.text);
 			expect(parsed.thought_history_length).toBe(2);
 		});
 	});
@@ -179,10 +179,10 @@ describe('ThoughtProcessor', () => {
 			const result = await processor.process(input);
 
 			expect(result.content).toHaveLength(1);
-			expect(result.content[0].type).toBe('text');
+			expect(result.content[0]!.type).toBe('text');
 			expect(result.isError).toBeUndefined();
 
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed).toMatchObject({
 				thought_number: 1,
 				total_thoughts: 3,
@@ -202,7 +202,7 @@ describe('ThoughtProcessor', () => {
 			};
 
 			const result = await processor.process(input);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 
 			expect(parsed.available_mcp_tools).toEqual(['Read', 'Write', 'Grep']);
 		});
@@ -217,7 +217,7 @@ describe('ThoughtProcessor', () => {
 			};
 
 			const result = await processor.process(input);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 
 			expect(parsed.available_skills).toEqual(['commit', 'review-pr']);
 		});
@@ -243,7 +243,7 @@ describe('ThoughtProcessor', () => {
 			};
 
 			const result = await processor.process(input);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 
 			expect(parsed.current_step).toEqual({
 				step_description: 'Analyze code',
@@ -268,7 +268,7 @@ describe('ThoughtProcessor', () => {
 			};
 
 			const result = await processor.process(input);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 
 			expect(parsed.branches).toEqual([]);
 		});
@@ -321,7 +321,7 @@ describe('ThoughtProcessor', () => {
 			const result = await throwingProcessor.process(input);
 
 			expect(result.isError).toBe(true);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.error).toBe('Database error');
 			expect(parsed.status).toBe('failed');
 		});
@@ -386,7 +386,7 @@ describe('ThoughtProcessor', () => {
 			};
 
 			const result = await processor.process(input);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.total_thoughts).toBe(999999);
 		});
 
@@ -398,7 +398,7 @@ describe('ThoughtProcessor', () => {
 			} as ThoughtData;
 
 			const result = await processor.process(input);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.next_thought_needed).toBe(true); // Default value
 		});
 
@@ -442,7 +442,7 @@ describe('ThoughtProcessor', () => {
 			};
 
 			const result = await processor.process(input);
-			const parsed = JSON.parse(result.content[0].text);
+			const parsed = JSON.parse(result.content[0]!.text);
 
 			expect(parsed.available_mcp_tools).toEqual(['tool1', 'tool2', 'tool3']);
 			expect(parsed.available_skills).toEqual(['skill1', 'skill2']);

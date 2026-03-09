@@ -163,8 +163,8 @@ describe('InputNormalizer', () => {
 
 			expect(normalized.previous_steps).toBeDefined();
 			expect(normalized.previous_steps).toHaveLength(2);
-			expect(normalized.previous_steps?.[0].recommended_tools).toBeDefined();
-			expect(normalized.previous_steps?.[1].recommended_tools).toBeDefined();
+			expect(normalized.previous_steps?.[0]?.recommended_tools).toBeDefined();
+			expect(normalized.previous_steps?.[1]?.recommended_tools).toBeDefined();
 		});
 
 		it('should handle mixed singular and plural in previous_steps', () => {
@@ -197,9 +197,9 @@ describe('InputNormalizer', () => {
 			expect(normalized.previous_steps).toBeDefined();
 			expect(normalized.previous_steps).toHaveLength(3);
 			// All should have recommended_tools (plural) after normalization
-			expect(normalized.previous_steps?.[0].recommended_tools).toBeDefined();
-			expect(normalized.previous_steps?.[1].recommended_tools).toBeDefined();
-			expect(normalized.previous_steps?.[2].recommended_tools).toBeDefined();
+			expect(normalized.previous_steps?.[0]?.recommended_tools).toBeDefined();
+			expect(normalized.previous_steps?.[1]?.recommended_tools).toBeDefined();
+			expect(normalized.previous_steps?.[2]?.recommended_tools).toBeDefined();
 		});
 
 		it('should handle empty previous_steps array', () => {
@@ -252,7 +252,7 @@ describe('InputNormalizer', () => {
 
 			const normalized = normalizeInput(input) as ThoughtData;
 
-			expect(normalized.previous_steps?.[0].recommended_tools?.[0].confidence).toBe(0.5);
+			expect(normalized.previous_steps?.[0]?.recommended_tools?.[0]?.confidence).toBe(0.5);
 		});
 
 		it('should fill in default priority (999) for missing tool priority in previous_steps', () => {
@@ -277,7 +277,7 @@ describe('InputNormalizer', () => {
 
 			const normalized = normalizeInput(input) as ThoughtData;
 
-			expect(normalized.previous_steps?.[0].recommended_tools?.[0].priority).toBe(999);
+			expect(normalized.previous_steps?.[0]?.recommended_tools?.[0]?.priority).toBe(999);
 		});
 
 		it('should fill in default rationale (empty string) for missing tool rationale in previous_steps', () => {
@@ -301,7 +301,7 @@ describe('InputNormalizer', () => {
 
 			const normalized = normalizeInput(input) as ThoughtData;
 
-			expect(normalized.previous_steps?.[0].recommended_tools?.[0].rationale).toBe('');
+			expect(normalized.previous_steps?.[0]?.recommended_tools?.[0]?.rationale).toBe('');
 		});
 
 		it('should fill in default expected_outcome (empty string) for missing in previous_steps', () => {
@@ -326,7 +326,7 @@ describe('InputNormalizer', () => {
 
 			const normalized = normalizeInput(input) as ThoughtData;
 
-			expect(normalized.previous_steps?.[0].expected_outcome).toBe('');
+			expect(normalized.previous_steps?.[0]?.expected_outcome).toBe('');
 		});
 
 		it('should preserve existing confidence and priority when present in previous_steps', () => {
@@ -353,9 +353,9 @@ describe('InputNormalizer', () => {
 
 			const normalized = normalizeInput(input) as ThoughtData;
 
-			expect(normalized.previous_steps?.[0].recommended_tools?.[0].confidence).toBe(0.8);
-			expect(normalized.previous_steps?.[0].recommended_tools?.[0].priority).toBe(2);
-			expect(normalized.previous_steps?.[0].expected_outcome).toBe('Files found');
+			expect(normalized.previous_steps?.[0]?.recommended_tools?.[0]?.confidence).toBe(0.8);
+			expect(normalized.previous_steps?.[0]?.recommended_tools?.[0]?.priority).toBe(2);
+			expect(normalized.previous_steps?.[0]?.expected_outcome).toBe('Files found');
 		});
 
 		it('should handle mixed complete and partial tool recommendations in previous_steps', () => {
@@ -392,14 +392,14 @@ describe('InputNormalizer', () => {
 			const normalized = normalizeInput(input) as ThoughtData;
 
 			// Step 1 should have defaults filled in
-			expect(normalized.previous_steps?.[0].recommended_tools?.[0].confidence).toBe(0.5);
-			expect(normalized.previous_steps?.[0].recommended_tools?.[0].priority).toBe(999);
-			expect(normalized.previous_steps?.[0].expected_outcome).toBe('');
+			expect(normalized.previous_steps?.[0]?.recommended_tools?.[0]?.confidence).toBe(0.5);
+			expect(normalized.previous_steps?.[0]?.recommended_tools?.[0]?.priority).toBe(999);
+			expect(normalized.previous_steps?.[0]?.expected_outcome).toBe('');
 
 			// Step 2 should preserve original values
-			expect(normalized.previous_steps?.[1].recommended_tools?.[0].confidence).toBe(0.9);
-			expect(normalized.previous_steps?.[1].recommended_tools?.[0].priority).toBe(1);
-			expect(normalized.previous_steps?.[1].expected_outcome).toBe('Found matches');
+			expect(normalized.previous_steps?.[1]?.recommended_tools?.[0]?.confidence).toBe(0.9);
+			expect(normalized.previous_steps?.[1]?.recommended_tools?.[0]?.priority).toBe(1);
+			expect(normalized.previous_steps?.[1]?.expected_outcome).toBe('Found matches');
 		});
 	});
 
@@ -437,7 +437,7 @@ describe('InputNormalizer', () => {
 			const normalized = normalizeInput(input) as ThoughtData;
 
 			expect(normalized.current_step?.recommended_tools).toBeDefined();
-			expect(normalized.previous_steps?.[0].recommended_tools).toBeDefined();
+			expect(normalized.previous_steps?.[0]?.recommended_tools).toBeDefined();
 		});
 
 		it('should not modify other fields', () => {

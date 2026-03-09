@@ -9,9 +9,9 @@ describe('Telemetry', () => {
 
 		const spans = telemetry.getSpans();
 		expect(spans).toHaveLength(1);
-		expect(spans[0].name).toBe('processThought');
-		expect(spans[0].attributes.service).toBe('test-service');
-		expect(spans[0].durationMs).toBeTypeOf('number');
+		expect(spans[0]!.name).toBe('processThought');
+		expect(spans[0]!.attributes.service).toBe('test-service');
+		expect(spans[0]!.durationMs).toBeTypeOf('number');
 	});
 
 	it('does not retain spans when telemetry is disabled', () => {
@@ -29,6 +29,6 @@ describe('Telemetry', () => {
 
 		const spans = telemetry.getSpans();
 		expect(spans).toHaveLength(1);
-		expect(spans[0].error).toBe('boom');
+		expect(spans[0]!.error).toBe('boom');
 	});
 });

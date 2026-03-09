@@ -202,4 +202,12 @@ private async _ensureDirectories(): Promise<void> {
 			return [];
 		}
 	}
+
+	/**
+	 * Close the backend and release resources.
+	 * No resources to release for file backend.
+	 */
+	public async close(): Promise<void> {
+		// No-op for file backend (files are already flushed on write)
+	}
 }

@@ -208,7 +208,7 @@ export abstract class BaseTransport {
 	protected getClientIp(req: IncomingMessage): string {
 		const forwardedFor = req.headers['x-forwarded-for'];
 		if (forwardedFor && typeof forwardedFor === 'string') {
-			return forwardedFor.split(',')[0].trim();
+			return forwardedFor.split(',')[0]!.trim();
 		}
 		const remoteAddress = req.socket.remoteAddress;
 		return remoteAddress || 'unknown';
@@ -268,7 +268,7 @@ export abstract class BaseTransport {
 			return true;
 		}
 
-		const hostWithoutPort = rawHost.split(':')[0].trim().toLowerCase();
+		const hostWithoutPort = rawHost.split(':')[0]!.trim().toLowerCase();
 		if (!hostWithoutPort) {
 			return false;
 		}

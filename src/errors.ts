@@ -214,7 +214,7 @@ export class InvalidThoughtError extends SequentialThinkingError {
  */
 export class SkillDiscoveryError extends SequentialThinkingError {
 	/** The underlying error that caused the discovery failure. */
-	public readonly cause: Error;
+	public override readonly cause: Error;
 
 	/**
 	 * Creates a new SkillDiscoveryError.

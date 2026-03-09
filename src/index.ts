@@ -144,11 +144,11 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 	}
 
 	// Type-safe event emission
-	emit<K extends keyof ServerEvents>(event: K, payload: ServerEvents[K]): boolean {
+	override emit<K extends keyof ServerEvents>(event: K, payload: ServerEvents[K]): boolean {
 		return super.emit(event, payload);
 	}
 
-	on<K extends keyof ServerEvents>(event: K, listener: (payload: ServerEvents[K]) => void): this {
+	override on<K extends keyof ServerEvents>(event: K, listener: (payload: ServerEvents[K]) => void): this {
 		return super.on(event, listener);
 	}
 
@@ -402,11 +402,26 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 	}
 
 	/**
-	 * Stop the server and clean up watchers
+	 * Stop the server and clean up watchers.
+	 * Closes persistence backend gracefully to ensure data is flushed.
 	 */
-	public stop(): void {
+	public async stop(): Promise<void> {
 		this._skillWatcher?.stop();
 		this._toolWatcher?.stop();
+
+		// Close persistence backend if available
+		const persistence = this._container.resolve<PersistenceBackend | null>('Persistence');
+		if (persistence) {
+			try {
+				await persistence.close();
+				this._logger.info('Persistence backend closed');
+			} catch (error) {
+				this._logger.error('Error closing persistence backend', {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+
 		this._logger.info('Server stopped, watchers cleaned up');
 	}
 
@@ -454,40 +469,7 @@ export async function createServer(
 	return ToolAwareSequentialThinkingServer.create(options);
 }
 
-/**
- * Synchronous factory function for creating a server without async operations.
- *
- * @deprecated Since v0.0.16. Use `create` async factory method instead.
- * The `create` method provides better error handling and async initialization support.
- *
- * @remarks
- * **Migration Guide:**
- * ```typescript
- * // OLD (deprecated)
- * const server = createServerSync({ autoDiscover: false });
- *
- * // NEW (recommended)
- * const server = await create({ autoDiscover: false });
- * ```
- *
- * Use this when you need synchronous server creation, but note that
- * skill discovery will still occur synchronously if `autoDiscover` is enabled.
- *
- * @param options - Server configuration options
- * @returns A configured server instance
- *
- * @example
- * ```typescript
- * // Deprecated usage
- * const server = createServerSync({ autoDiscover: false });
- *
- * // Recommended usage
- * const server = await create({ autoDiscover: false });
- * ```
- */
-export function createServerSync(options: ServerOptions = {}): ToolAwareSequentialThinkingServer {
-	return new ToolAwareSequentialThinkingServer(options);
-}
+
 
 // Initialize server
 async function initializeServer(): Promise<ToolAwareSequentialThinkingServer> {
@@ -548,7 +530,7 @@ async function main() {
 
 		const shutdown = async (): Promise<void> => {
 			await sseTransport.stop();
-			thinkingServer.stop();
+			await thinkingServer.stop();
 		};
 
 		process.once('SIGINT', () => {
@@ -571,10 +553,26 @@ async function main() {
 		const transport = new StdioTransport(server);
 		transport.listen();
 
-		const shutdown = (): void => {
-			thinkingServer.stop();
-			process.exit(0);
+		const shutdown = async (): Promise<void> => {
+			const forceExit = setTimeout(() => {
+				thinkingServer['_logger'].error('Graceful shutdown timed out after 30s - forcing exit');
+				process.exit(1);
+			}, 30_000).unref(); // 30s timeout, don't keep process alive
+
+			try {
+				await thinkingServer.stop();
+				clearTimeout(forceExit);
+				process.exit(0);
+			} catch (error) {
+				thinkingServer['_logger'].error('Error during shutdown', {
+					error: error instanceof Error ? error.message : String(error),
+				});
+				process.exit(1);
+			}
 		};
+
+		process.once('SIGINT', () => void shutdown());
+		process.once('SIGTERM', () => void shutdown());
 
 		process.once('SIGINT', shutdown);
 		process.once('SIGTERM', shutdown);

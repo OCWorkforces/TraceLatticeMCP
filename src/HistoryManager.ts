@@ -312,9 +312,9 @@ export class HistoryManager implements IHistoryManager {
 	 * @private
 	 */
 	private trimBranchSize(branchId: string): void {
-		if (this._branches[branchId].length > this._maxBranchSize) {
-			const removed = this._branches[branchId].length - this._maxBranchSize;
-			this._branches[branchId] = this._branches[branchId].slice(-this._maxBranchSize);
+		if ((this._branches[branchId] ?? []).length > this._maxBranchSize) {
+			const removed = this._branches[branchId]!.length - this._maxBranchSize;
+			this._branches[branchId] = this._branches[branchId]!.slice(-this._maxBranchSize);
 			this.log(`Trimmed branch '${branchId}': removed ${removed} old thoughts`, {
 				branchId,
 				removed,
