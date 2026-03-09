@@ -151,16 +151,19 @@ export class FilePersistence implements PersistenceBackend {
 			}
 
 			const branchPath = this._safeBranchPath(branchId);
-			if (!existsSync(branchPath)) {
+
+			try {
+				if (!existsSync(branchPath)) {
+					return undefined;
+				}
+
+				const content = await readFile(branchPath, 'utf-8');
+				const data = JSON.parse(content) as ThoughtData[];
+
+				return Array.isArray(data) ? data : undefined;
+			} catch {
 				return undefined;
 			}
-
-			const content = await readFile(branchPath, 'utf-8');
-			const data = JSON.parse(content) as ThoughtData[];
-
-			return Array.isArray(data) ? data : undefined;
-		} catch {
-			return undefined;
 		} finally {
 			this._recordOperationDuration('load_branch', startTime);
 		}

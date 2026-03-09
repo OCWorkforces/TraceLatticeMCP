@@ -125,6 +125,7 @@ describe('Metrics Integration', () => {
 	});
 
 	it('resolves Metrics from DI container and returns Prometheus format', () => {
+		server.getContainer().resolve<Metrics>('Metrics').counter('test_metric_total', 1, {});
 		const snapshot = server.getMetricsSnapshot();
 		expect(snapshot).toContain('# TYPE');
 		expect(snapshot).toContain('sequentialthinking_');
