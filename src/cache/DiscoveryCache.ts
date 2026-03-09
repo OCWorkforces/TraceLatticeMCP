@@ -1,3 +1,5 @@
+import type { Metrics } from '../metrics/metrics.impl.js';
+
 /**
  * LRU Cache for tool/skill discovery results with TTL support.
  *
@@ -57,6 +59,7 @@ export interface DiscoveryCacheOptions {
 	 * @default 300000 (5 minutes)
 	 */
 	ttl?: number;
+	metrics?: Metrics;
 }
 
 /**
@@ -126,6 +129,7 @@ export class DiscoveryCache<T> {
 
 	/** Time-to-live in milliseconds for cache entries. */
 	private _ttl: number;
+	private _metrics?: Metrics;
 
 	/**
 	 * Creates a new DiscoveryCache instance.
@@ -148,6 +152,7 @@ export class DiscoveryCache<T> {
 		this._cache = new Map();
 		this._maxSize = options.maxSize ?? 100;
 		this._ttl = options.ttl ?? 300000; // 5 minutes default
+		this._metrics = options.metrics;
 	}
 
 	/**
@@ -173,7 +178,10 @@ export class DiscoveryCache<T> {
 	 */
 	get(key: string): T[] | null {
 		const entry = this._cache.get(key);
-		if (!entry) return null;
+		if (!entry) {
+			this._metrics?.counter('cache_miss_total', 1, {}, 'Total discovery cache misses');
+			return null;
+		}
 
 		const now = Date.now();
 		const age = now - entry.timestamp;
@@ -181,6 +189,7 @@ export class DiscoveryCache<T> {
 		// Check TTL
 		if (age > this._ttl) {
 			this._cache.delete(key);
+			this._metrics?.counter('cache_miss_total', 1, {}, 'Total discovery cache misses');
 			return null;
 		}
 
@@ -191,6 +200,7 @@ export class DiscoveryCache<T> {
 		// Move to end (most recently used)
 		this._cache.delete(key);
 		this._cache.set(key, entry);
+		this._metrics?.counter('cache_hit_total', 1, {}, 'Total discovery cache hits');
 
 		return entry.data;
 	}

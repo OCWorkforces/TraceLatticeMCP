@@ -19,6 +19,7 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
 import { safeParse } from 'valibot';
 import { JsonRpcRequestSchema } from '../schema.js';
+import type { Metrics } from '../metrics/metrics.impl.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 
 /**
@@ -26,6 +27,7 @@ import { BaseTransport, type TransportOptions } from './BaseTransport.js';
  */
 export interface SseTransportOptions extends TransportOptions {
 	path?: string;
+	metrics?: Metrics;
 }
 
 /**
@@ -51,10 +53,13 @@ export class SseTransport extends BaseTransport {
 	private _path: string;
 	private _clients: Set<ServerResponse> = new Set();
 	private _messageQueue: Map<string, unknown[]> = new Map();
+	private _metrics?: Metrics;
 
 	constructor(options: SseTransportOptions = {}) {
 		super(options);
 		this._path = options.path ?? '/sse';
+		this._metrics = options.metrics;
+		this._updateActiveConnectionsMetric();
 
 		this._server = createServer((req, res) => this._handleRequest(req, res));
 	}
@@ -172,10 +177,12 @@ export class SseTransport extends BaseTransport {
 
 		// Add to clients
 		this._clients.add(res);
+		this._updateActiveConnectionsMetric();
 
 		// Handle client disconnect
 		req.on('close', () => {
 			this._clients.delete(res);
+			this._updateActiveConnectionsMetric();
 		});
 
 		// Send any queued messages
@@ -252,7 +259,17 @@ export class SseTransport extends BaseTransport {
 		} catch {
 			// Client disconnected
 			this._clients.delete(res);
+			this._updateActiveConnectionsMetric();
 		}
+	}
+
+	private _updateActiveConnectionsMetric(): void {
+		this._metrics?.gauge(
+			'sse_active_connections',
+			this._clients.size,
+			{},
+			'Current active SSE connections'
+		);
 	}
 
 	/**
@@ -298,6 +315,7 @@ export class SseTransport extends BaseTransport {
 				}
 			}
 			this._clients.clear();
+			this._updateActiveConnectionsMetric();
 
 			// Close server
 			this._server.close(() => {

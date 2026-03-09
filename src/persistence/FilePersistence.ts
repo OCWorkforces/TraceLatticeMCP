@@ -1,5 +1,6 @@
 import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
 import type { ThoughtData } from '../types.js';
+import type { Metrics } from '../metrics/metrics.impl.js';
 import { mkdir, writeFile, readFile, readdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
@@ -25,8 +26,9 @@ export class FilePersistence implements PersistenceBackend {
 	private _branchesDir: string;
 	private _maxHistorySize: number;
 	private _persistBranches: boolean;
+	private _metrics?: Metrics;
 
-	constructor(options?: PersistenceConfig['options']) {
+	constructor(options?: PersistenceConfig['options'] & { metrics?: Metrics }) {
 		// Default to .claude/data in current directory or home directory
 		const defaultDataDir = existsSync('.claude/data')
 			? '.claude/data'
@@ -36,12 +38,18 @@ export class FilePersistence implements PersistenceBackend {
 		this._branchesDir = join(this._dataDir, 'branches');
 		this._maxHistorySize = options?.maxHistorySize ?? 10000;
 		this._persistBranches = options?.persistBranches ?? true;
+		this._metrics = options?.metrics;
+	}
+
+	private _recordOperationDuration(operation: string, startTime: number): void {
+		const durationSeconds = (Date.now() - startTime) / 1000;
+		this._metrics?.histogram('persistence_op_duration_seconds', durationSeconds, { operation });
 	}
 
 	/**
 	 * Initialize the persistence directory structure.
 	 */
-private async _ensureDirectories(): Promise<void> {
+	private async _ensureDirectories(): Promise<void> {
 		if (!existsSync(this._dataDir)) {
 			await mkdir(this._dataDir, { recursive: true });
 		}
@@ -65,7 +73,9 @@ private async _ensureDirectories(): Promise<void> {
 		// Validate format first (must be alphanumeric with hyphens/underscores, 1-64 chars)
 		const validBranchIdPattern = /^[a-zA-Z0-9_-]{1,64}$/;
 		if (!validBranchIdPattern.test(branchId)) {
-			throw new Error(`Invalid branch ID: must be 1-64 alphanumeric characters, hyphens, or underscores only`);
+			throw new Error(
+				`Invalid branch ID: must be 1-64 alphanumeric characters, hyphens, or underscores only`
+			);
 		}
 
 		const resolved = resolve(this._branchesDir, `${branchId}.json`);
@@ -80,24 +90,25 @@ private async _ensureDirectories(): Promise<void> {
 	}
 
 	public async saveThought(thought: ThoughtData): Promise<void> {
-		await this._ensureDirectories();
+		const startTime = Date.now();
+		try {
+			await this._ensureDirectories();
 
-		// Load existing history
-		const history = await this.loadHistory();
+			const history = await this.loadHistory();
+			history.push(thought);
 
-		// Add new thought
-		history.push(thought);
+			if (history.length > this._maxHistorySize) {
+				history.splice(0, history.length - this._maxHistorySize);
+			}
 
-		// Trim to max size if needed
-		if (history.length > this._maxHistorySize) {
-			history.splice(0, history.length - this._maxHistorySize);
+			await writeFile(this._historyPath, JSON.stringify(history, null, 2), 'utf-8');
+		} finally {
+			this._recordOperationDuration('save_thought', startTime);
 		}
-
-		// Save back to file
-		await writeFile(this._historyPath, JSON.stringify(history, null, 2), 'utf-8');
 	}
 
 	public async loadHistory(): Promise<ThoughtData[]> {
+		const startTime = Date.now();
 		try {
 			if (!existsSync(this._historyPath)) {
 				return [];
@@ -111,28 +122,35 @@ private async _ensureDirectories(): Promise<void> {
 		} catch {
 			// If file is corrupted, start fresh
 			return [];
+		} finally {
+			this._recordOperationDuration('load_history', startTime);
 		}
 	}
 
 	public async saveBranch(branchId: string, thoughts: ThoughtData[]): Promise<void> {
-		if (!this._persistBranches) {
-			return;
+		const startTime = Date.now();
+		try {
+			if (!this._persistBranches) {
+				return;
+			}
+
+			await this._ensureDirectories();
+
+			const branchPath = this._safeBranchPath(branchId);
+			await writeFile(branchPath, JSON.stringify(thoughts, null, 2), 'utf-8');
+		} finally {
+			this._recordOperationDuration('save_branch', startTime);
 		}
-
-		await this._ensureDirectories();
-
-		const branchPath = this._safeBranchPath(branchId);
-		await writeFile(branchPath, JSON.stringify(thoughts, null, 2), 'utf-8');
 	}
 
 	public async loadBranch(branchId: string): Promise<ThoughtData[] | undefined> {
-		if (!this._persistBranches) {
-			return undefined;
-		}
-
-		const branchPath = this._safeBranchPath(branchId);
-
+		const startTime = Date.now();
 		try {
+			if (!this._persistBranches) {
+				return undefined;
+			}
+
+			const branchPath = this._safeBranchPath(branchId);
 			if (!existsSync(branchPath)) {
 				return undefined;
 			}
@@ -143,6 +161,8 @@ private async _ensureDirectories(): Promise<void> {
 			return Array.isArray(data) ? data : undefined;
 		} catch {
 			return undefined;
+		} finally {
+			this._recordOperationDuration('load_branch', startTime);
 		}
 	}
 

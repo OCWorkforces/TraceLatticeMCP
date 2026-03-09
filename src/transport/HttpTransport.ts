@@ -18,6 +18,7 @@ import type { McpServer } from 'tmcp';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { safeParse } from 'valibot';
 import { JsonRpcRequestSchema } from '../schema.js';
+import type { Metrics } from '../metrics/metrics.impl.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 
 export interface HttpTransportOptions extends TransportOptions {
@@ -26,6 +27,7 @@ export interface HttpTransportOptions extends TransportOptions {
 	 * @default '/messages'
 	 */
 	path?: string;
+	metrics?: Metrics;
 	metricsProvider?: () => string;
 
 	/**
@@ -86,6 +88,7 @@ export class HttpTransport extends BaseTransport {
 	private _maxBodySize: number;
 	private _requestCount: number = 0;
 	private _path: string;
+	private _metrics?: Metrics;
 	private _metricsProvider: (() => string) | null;
 
 	constructor(options: HttpTransportOptions = {}) {
@@ -95,6 +98,7 @@ export class HttpTransport extends BaseTransport {
 		this._bodySizeLimitEnabled = options.enableBodySizeLimit ?? true;
 		this._maxBodySize = options.maxBodySize ?? 10 * 1024 * 1024;
 		this._path = options.path ?? '/messages';
+		this._metrics = options.metrics;
 		this._metricsProvider = options.metricsProvider ?? null;
 		this._server = createServer((req, res) => this._handleRequest(req, res));
 	}
@@ -123,6 +127,13 @@ export class HttpTransport extends BaseTransport {
 	 * Handles incoming HTTP requests.
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+		const startTime = Date.now();
+		this._metrics?.counter('http_requests_total', 1, {}, 'Total HTTP transport requests');
+		res.once('finish', () => {
+			const durationSeconds = (Date.now() - startTime) / 1000;
+			this._metrics?.histogram('http_request_duration_seconds', durationSeconds, {});
+		});
+
 		if (!this.validateHostHeader(req)) {
 			res.writeHead(403, { 'Content-Type': 'application/json' });
 			res.end(

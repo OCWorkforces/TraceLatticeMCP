@@ -148,7 +148,10 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 		return super.emit(event, payload);
 	}
 
-	override on<K extends keyof ServerEvents>(event: K, listener: (payload: ServerEvents[K]) => void): this {
+	override on<K extends keyof ServerEvents>(
+		event: K,
+		listener: (payload: ServerEvents[K]) => void
+	): this {
 		return super.on(event, listener);
 	}
 
@@ -284,7 +287,9 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 			() =>
 				new ToolRegistry({
 					logger,
-					cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
+					cache: config.discoveryCache
+						? new DiscoveryCache({ ...config.discoveryCache, metrics })
+						: undefined,
 				})
 		);
 		container.register(
@@ -292,7 +297,9 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 			() =>
 				new SkillRegistry({
 					logger,
-					cache: config.discoveryCache ? new DiscoveryCache(config.discoveryCache) : undefined,
+					cache: config.discoveryCache
+						? new DiscoveryCache({ ...config.discoveryCache, metrics })
+						: undefined,
 					skillDirs: config.skillDirs,
 					lazyDiscovery: options.lazyDiscovery,
 				})
@@ -303,6 +310,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 			const cfg = container.resolve<ServerConfig>('Config');
 			const log = container.resolve<StructuredLogger>('Logger');
 			const pers = container.resolve('Persistence') as PersistenceBackend | null;
+			const componentMetrics = container.resolve<Metrics>('Metrics');
 			const tools = container.resolve<ToolRegistry>('ToolRegistry');
 			const skills = container.resolve<SkillRegistry>('SkillRegistry');
 			return new HistoryManager({
@@ -314,6 +322,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 				discoveryCache: cfg.discoveryCache,
 				lazyDiscovery: options.lazyDiscovery,
 				persistence: pers,
+				metrics: componentMetrics,
 				tools,
 				skills,
 			});
@@ -390,7 +399,6 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter {
 	public async processThought(input: v.InferInput<typeof SequentialThinkingSchema>) {
 		const startTime = Date.now();
 		const thoughtInput = input as ThoughtData;
-		this._metrics.counter('thought_requests_total', 1, {}, 'Total thought processing requests');
 		const result = await this._thoughtProcessor.process(thoughtInput);
 		const durationSeconds = (Date.now() - startTime) / 1000;
 		this._metrics.histogram('thought_processing_duration_seconds', durationSeconds, {});
@@ -469,8 +477,6 @@ export async function createServer(
 	return ToolAwareSequentialThinkingServer.create(options);
 }
 
-
-
 // Initialize server
 async function initializeServer(): Promise<ToolAwareSequentialThinkingServer> {
 	// Create logger for initialization
@@ -516,6 +522,7 @@ async function main() {
 		const { SseTransport } = await import('./transport/SseTransport.js');
 		const port = parseInt(process.env.SSE_PORT || '3000', 10);
 		const host = process.env.SSE_HOST || 'localhost';
+		const transportMetrics = thinkingServer.getContainer().resolve<Metrics>('Metrics');
 
 		const sseTransport = new SseTransport({
 			port,
@@ -523,6 +530,7 @@ async function main() {
 			corsOrigin: process.env.CORS_ORIGIN || '*',
 			enableCors: process.env.ENABLE_CORS !== 'false',
 			allowedHosts: process.env.ALLOWED_HOSTS?.split(',').map((hostValue) => hostValue.trim()),
+			metrics: transportMetrics,
 		});
 
 		// Connect the SSE transport
