@@ -2,26 +2,25 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ConnectionPool, createConnectionPool } from '../pool/ConnectionPool.js';
 import type { ThoughtData } from '../types.js';
 
-// Mock the server creation
-vi.mock('../index.js', () => ({
-	ToolAwareSequentialThinkingServer: {
-		create: vi.fn().mockResolvedValue({
-			processThought: vi.fn().mockResolvedValue({
-				content: [{ type: 'text', text: 'Test response' }],
-			}),
-			stop: vi.fn().mockResolvedValue(undefined),
-		}),
-	},
-}));
+const createMockServer = () => ({
+	processThought: vi.fn().mockResolvedValue({
+		content: [{ type: 'text', text: 'Test response' }],
+	}),
+	stop: vi.fn().mockResolvedValue(undefined),
+});
+
+const createMockServerFactory = () => vi.fn().mockImplementation(async () => createMockServer());
 
 describe('ConnectionPool', () => {
 	let pool: ConnectionPool;
 
 	beforeEach(() => {
+		const serverFactory = createMockServerFactory();
 		pool = new ConnectionPool({
 			maxSessions: 5,
 			sessionTimeout: 60000, // 1 minute
 			autoCleanup: false, // Disable for most tests
+			serverFactory,
 		});
 	});
 
@@ -33,7 +32,7 @@ describe('ConnectionPool', () => {
 
 	describe('constructor', () => {
 		it('should use default options when none provided', () => {
-			const defaultPool = new ConnectionPool();
+			const defaultPool = new ConnectionPool({ serverFactory: createMockServerFactory() });
 
 			expect(defaultPool).toBeInstanceOf(ConnectionPool);
 
@@ -47,21 +46,42 @@ describe('ConnectionPool', () => {
 		});
 
 		it('should use custom maxSessions', () => {
-			const customPool = new ConnectionPool({ maxSessions: 10 });
+			const customPool = new ConnectionPool({
+				maxSessions: 10,
+				serverFactory: createMockServerFactory(),
+			});
 			expect(customPool.getStats().maxSessions).toBe(10);
 			customPool.terminate();
 		});
 
 		it('should use custom sessionTimeout', () => {
-			const customPool = new ConnectionPool({ sessionTimeout: 120000 });
+			const customPool = new ConnectionPool({
+				sessionTimeout: 120000,
+				serverFactory: createMockServerFactory(),
+			});
 			expect(customPool.getStats().sessionTimeout).toBe(120000);
 			customPool.terminate();
 		});
 
 		it('should allow disabling autoCleanup', () => {
-			const noCleanupPool = new ConnectionPool({ autoCleanup: false });
+			const noCleanupPool = new ConnectionPool({
+				autoCleanup: false,
+				serverFactory: createMockServerFactory(),
+			});
 			expect(noCleanupPool.getStats().cleanupEnabled).toBe(false);
 			noCleanupPool.terminate();
+		});
+
+		it('should require serverFactory to create sessions', async () => {
+			const missingFactoryPool = new ConnectionPool({
+				autoCleanup: false,
+			});
+
+			await expect(async () => await missingFactoryPool.createSession()).rejects.toThrow(
+				'ConnectionPool requires a serverFactory option to create sessions'
+			);
+
+			await missingFactoryPool.terminate();
 		});
 	});
 
@@ -85,6 +105,7 @@ describe('ConnectionPool', () => {
 			const smallPool = new ConnectionPool({
 				maxSessions: 2,
 				autoCleanup: false,
+				serverFactory: createMockServerFactory(),
 			});
 
 			await smallPool.createSession();
@@ -165,6 +186,7 @@ describe('ConnectionPool', () => {
 			const smallPool = new ConnectionPool({
 				maxSessions: 1,
 				autoCleanup: false,
+				serverFactory: createMockServerFactory(),
 			});
 
 			const id1 = await smallPool.createSession();
@@ -251,13 +273,19 @@ describe('ConnectionPool', () => {
 		});
 
 		it('should track maxSessions correctly', () => {
-			const customPool = new ConnectionPool({ maxSessions: 50 });
+			const customPool = new ConnectionPool({
+				maxSessions: 50,
+				serverFactory: createMockServerFactory(),
+			});
 			expect(customPool.getStats().maxSessions).toBe(50);
 			customPool.terminate();
 		});
 
 		it('should track sessionTimeout correctly', () => {
-			const customPool = new ConnectionPool({ sessionTimeout: 120000 });
+			const customPool = new ConnectionPool({
+				sessionTimeout: 120000,
+				serverFactory: createMockServerFactory(),
+			});
 			expect(customPool.getStats().sessionTimeout).toBe(120000);
 			customPool.terminate();
 		});
@@ -276,14 +304,14 @@ describe('ConnectionPool', () => {
 
 	describe('terminate', () => {
 		it('should terminate gracefully when empty', async () => {
-			await expect(async () => await pool.terminate()).not.toThrow();
+			await expect(pool.terminate()).resolves.toBeUndefined();
 		});
 
 		it('should terminate gracefully with sessions', async () => {
 			await pool.createSession();
 			await pool.createSession();
 
-			await expect(async () => await pool.terminate()).not.toThrow();
+			await expect(pool.terminate()).resolves.toBeUndefined();
 		});
 
 		it('should clear all sessions on terminate', async () => {
@@ -299,7 +327,7 @@ describe('ConnectionPool', () => {
 
 		it('should be idempotent', async () => {
 			await pool.terminate();
-			await expect(async () => await pool.terminate()).not.toThrow();
+			await expect(pool.terminate()).resolves.toBeUndefined();
 		});
 
 		it('should prevent operations after terminate', async () => {
@@ -313,7 +341,9 @@ describe('ConnectionPool', () => {
 
 	describe('createConnectionPool factory', () => {
 		it('should create ConnectionPool with default options', () => {
-			const defaultPool = createConnectionPool();
+			const defaultPool = createConnectionPool({
+				serverFactory: createMockServerFactory(),
+			});
 
 			expect(defaultPool).toBeInstanceOf(ConnectionPool);
 
@@ -327,6 +357,7 @@ describe('ConnectionPool', () => {
 			const customPool = createConnectionPool({
 				maxSessions: 25,
 				sessionTimeout: 60000,
+				serverFactory: createMockServerFactory(),
 			});
 
 			expect(customPool).toBeInstanceOf(ConnectionPool);
@@ -345,6 +376,7 @@ describe('ConnectionPool edge cases', () => {
 		const zeroPool = new ConnectionPool({
 			maxSessions: 0,
 			autoCleanup: false,
+			serverFactory: createMockServerFactory(),
 		});
 
 		await expect(async () => await zeroPool.createSession()).rejects.toThrow(
@@ -358,6 +390,7 @@ describe('ConnectionPool edge cases', () => {
 		const largePool = new ConnectionPool({
 			maxSessions: 10000,
 			autoCleanup: false,
+			serverFactory: createMockServerFactory(),
 		});
 
 		expect(largePool.getStats().maxSessions).toBe(10000);
@@ -369,6 +402,7 @@ describe('ConnectionPool edge cases', () => {
 		const shortTimeoutPool = new ConnectionPool({
 			sessionTimeout: 1, // 1ms
 			autoCleanup: false,
+			serverFactory: createMockServerFactory(),
 		});
 
 		// Session should be created but time out immediately
@@ -388,6 +422,7 @@ describe('ConnectionPool edge cases', () => {
 		const longTimeoutPool = new ConnectionPool({
 			sessionTimeout: 3600000, // 1 hour
 			autoCleanup: false,
+			serverFactory: createMockServerFactory(),
 		});
 
 		expect(longTimeoutPool.getStats().sessionTimeout).toBe(3600000);
@@ -398,13 +433,16 @@ describe('ConnectionPool edge cases', () => {
 
 describe('ConnectionPool cleanup', () => {
 	it('should enable cleanup by default', () => {
-		const defaultPool = new ConnectionPool();
+		const defaultPool = new ConnectionPool({ serverFactory: createMockServerFactory() });
 		expect(defaultPool.getStats().cleanupEnabled).toBe(true);
 		defaultPool.terminate();
 	});
 
 	it('should allow disabling cleanup', () => {
-		const noCleanupPool = new ConnectionPool({ autoCleanup: false });
+		const noCleanupPool = new ConnectionPool({
+			autoCleanup: false,
+			serverFactory: createMockServerFactory(),
+		});
 		expect(noCleanupPool.getStats().cleanupEnabled).toBe(false);
 		noCleanupPool.terminate();
 	});
@@ -412,6 +450,7 @@ describe('ConnectionPool cleanup', () => {
 	it('should use custom cleanup interval', () => {
 		const customIntervalPool = new ConnectionPool({
 			cleanupInterval: 30000, // 30 seconds
+			serverFactory: createMockServerFactory(),
 		});
 
 		expect(customIntervalPool).toBeInstanceOf(ConnectionPool);

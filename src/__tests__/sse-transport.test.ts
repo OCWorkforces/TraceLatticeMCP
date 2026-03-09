@@ -523,9 +523,10 @@ describe('SseTransport', () => {
 		it('should be safe to call multiple times', async () => {
 			await transport.connect({} as McpServer);
 
+			const stopPromise = transport.stop();
+			await expect(stopPromise).resolves.toBeUndefined();
 			await expect(transport.stop()).resolves.toBeUndefined();
-			expect(transport.stop()).resolves.toBeUndefined();
-			expect(transport.stop()).resolves.toBeUndefined();
+			await expect(transport.stop()).resolves.toBeUndefined();
 		});
 	});
 
