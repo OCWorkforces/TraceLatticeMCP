@@ -237,10 +237,11 @@ export abstract class BaseTransport {
 
 		// Check if configured origin is a wildcard pattern
 		if (this._corsOrigin.includes('*')) {
-			// Escape all regex metacharacters EXCEPT *, then replace * with .*
+			// Escape all regex metacharacters EXCEPT *,
+			// then replace * with a hostname-safe pattern (alphanumeric, hyphens, dots)
 			const escaped = this._corsOrigin
 				.replace(/[.+?^${}()|[\]\\]/g, '\\$&') // escape metacharacters (not *)
-				.replace(/\*/g, '.*');                    // convert * to .*
+				.replace(/\*/g, '[a-zA-Z0-9.-]*');    // * matches valid hostname chars only
 			const regex = new RegExp(`^${escaped}$`);
 			return regex.test(origin);
 		}
