@@ -528,3 +528,27 @@ export class PoolTerminatedError extends SequentialThinkingError {
 		this.name = 'PoolTerminatedError';
 	}
 }
+
+/**
+ * Error thrown when input validation fails due to invalid or malicious data.
+ *
+ * This error is thrown when user input fails security or format validation,
+ * such as path traversal attempts or invalid identifier formats.
+ *
+ * @example
+ * ```typescript
+ * if (!BRANCH_ID_PATTERN.test(branchId)) {
+ *   throw new ValidationError('branchId', 'Invalid format');
+ * }
+ * ```
+ */
+export class ValidationError extends SequentialThinkingError {
+	/** The field that failed validation. */
+	public readonly field: string;
+
+	constructor(field: string, reason: string) {
+		super(`Validation failed for '${field}': ${reason}`, 'VALIDATION_ERROR');
+		this.name = 'ValidationError';
+		this.field = field;
+	}
+}

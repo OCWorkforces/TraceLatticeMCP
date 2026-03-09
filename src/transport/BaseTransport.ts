@@ -237,8 +237,11 @@ export abstract class BaseTransport {
 
 		// Check if configured origin is a wildcard pattern
 		if (this._corsOrigin.includes('*')) {
-			const pattern = this._corsOrigin.replace(/\*/g, '.*');
-			const regex = new RegExp(`^${pattern}$`);
+			// Escape all regex metacharacters EXCEPT *, then replace * with .*
+			const escaped = this._corsOrigin
+				.replace(/[.+?^${}()|[\]\\]/g, '\\$&') // escape metacharacters (not *)
+				.replace(/\*/g, '.*');                    // convert * to .*
+			const regex = new RegExp(`^${escaped}$`);
 			return regex.test(origin);
 		}
 

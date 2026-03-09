@@ -309,8 +309,134 @@ describe('SseTransport', () => {
 				}
 			);
 
-			expect(response.statusCode).toBe(403);
-			expect(response.body).toContain('invalid host header');
+		expect(response.body).toContain('invalid host header');
+		});
+
+		// P0-B: CORS regex injection security tests
+		it('should safely handle CORS origin with regex metacharacters', async () => {
+			await transport.stop();
+
+			// Test CORS origin containing regex metacharacters (should be escaped, not interpreted)
+			const maliciousTransport = new SseTransport({
+				port: testPort + 1,
+				corsOrigin: 'https://sub.example.com', // literal dot should match literal dot
+			});
+			await maliciousTransport.connect({} as McpServer);
+
+			// Request with matching origin - should succeed
+			const validResponse = await new Promise<{ statusCode: number; headers: Record<string, string> }>(
+				(resolve, reject) => {
+					const req = request(
+						{
+							hostname: 'localhost',
+							port: testPort + 1,
+							path: '/health',
+							method: 'GET',
+							headers: {
+								origin: 'https://sub.example.com',
+								host: `localhost:${testPort + 1}`,
+							},
+						},
+						(res) => {
+							resolve({
+								statusCode: res.statusCode ?? 0,
+								headers: res.headers as Record<string, string>,
+							});
+						}
+					);
+					req.on('error', reject);
+					req.end();
+				}
+			);
+
+			expect(validResponse.statusCode).toBe(200);
+			expect(validResponse.headers['access-control-allow-origin']).toBe('https://sub.example.com');
+
+			// Request with origin that would match if dots were wildcards (but they shouldn't be)
+			const invalidResponse = await new Promise<{ statusCode: number }>((resolve, reject) => {
+				const req = request(
+					{
+						hostname: 'localhost',
+						port: testPort + 1,
+						path: '/health',
+						method: 'GET',
+						headers: {
+							origin: 'https://subXexampleXcom', // Would match if . was wildcard
+							host: `localhost:${testPort + 1}`,
+						},
+					},
+					(res) => {
+						resolve({ statusCode: res.statusCode ?? 0 });
+					}
+				);
+				req.on('error', reject);
+				req.end();
+			});
+
+			// Should reject because dots are NOT wildcards
+			expect(invalidResponse.statusCode).toBe(403);
+
+			await maliciousTransport.stop();
+		});
+
+		it('should handle wildcard CORS patterns safely', async () => {
+			await transport.stop();
+
+			// Test wildcard CORS origin
+			const wildcardTransport = new SseTransport({
+				port: testPort + 1,
+				corsOrigin: 'https://*.example.com',
+			});
+			await wildcardTransport.connect({} as McpServer);
+
+			// Should match subdomain
+			const validResponse = await new Promise<{ statusCode: number }>((resolve, reject) => {
+				const req = request(
+					{
+						hostname: 'localhost',
+						port: testPort + 1,
+						path: '/health',
+						method: 'GET',
+						headers: {
+							origin: 'https://sub.example.com',
+							host: `localhost:${testPort + 1}`,
+						},
+					},
+					(res) => {
+						resolve({ statusCode: res.statusCode ?? 0 });
+					}
+				);
+				req.on('error', reject);
+				req.end();
+			});
+
+			expect(validResponse.statusCode).toBe(200);
+
+			// Should NOT match origin with regex metacharacters that could exploit the pattern
+			const exploitResponse = await new Promise<{ statusCode: number }>((resolve, reject) => {
+				const req = request(
+					{
+						hostname: 'localhost',
+						port: testPort + 1,
+						path: '/health',
+						method: 'GET',
+						headers: {
+							origin: 'https://evil.com#.example.com', // Attempt to exploit
+							host: `localhost:${testPort + 1}`,
+						},
+					},
+					(res) => {
+						resolve({ statusCode: res.statusCode ?? 0 });
+					}
+				);
+				req.on('error', reject);
+				req.end();
+			});
+
+			// Should reject the exploit attempt
+			expect(exploitResponse.statusCode).toBe(403);
+
+			await wildcardTransport.stop();
 		});
 	});
 

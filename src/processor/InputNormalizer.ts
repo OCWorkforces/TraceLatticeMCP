@@ -12,6 +12,7 @@
  */
 
 import type { ThoughtData } from '../types.js';
+import { ValidationError } from '../errors.js';
 
 /**
  * Default values for missing partial tool recommendation fields.
@@ -22,6 +23,37 @@ const DEFAULT_TOOL_RATIONALE = '';
 const DEFAULT_STEP_OUTCOME = '';
 
 /**
+ * Valid branch ID pattern: alphanumeric, hyphens, underscores only.
+ * Prevents path traversal attacks by rejecting special characters like / . \ etc.
+ */
+const BRANCH_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
+
+/**
+ * Sanitizes and validates a branch ID to prevent path traversal attacks.
+ *
+ * @param branchId - The branch ID to sanitize
+ * @returns The sanitized branch ID
+ * @throws ValidationError if the branch ID contains invalid characters
+ *
+ * @example
+ * ```typescript
+ * sanitizeBranchId('my-branch_01'); // 'my-branch_01'
+ * sanitizeBranchId('../etc/passwd'); // throws ValidationError
+ * ```
+ */
+export function sanitizeBranchId(branchId: string): string {
+	// Validate format
+	if (!BRANCH_ID_PATTERN.test(branchId)) {
+		throw new ValidationError(
+			'branch_id',
+			'Invalid format - must be 1-64 alphanumeric characters, hyphens, or underscores only'
+		);
+	}
+	return branchId;
+}
+
+/**
+ * Normalizes tool recommendation objects with default values.
  * Normalizes tool recommendation objects with default values.
  *
  * Fills in sensible defaults for missing optional fields:
@@ -208,6 +240,11 @@ export function normalizeInput(input: unknown): ThoughtData {
 				? normalizeStepRecommendation(step as Record<string, unknown>, true) // lenient mode
 				: step
 		);
+	}
+
+	// Sanitize branch_id to prevent path traversal attacks
+	if (typeof normalized.branch_id === 'string') {
+		normalized.branch_id = sanitizeBranchId(normalized.branch_id);
 	}
 
 	return normalized as unknown as ThoughtData;

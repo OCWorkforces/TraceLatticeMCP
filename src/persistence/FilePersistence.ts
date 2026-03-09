@@ -2,7 +2,7 @@ import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend
 import type { ThoughtData } from '../types.js';
 import { mkdir, writeFile, readFile, readdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 
 /**
@@ -41,13 +41,42 @@ export class FilePersistence implements PersistenceBackend {
 	/**
 	 * Initialize the persistence directory structure.
 	 */
-	private async _ensureDirectories(): Promise<void> {
+private async _ensureDirectories(): Promise<void> {
 		if (!existsSync(this._dataDir)) {
 			await mkdir(this._dataDir, { recursive: true });
 		}
 		if (this._persistBranches && !existsSync(this._branchesDir)) {
 			await mkdir(this._branchesDir, { recursive: true });
 		}
+	}
+
+	/**
+	 * Validates branch ID format and resolves the path safely.
+	 *
+	 * This method provides defense-in-depth security by:
+	 * 1. Validating the branch ID format (alphanumeric, hyphens, underscores only)
+	 * 2. Preventing path traversal attacks
+	 *
+	 * @param branchId - The branch ID to validate and resolve
+	 * @returns The safe, resolved branch file path
+	 * @throws Error if branch ID is invalid or path traversal is detected
+	 */
+	private _safeBranchPath(branchId: string): string {
+		// Validate format first (must be alphanumeric with hyphens/underscores, 1-64 chars)
+		const validBranchIdPattern = /^[a-zA-Z0-9_-]{1,64}$/;
+		if (!validBranchIdPattern.test(branchId)) {
+			throw new Error(`Invalid branch ID: must be 1-64 alphanumeric characters, hyphens, or underscores only`);
+		}
+
+		const resolved = resolve(this._branchesDir, `${branchId}.json`);
+		const normalizedBranchesDir = resolve(this._branchesDir);
+
+		// Ensure the resolved path is still within branches directory
+		if (!resolved.startsWith(normalizedBranchesDir + sep)) {
+			throw new Error(`Invalid branch ID: path traversal detected`);
+		}
+
+		return resolved;
 	}
 
 	public async saveThought(thought: ThoughtData): Promise<void> {
@@ -92,7 +121,7 @@ export class FilePersistence implements PersistenceBackend {
 
 		await this._ensureDirectories();
 
-		const branchPath = join(this._branchesDir, `${branchId}.json`);
+		const branchPath = this._safeBranchPath(branchId);
 		await writeFile(branchPath, JSON.stringify(thoughts, null, 2), 'utf-8');
 	}
 
@@ -101,7 +130,7 @@ export class FilePersistence implements PersistenceBackend {
 			return undefined;
 		}
 
-		const branchPath = join(this._branchesDir, `${branchId}.json`);
+		const branchPath = this._safeBranchPath(branchId);
 
 		try {
 			if (!existsSync(branchPath)) {
