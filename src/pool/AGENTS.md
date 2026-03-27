@@ -7,7 +7,6 @@ Connection pool for multi-user SSE sessions with per-user isolation, timeouts, a
 ## WHERE TO LOOK
 
 - `src/pool/ConnectionPool.ts` - Session map, lifecycle, cleanup, timeout logic
-- `src/pool/index.ts` - Factory/export surface for pool wiring
 - `src/transport/SseTransport.ts` - Integration point using pool for multi-user sessions
 - `src/HistoryManager.ts` - Per-session history owned by pool sessions
 

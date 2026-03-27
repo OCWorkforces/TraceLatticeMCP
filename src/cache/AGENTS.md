@@ -7,7 +7,6 @@ LRU + TTL cache for tool/skill discovery results.
 ## WHERE TO LOOK
 
 - `src/cache/DiscoveryCache.ts` - cache implementation (LRU, TTL, eviction)
-- `src/cache/index.ts` - exports and factory surface
 
 ## CONVENTIONS
 

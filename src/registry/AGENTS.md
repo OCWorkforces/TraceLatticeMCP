@@ -1,32 +1,28 @@
 # REGISTRY MODULE
 
-**Generated:** 2026-01-26
+**Updated:** 2026-03-27
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW
 
-Manages discovery and lifecycle of MCP tools and Claude Code skills.
+Manages discovery and lifecycle of MCP tools and Claude Code skills via `BaseRegistry<T>` generic base class.
 
 ## STRUCTURE
 
 ```
 src/registry/
-├── ToolRegistry.ts   # MCP tool management
-├── SkillRegistry.ts  # Claude Skill management
-└── index.ts          # Exports
+├── BaseRegistry.ts    # Generic CRUD + discovery + LRU cache + frontmatter parsing
+├── ToolRegistry.ts    # MCP tool management (extends BaseRegistry)
+└── SkillRegistry.ts   # Claude Skill management (extends BaseRegistry)
 ```
 
-## DISCOVERY LOGIC
+## BASE REGISTRY
 
-- **Tools**: `.claude/tools/` (local) -> `~/.claude/tools/` (global)
-- **Skills**: `.claude/skills/` (local) -> `~/.claude/skills/` (global)
-- **Caching**: Uses `DiscoveryCache` (LRU) to prevent re-reading files.
+Generic class handling: add/get/remove/update/clear (CRUD), `discoverAsync()` with file scanning, frontmatter parsing (`---yaml---` blocks), LRU cache via `IDiscoveryCache`, deduplication by name.
+
+## DISCOVERY
+
+- **Tools**: `.claude/tools/` (local) → `~/.claude/tools/` (global)
+- **Skills**: `.claude/skills/` (local) → `~/.claude/skills/` (global)
+- **Caching**: Uses `DiscoveryCache` (LRU+TTL) to prevent re-reading files.
 - **Watchers**: Optional file watchers trigger re-discovery.
-
-## USAGE
-
-```typescript
-const registry = new ToolRegistry(logger, cache);
-await registry.discoverAsync();
-const tool = registry.getTool('my-tool');
-```

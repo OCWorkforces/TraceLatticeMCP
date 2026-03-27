@@ -8,8 +8,6 @@ Chokidar-backed watchers keep tool/skill registries in sync with filesystem chan
 
 - `src/watchers/SkillWatcher.ts` - Watches `.claude/skills/` (project) + `~/.claude/skills/` (user); events: `add`, `change`, `unlink`.
 - `src/watchers/ToolWatcher.ts` - Watches `.claude/tools/` (project) + `~/.claude/tools/` (user); events: `add`, `unlink` for `.tool.md` only.
-- `src/watchers/index.ts` - Public exports.
-
 ## CONVENTIONS
 
 - **File filters:** skills accept `.md`, `.yml`, `.yaml`; tools accept `.tool.md` only.
