@@ -3,6 +3,7 @@ import {
 	SequentialThinkingSchema,
 	PartialToolRecommendationSchema,
 	PartialStepRecommendationSchema,
+	SkillRecommendationSchema,
 } from '../schema.js';
 import { safeParse } from 'valibot';
 
@@ -405,7 +406,68 @@ describe('SequentialThinkingSchema with lenient previous_steps', () => {
 				},
 			],
 		};
-		const result = safeParse(SequentialThinkingSchema, input);
+	const result = safeParse(SequentialThinkingSchema, input);
+	expect(result.success).toBe(false);
+});
+});
+
+describe('SkillRecommendationSchema - optional fields (Bug 1 fix)', () => {
+
+
+	it('should accept skill with only skill_name (confidence/rationale optional)', () => {
+		const minimal = { skill_name: 'ast-grep' };
+		const result = safeParse(SkillRecommendationSchema, minimal);
+		expect(result.success).toBe(true);
+	});
+
+	it('should accept skill with only skill_name and confidence', () => {
+		const minimal = { skill_name: 'ast-grep', confidence: 0.8 };
+		const result = safeParse(SkillRecommendationSchema, minimal);
+		expect(result.success).toBe(true);
+	});
+
+	it('should accept skill with only skill_name and rationale', () => {
+		const minimal = { skill_name: 'ast-grep', rationale: 'Need AST search' };
+		const result = safeParse(SkillRecommendationSchema, minimal);
+		expect(result.success).toBe(true);
+	});
+
+	it('should accept full skill recommendation', () => {
+		const full = {
+			skill_name: 'commit',
+			confidence: 0.95,
+			rationale: 'Handles git commits',
+			priority: 1,
+		};
+		const result = safeParse(SkillRecommendationSchema, full);
+		expect(result.success).toBe(true);
+	});
+
+	it('should reject confidence outside 0-1 range', () => {
+		const invalid = { skill_name: 'ast-grep', confidence: 1.5 };
+		const result = safeParse(SkillRecommendationSchema, invalid);
 		expect(result.success).toBe(false);
+	});
+
+	it('should require skill_name', () => {
+		const missing = { confidence: 0.5, rationale: 'test' };
+		const result = safeParse(SkillRecommendationSchema, missing);
+		expect(result.success).toBe(false);
+	});
+
+	it('should accept minimal skill in current_step via SequentialThinkingSchema', () => {
+		const input = {
+			thought: 'Test thought',
+			thought_number: 1,
+			total_thoughts: 1,
+			current_step: {
+				step_description: 'Test step',
+				recommended_tools: [{ tool_name: 'Read', confidence: 0.9, rationale: 'test' }],
+				recommended_skills: [{ skill_name: 'ast-grep' }],
+				expected_outcome: 'Done',
+			},
+		};
+		const result = safeParse(SequentialThinkingSchema, input);
+		expect(result.success).toBe(true);
 	});
 });

@@ -20,6 +20,13 @@
  */
 
 export { BaseTransport } from './BaseTransport.js';
+export type { ITransport, TransportOptions } from './BaseTransport.js';
 
 export { SseTransport, createSseTransport } from './SseTransport.js';
 export type { SseTransportOptions } from './SseTransport.js';
+
+export { HttpTransport, createHttpTransport } from './HttpTransport.js';
+export type { HttpTransportOptions } from './HttpTransport.js';
+
+export { StreamableHttpTransport, createStreamableHttpTransport } from './StreamableHttpTransport.js';
+export type { StreamableHttpTransportOptions } from './StreamableHttpTransport.js';

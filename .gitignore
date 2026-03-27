@@ -208,3 +208,5 @@ __marimo__/
 
 node_modules/
 coverage/
+.sisyphus/
+.agents/

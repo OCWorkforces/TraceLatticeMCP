@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { cpus } from 'node:os';
-import type { ThoughtData } from '../types.js';
+import type { ThoughtData, IDisposable } from '../types.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 
 export interface WorkerManagerOptions {
@@ -87,8 +87,9 @@ export interface WorkerResponse {
  * Each worker runs in a separate process and can process thoughts independently.
  * The manager distributes incoming requests across available workers.
  */
-export class WorkerManager {
-	private _workers: Worker[] = [];
+export class WorkerManager implements IDisposable {
+	private _workers: Map<number, Worker> = new Map();
+	private _nextWorkerId = 0;
 	private _maxWorkers: number;
 	private _workerScript: string;
 	private _workerTimeout: number;
@@ -143,7 +144,7 @@ export class WorkerManager {
 
 		// Spawn workers
 		for (let i = 0; i < this._maxWorkers; i++) {
-			await this._spawnWorker(i);
+			await this._spawnWorker();
 		}
 
 		// Start health check if enabled
@@ -151,13 +152,14 @@ export class WorkerManager {
 			this._startHealthCheck();
 		}
 
-		this._logger.info(`WorkerManager started with ${this._workers.length} workers`);
+		this._logger.info(`WorkerManager started with ${this._workers.size} workers`);
 	}
 
 	/**
 	 * Spawn a single worker process.
 	 */
-	private async _spawnWorker(index: number): Promise<void> {
+	private async _spawnWorker(reuseId?: number): Promise<void> {
+		const workerId = reuseId !== undefined ? reuseId : this._nextWorkerId++;
 		const worker = new Worker(this._workerScript, {
 			resourceLimits: {
 				maxOldGenerationSizeMb: 100, // Limit memory usage
@@ -165,31 +167,31 @@ export class WorkerManager {
 		});
 
 		worker.on('online', () => {
-			this._logger.info(`Worker ${index} is online`);
-			this._workerRetryCount.delete(index);
+			this._logger.info(`Worker ${workerId} is online`);
+			this._workerRetryCount.delete(workerId);
 		});
 
 		worker.on('message', (message: WorkerResponse) => {
-			this._handleWorkerMessage(index, message);
+			this._handleWorkerMessage(workerId, message);
 		});
 
 		worker.on('error', () => {
-			this._logger.error(`Worker ${index} error`);
-			this._handleWorkerError(index);
+			this._logger.error(`Worker ${workerId} error`);
+			this._handleWorkerError(workerId);
 		});
 
 		worker.on('exit', (code) => {
-			this._logger.info(`Worker ${index} exited with code ${code}`);
-			this._handleWorkerExit(index, code);
+			this._logger.info(`Worker ${workerId} exited with code ${code}`);
+			this._handleWorkerExit(workerId, code);
 		});
 
-		this._workers.push(worker);
+		this._workers.set(workerId, worker);
 	}
 
 	/**
 	 * Handle incoming messages from workers.
 	 */
-	private _handleWorkerMessage(workerIndex: number, message: WorkerResponse): void {
+	private _handleWorkerMessage(workerId: number, message: WorkerResponse): void {
 		if (message.type === 'result' && message.requestId) {
 			const callback = this._activeRequests.get(message.requestId);
 			if (callback) {
@@ -204,54 +206,54 @@ export class WorkerManager {
 			}
 		} else if (message.type === 'health') {
 			// Health check response - worker is alive
-			this._workerRetryCount.delete(workerIndex);
+			this._workerRetryCount.delete(workerId);
 		}
 	}
 
 	/**
 	 * Handle worker errors.
 	 */
-	private _handleWorkerError(workerIndex: number): void {
-		const retryCount = this._workerRetryCount.get(workerIndex) || 0;
+	private _handleWorkerError(workerId: number): void {
+		const retryCount = this._workerRetryCount.get(workerId) || 0;
 
 		if (retryCount < this._maxRetries) {
-			this._workerRetryCount.set(workerIndex, retryCount + 1);
+			this._workerRetryCount.set(workerId, retryCount + 1);
 			this._logger.info(
-				`Restarting worker ${workerIndex} (attempt ${retryCount + 1}/${this._maxRetries})`
+				`Restarting worker ${workerId} (attempt ${retryCount + 1}/${this._maxRetries})`
 			);
 
 			// Remove failed worker
-			const worker = this._workers[workerIndex];
+			const worker = this._workers.get(workerId);
 			if (worker) {
 				try {
 					worker.terminate();
 				} catch {
 					// Ignore
 				}
-				this._workers.splice(workerIndex, 1);
+				this._workers.delete(workerId);
 			}
 
 			// Spawn new worker after delay
 			setTimeout(
 				() => {
 					if (!this._terminated) {
-						this._spawnWorker(workerIndex).catch((spawnErr) => {
-							this._logger.error(`Failed to restart worker ${workerIndex}`, { error: spawnErr });
+						this._spawnWorker(workerId).catch((spawnErr) => {
+							this._logger.error(`Failed to restart worker ${workerId}`, { error: spawnErr });
 						});
 					}
 				},
 				1000 * (retryCount + 1)
 			);
 		} else {
-			this._logger.error(`Worker ${workerIndex} exceeded max retries, removing from pool`);
-			const worker = this._workers[workerIndex];
+			this._logger.error(`Worker ${workerId} exceeded max retries, removing from pool`);
+			const worker = this._workers.get(workerId);
 			if (worker) {
 				try {
 					worker.terminate();
 				} catch {
 					// Ignore
 				}
-				this._workers.splice(workerIndex, 1);
+				this._workers.delete(workerId);
 			}
 		}
 	}
@@ -259,16 +261,13 @@ export class WorkerManager {
 	/**
 	 * Handle worker exit.
 	 */
-	private _handleWorkerExit(workerIndex: number, code: number): void {
-		const worker = this._workers[workerIndex];
-		if (worker) {
-			this._workers.splice(workerIndex, 1);
-		}
+	private _handleWorkerExit(workerId: number, code: number): void {
+		this._workers.delete(workerId);
 
 		// Spawn replacement worker if not terminated
 		if (!this._terminated && code !== 0) {
-			this._logger.info(`Spawning replacement worker ${workerIndex}`);
-			this._spawnWorker(workerIndex).catch((err) => {
+			this._logger.info(`Spawning replacement worker ${workerId}`);
+			this._spawnWorker(workerId).catch((err) => {
 				this._logger.error(`Failed to spawn replacement worker`, err);
 			});
 		}
@@ -279,14 +278,11 @@ export class WorkerManager {
 	 */
 	private _startHealthCheck(): void {
 		this._healthCheckTimer = setInterval(() => {
-			for (let i = 0; i < this._workers.length; i++) {
-				const worker = this._workers[i];
-				if (worker) {
-					try {
-						worker.postMessage({ type: 'health-check' });
-					} catch {
-						// Worker is dead, will be handled by exit event
-					}
+			for (const [, worker] of this._workers.entries()) {
+				try {
+					worker.postMessage({ type: 'health-check' });
+				} catch {
+					// Worker is dead, will be handled by exit event
 				}
 			}
 		}, this._healthCheckInterval);
@@ -303,20 +299,22 @@ export class WorkerManager {
 			throw new Error('WorkerManager has been terminated');
 		}
 
-		if (this._workers.length === 0) {
+		if (this._workers.size === 0) {
 			throw new Error('No workers available');
 		}
 
-		// Get next available worker (round-robin)
-		const workerIndex = this._nextWorkerIndex;
-		const worker = this._workers[workerIndex];
+		// Get next available worker (round-robin over Map keys)
+		const workerIds = Array.from(this._workers.keys());
+		const index = this._nextWorkerIndex % workerIds.length;
+		const workerId = workerIds[index]!;
+		const worker = this._workers.get(workerId);
 
 		if (!worker) {
-			throw new Error(`Worker ${workerIndex} not available`);
+			throw new Error(`Worker ${workerId} not available`);
 		}
 
 		// Increment next worker index (round-robin)
-		this._nextWorkerIndex = (this._nextWorkerIndex + 1) % this._workers.length;
+		this._nextWorkerIndex = (this._nextWorkerIndex + 1) % workerIds.length;
 
 		// Generate unique request ID
 		const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
@@ -363,7 +361,7 @@ export class WorkerManager {
 		healthCheckEnabled: boolean;
 	} {
 		return {
-			activeWorkers: this._workers.length,
+			activeWorkers: this._workers.size,
 			activeRequests: this._activeRequests.size,
 			maxWorkers: this._maxWorkers,
 			healthCheckEnabled: this._enableHealthCheck,
@@ -387,7 +385,7 @@ export class WorkerManager {
 		}
 
 		// Terminate all workers
-		const terminatePromises = this._workers.map((worker) => {
+		const terminatePromises = Array.from(this._workers.values()).map((worker) => {
 			return new Promise<void>((resolve) => {
 				worker
 					.terminate()
@@ -397,17 +395,26 @@ export class WorkerManager {
 		});
 
 		await Promise.all(terminatePromises);
-		this._workers = [];
+		this._workers.clear();
 		this._activeRequests.clear();
 
 		this._logger.info('WorkerManager terminated');
 	}
 
 	/**
+	 * Dispose of the worker manager, releasing all resources.
+	 * Implements the IDisposable interface.
+	 * Delegates to terminate() for backward compatibility.
+	 */
+	async dispose(): Promise<void> {
+		await this.terminate();
+	}
+
+	/**
 	 * Check if worker manager is running.
 	 */
 	isRunning(): boolean {
-		return !this._terminated && this._workers.length > 0;
+		return !this._terminated && this._workers.size > 0;
 	}
 }
 

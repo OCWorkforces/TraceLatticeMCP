@@ -3,7 +3,7 @@ import type { ThoughtData } from '../types.js';
 /**
  * Persistence backend interface for storing thought history and branches.
  *
- * Implementations can store data in various formats (JSON files, SQLite, Redis, etc.)
+ * Implementations can store data in various formats (JSON files, SQLite, etc.)
  * while providing a unified API for HistoryManager.
  */
 export interface PersistenceBackend {

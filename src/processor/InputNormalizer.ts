@@ -23,6 +23,12 @@ const DEFAULT_TOOL_RATIONALE = '';
 const DEFAULT_STEP_OUTCOME = '';
 
 /**
+ * Default values for missing skill recommendation fields.
+ */
+const DEFAULT_SKILL_CONFIDENCE = 0.5;
+const DEFAULT_SKILL_PRIORITY = 999;
+const DEFAULT_SKILL_RATIONALE = '';
+/**
  * Valid branch ID pattern: alphanumeric, hyphens, underscores only.
  * Prevents path traversal attacks by rejecting special characters like / . \ etc.
  */
@@ -93,6 +99,44 @@ function normalizeToolRecommendation(tool: Record<string, unknown>): Record<stri
 }
 
 /**
+ * Normalizes skill recommendation objects with default values.
+ *
+ * Fills in sensible defaults for missing optional fields:
+ * - `confidence`: 0.5
+ * - `priority`: 999
+ * - `rationale`: empty string
+ *
+ * @param skill - The skill recommendation to normalize
+ * @returns The normalized skill recommendation with defaults filled in
+ *
+ * @example
+ * ```typescript
+ * const input = { skill_name: 'ast-grep' };
+ * const normalized = normalizeSkillRecommendation(input);
+ * // { skill_name: 'ast-grep', confidence: 0.5, priority: 999, rationale: '' }
+ * ```
+ */
+function normalizeSkillRecommendation(skill: Record<string, unknown>): Record<string, unknown> {
+	const normalized: Record<string, unknown> = { ...skill };
+
+	// Fill in default confidence if missing
+	if (!('confidence' in normalized) || normalized.confidence === undefined) {
+		normalized.confidence = DEFAULT_SKILL_CONFIDENCE;
+	}
+
+	// Fill in default priority if missing
+	if (!('priority' in normalized) || normalized.priority === undefined) {
+		normalized.priority = DEFAULT_SKILL_PRIORITY;
+	}
+
+	// Fill in default rationale if missing
+	if (!('rationale' in normalized) || normalized.rationale === undefined) {
+		normalized.rationale = DEFAULT_SKILL_RATIONALE;
+	}
+
+	return normalized;
+}
+/**
  * Normalizes step recommendation objects.
  *
  * Handles common field name mistakes:
@@ -152,6 +196,14 @@ function normalizeStepRecommendation(
 		);
 	}
 
+	// Normalize recommended_skills array if present
+	if (Array.isArray(normalized.recommended_skills)) {
+		normalized.recommended_skills = normalized.recommended_skills.map((skill) =>
+			typeof skill === 'object' && skill !== null
+				? normalizeSkillRecommendation(skill as Record<string, unknown>)
+				: skill
+		);
+	}
 	// In lenient mode, fill in default expected_outcome if missing
 	if (lenient && !('expected_outcome' in normalized)) {
 		normalized.expected_outcome = DEFAULT_STEP_OUTCOME;

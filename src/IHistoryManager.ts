@@ -80,4 +80,18 @@ export interface IHistoryManager {
 	 * Clears all history and branches.
 	 */
 	clear(): void;
+	/**
+	 * Gets the most recently available MCP tools from the session.
+	 *
+	 * @returns The last-seen array of MCP tool names, or undefined if never set
+	 */
+	getAvailableMcpTools(): string[] | undefined;
+
+	/**
+	 * Gets the most recently available skills from the session.
+	 *
+	 * @returns The last-seen array of skill names, or undefined if never set
+	 */
+	getAvailableSkills(): string[] | undefined;
+
 }

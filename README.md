@@ -11,169 +11,107 @@ An MCP (Model Context Protocol) server that provides sequential thinking capabil
 - **History Management**: Configurable thought history with automatic trimming
 - **Type-Safe**: Full TypeScript support with Valibot validation
 
-## Installation
+## Install
+
+Requires [Node.js](https://nodejs.org/) v18+.
+
+From the project root:
 
 ```bash
-npm install sequentialthinking-tools
+chmod +x install-mcp-sequentialthinking-tools.sh
+./install-mcp-sequentialthinking-tools.sh
 ```
 
-## Quick Start
+This script will:
+1. Check prerequisites (Node.js, npm)
+2. Install dependencies and build the project
+3. Install `sequentialthinking-tools` globally
 
-```typescript
-import { McpServer } from 'tmcp';
-import { ToolAwareSequentialThinkingServer } from 'sequentialthinking-tools';
+Verify the installation:
 
-const thinkingServer = new ToolAwareSequentialThinkingServer({
-	maxHistorySize: 1000,
-});
-
-// Discover Claude Code skills automatically
-thinkingServer.discoverSkills();
-
-// Register with MCP server
-server.tool(
-	{
-		name: 'sequentialthinking_tools',
-		description: 'Sequential thinking with tool recommendations',
-		schema: SequentialThinkingSchema,
-	},
-	async (input) => {
-		return thinkingServer.processThought(input);
-	}
-);
+```bash
+sequentialthinking-tools --help
 ```
 
-## Usage
+> **Tip:** Use `./install-mcp-sequentialthinking-tools.sh --link` for development mode (symlinks instead of copying, rebuild with `npm run build` after changes).
 
-### Basic Usage
+## Configure MCP Client
 
-```typescript
-await thinkingServer.processThought({
-	thought: 'I need to analyze the codebase structure',
-	thought_number: 1,
-	total_thoughts: 5,
-	next_thought_needed: true,
-	available_mcp_tools: ['mcp-omnisearch', 'mcp-turso-cloud'],
-	current_step: {
-		step_description: 'Explore project structure',
-		recommended_tools: [
-			{
-				tool_name: 'mcp-omnisearch',
-				confidence: 0.9,
-				rationale: 'Best for file discovery and code search',
-				priority: 1,
-			},
-		],
-		expected_outcome: 'List of main project directories and files',
-	},
-});
+The server uses **stdio transport** by default — no extra configuration needed. Add it to your MCP client:
+
+### Claude Code
+
+**User-scoped** (`~/.claude.json`) or **project-scoped** (`.mcp.json` in project root):
+
+```json
+{
+  "mcpServers": {
+    "sequentialthinking-tools": {
+      "command": "sequentialthinking-tools"
+    }
+  }
+}
 ```
 
-### Skill Discovery
+Or via CLI:
 
-The server automatically discovers skills from:
+```bash
+claude mcp add sequentialthinking-tools -- sequentialthinking-tools
+```
 
-- `.claude/skills/` (project-local, highest priority)
-- `~/.claude/skills/` (user-global)
+### Codex CLI
 
-Skills are defined in `SKILL.md` or `skill.md` files with YAML frontmatter:
+**User-scoped** (`~/.codex/config.toml`) or **project-scoped** (`.codex/config.toml`):
 
-```yaml
----
-name: commit
-description: Handles git commit workflow
-user-invocable: true
-allowed-tools: [git]
----
-# Commit Skill
+```toml
+[mcp_servers.sequentialthinking-tools]
+command = "sequentialthinking-tools"
+```
 
-Guidelines for git commits...
+Or via CLI:
+
+```bash
+codex mcp add sequentialthinking-tools -- sequentialthinking-tools
+```
+
+### OpenCode
+
+**Global** (`~/.config/opencode/opencode.json`) or **project-scoped** (`.opencode.json`):
+
+```json
+{
+  "mcpServers": {
+    "sequentialthinking-tools": {
+      "command": "sequentialthinking-tools",
+      "type": "stdio"
+    }
+  }
+}
 ```
 
 ## Configuration
 
-### Environment Variables
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MAX_HISTORY_SIZE` | `1000` | Maximum thoughts to keep in history |
 
-| Variable           | Default | Description                                   |
-| ------------------ | ------- | --------------------------------------------- |
-| `MAX_HISTORY_SIZE` | `1000`  | Maximum number of thoughts to keep in history |
+## Transports
 
-### Constructor Options
+The server supports three transports via the `TRANSPORT_TYPE` environment variable:
 
-```typescript
-interface ServerOptions {
-	maxHistorySize?: number; // Default: 1000
-}
-```
-
-## API Reference
-
-### Methods
-
-#### `addTool(tool: Tool): void`
-
-Register an MCP tool with the server.
-
-#### `addSkill(skill: Skill): void`
-
-Register a Claude Code skill with the server.
-
-#### `removeTool(name: string): boolean`
-
-Remove a tool by name. Returns `true` if successful.
-
-#### `removeSkill(name: string): boolean`
-
-Remove a skill by name. Returns `true` if successful.
-
-#### `updateTool(name: string, updates: Partial<Tool>): boolean`
-
-Update tool properties. Returns `true` if successful.
-
-#### `updateSkill(name: string, updates: Partial<Skill>): boolean`
-
-Update skill properties. Returns `true` if successful.
-
-#### `getAvailableTools(): Tool[]`
-
-Get all registered tools.
-
-#### `getAvailableSkills(): Skill[]`
-
-Get all registered skills.
-
-#### `discoverSkills(): number`
-
-Scan for skills in standard locations. Returns the number of skills discovered.
-
-#### `clearHistory(): void`
-
-Clear thought history and branches.
-
-#### `processThought(input): Promise<ToolResponse>`
-
-Process a thought step in the sequential thinking chain.
-
+| Transport | Use Case | Command |
+|-----------|----------|---------|
+| `stdio` (default) | Local MCP clients | `sequentialthinking-tools` |
+| `sse` (legacy) | Multi-user, backwards compat | `TRANSPORT_TYPE=sse sequentialthinking-tools` |
+| `streamable-http` | Production deployments | `TRANSPORT_TYPE=streamable-http sequentialthinking-tools` |
 ## Development
 
 ```bash
-# Install dependencies
 npm install
-
-# Run in development mode with MCP inspector
-npm run dev
-
-# Run tests
+npm run dev        # MCP inspector
 npm test
-
-# Type checking
 npm run type-check
-
-# Linting
 npm run lint
-
-# Format code
-npm run format
 ```
 
 ## License

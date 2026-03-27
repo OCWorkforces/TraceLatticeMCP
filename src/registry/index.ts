@@ -16,3 +16,5 @@
 
 export { ToolRegistry } from './ToolRegistry.js';
 export { SkillRegistry } from './SkillRegistry.js';
+export { BaseRegistry } from './BaseRegistry.js';
+export type { BaseRegistryOptions } from './BaseRegistry.js';

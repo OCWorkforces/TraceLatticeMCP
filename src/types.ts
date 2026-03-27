@@ -298,3 +298,22 @@ export interface ServerConfig {
 	/** Map of registered skills indexed by their unique names. */
 	available_skills: Map<string, Skill>;
 }
+
+/**
+ * Interface for services that need resource cleanup.
+ * Implement this on any service that holds resources (connections, file handles, timers, etc.)
+ *
+ * @example
+ * ```typescript
+ * class MyService implements IDisposable {
+ *   async dispose(): Promise<void> {
+ *     await this.closeConnections();
+ *     this.clearTimers();
+ *   }
+ * }
+ * ```
+ */
+export interface IDisposable {
+	/** Release all resources held by this service. */
+	dispose(): Promise<void>;
+}

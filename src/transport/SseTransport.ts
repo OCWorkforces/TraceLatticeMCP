@@ -4,6 +4,9 @@
  * This transport allows multiple concurrent connections over HTTP using Server-Sent Events,
  * enabling multi-user scenarios and horizontal scaling.
  *
+ * When a ConnectionPool is provided, each SSE client gets an isolated session with its own
+ * thought history. Without a pool, all clients share a single server instance (backward compatible).
+ *
  * @example
  * ```typescript
  * const transport = new SseTransport({
@@ -21,13 +24,19 @@ import { safeParse } from 'valibot';
 import { JsonRpcRequestSchema } from '../schema.js';
 import type { Metrics } from '../metrics/metrics.impl.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
-
+import type { ConnectionPool } from '../pool/ConnectionPool.js';
 /**
  * SSE-specific transport options extending base TransportOptions.
  */
 export interface SseTransportOptions extends TransportOptions {
 	path?: string;
 	metrics?: Metrics;
+	/**
+	 * Optional connection pool for per-session state isolation.
+	 * When provided, each SSE client gets an isolated thought history.
+	 * When omitted, all clients share a single server instance (backward compatible).
+	 */
+	connectionPool?: ConnectionPool;
 }
 
 /**
@@ -52,13 +61,16 @@ export class SseTransport extends BaseTransport {
 	private _server: ReturnType<typeof createServer>;
 	private _path: string;
 	private _clients: Set<ServerResponse> = new Set();
+	private _clientSessionMap: Map<ServerResponse, string> = new Map();
 	private _messageQueue: Map<string, unknown[]> = new Map();
 	private _metrics?: Metrics;
+	private _connectionPool?: ConnectionPool;
 
 	constructor(options: SseTransportOptions = {}) {
 		super(options);
 		this._path = options.path ?? '/sse';
 		this._metrics = options.metrics;
+		this._connectionPool = options.connectionPool;
 		this._updateActiveConnectionsMetric();
 
 		this._server = createServer((req, res) => this._handleRequest(req, res));
@@ -86,7 +98,16 @@ export class SseTransport extends BaseTransport {
 	 * Handle incoming HTTP requests
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+		const startTime = Date.now();
+		const requestPath = req.url || '/';
+		const requestMethod = req.method || 'GET';
+		this._metrics?.counter('http_requests_total', 1, { transport: 'sse', method: requestMethod, path: requestPath }, 'Total HTTP requests');
+		res.once('finish', () => {
+			const durationSeconds = (Date.now() - startTime) / 1000;
+			this._metrics?.histogram('http_request_duration_seconds', durationSeconds, { transport: 'sse', path: requestPath });
+		});
 		if (!this.validateHostHeader(req)) {
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'sse', error_type: 'forbidden' }, 'Total HTTP request errors');
 			res.writeHead(403, { 'Content-Type': 'application/json' });
 			res.end(JSON.stringify({ error: 'Forbidden - invalid host header' }));
 			return;
@@ -97,6 +118,7 @@ export class SseTransport extends BaseTransport {
 		// Check rate limit first
 		const clientIp = this.getClientIp(req);
 		if (this.checkRateLimit(clientIp)) {
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'sse', error_type: 'rate_limit' }, 'Total HTTP request errors');
 			res.writeHead(429, {
 				'Content-Type': 'application/json',
 				'Retry-After': '60',
@@ -107,6 +129,7 @@ export class SseTransport extends BaseTransport {
 
 		// Validate CORS origin
 		if (!this.validateCorsOrigin(req)) {
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'sse', error_type: 'forbidden' }, 'Total HTTP request errors');
 			res.writeHead(403, { 'Content-Type': 'application/json' });
 			res.end(JSON.stringify({ error: 'Forbidden - invalid origin' }));
 			return;
@@ -122,12 +145,12 @@ export class SseTransport extends BaseTransport {
 		if (sanitizedParams.session || sanitizedParams.sessionId) {
 			const sessionId = (sanitizedParams.session ?? sanitizedParams.sessionId)!;
 			if (!this.validateSessionId(sessionId)) {
+				this._metrics?.counter('http_request_errors_total', 1, { transport: 'sse', error_type: 'validation' }, 'Total HTTP request errors');
 				res.writeHead(400, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Invalid session ID format' }));
 				return;
 			}
 		}
-
 		// Handle CORS preflight
 		if (this._enableCors && req.method === 'OPTIONS') {
 			res.writeHead(204);
@@ -137,22 +160,49 @@ export class SseTransport extends BaseTransport {
 
 		// Handle SSE endpoint
 		if (url.pathname === this._path && req.method === 'GET') {
-			this._handleSseConnection(req, res);
+			await this._handleSseConnection(req, res, sanitizedParams);
 			return;
 		}
 
 		// Handle message endpoint (for receiving messages from clients)
 		if (url.pathname === `${this._path}/message` && req.method === 'POST') {
-			await this._handleMessage(req, res);
+			await this._handleMessage(req, res, sanitizedParams);
 			return;
 		}
 
-		// Handle health check
+		// Handle health check (liveness)
 		if (url.pathname === '/health') {
+			const healthData: Record<string, unknown> = { status: 'healthy', clients: this._clients.size };
+			if (this._connectionPool) {
+				const poolStats = this._connectionPool.getStats();
+				healthData.pool = poolStats;
+			}
+			if (this._healthChecker) {
+				const liveness = this._healthChecker.checkLiveness();
+				healthData.liveness = liveness;
+			}
 			res.writeHead(200, {
 				'Content-Type': 'application/json',
 			});
-			res.end(JSON.stringify({ status: 'healthy', clients: this._clients.size }));
+			res.end(JSON.stringify(healthData));
+			return;
+		}
+
+		// Handle readiness check
+		if (url.pathname === '/ready') {
+			if (this._healthChecker) {
+				const readiness = await this._healthChecker.checkReadiness();
+				const statusCode = readiness.status === 'ok' ? 200 : 503;
+				res.writeHead(statusCode, {
+					'Content-Type': 'application/json',
+				});
+				res.end(JSON.stringify(readiness));
+			} else {
+				res.writeHead(200, {
+					'Content-Type': 'application/json',
+				});
+				res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString(), components: {} }));
+			}
 			return;
 		}
 
@@ -164,7 +214,11 @@ export class SseTransport extends BaseTransport {
 	/**
 	 * Handle new SSE connection
 	 */
-	private _handleSseConnection(req: IncomingMessage, res: ServerResponse): void {
+	private async _handleSseConnection(
+		req: IncomingMessage,
+		res: ServerResponse,
+		params: Record<string, string>
+	): Promise<void> {
 		// Set SSE headers
 		res.writeHead(200, {
 			'Content-Type': 'text/event-stream',
@@ -172,8 +226,32 @@ export class SseTransport extends BaseTransport {
 			Connection: 'keep-alive',
 		});
 
+		// Resolve session ID when pool is active
+		let sessionId: string | undefined;
+		if (this._connectionPool) {
+			const requestedSession = params.session ?? params.sessionId;
+			if (requestedSession && this._connectionPool.getSessionInfo(requestedSession)) {
+				sessionId = requestedSession;
+			} else {
+				try {
+					sessionId = await this._connectionPool.createSession();
+				} catch (error) {
+					res.write(`event: error\n`);
+					res.write(`data: ${JSON.stringify({ error: error instanceof Error ? error.message : 'Failed to create session' })}\n\n`);
+					res.end();
+					return;
+				}
+			}
+			this._clientSessionMap.set(res, sessionId);
+			this._updatePoolMetrics();
+		}
+
 		// Send initial connection event
-		this._sendSseEvent(res, 'connected', { timestamp: Date.now() });
+		const connectedPayload: Record<string, unknown> = { timestamp: Date.now() };
+		if (sessionId) {
+			connectedPayload.sessionId = sessionId;
+		}
+		this._sendSseEvent(res, 'connected', connectedPayload);
 
 		// Add to clients
 		this._clients.add(res);
@@ -182,6 +260,7 @@ export class SseTransport extends BaseTransport {
 		// Handle client disconnect
 		req.on('close', () => {
 			this._clients.delete(res);
+			this._clientSessionMap.delete(res);
 			this._updateActiveConnectionsMetric();
 		});
 
@@ -199,7 +278,11 @@ export class SseTransport extends BaseTransport {
 	/**
 	 * Handle incoming message from client
 	 */
-	private async _handleMessage(req: IncomingMessage, res: ServerResponse): Promise<void> {
+	private async _handleMessage(
+		req: IncomingMessage,
+		res: ServerResponse,
+		_params: Record<string, string>
+	): Promise<void> {
 		let body = '';
 
 		for await (const chunk of req) {
@@ -210,6 +293,7 @@ export class SseTransport extends BaseTransport {
 			const jsonRpcRequest = JSON.parse(body);
 			const parseResult = safeParse(JsonRpcRequestSchema, jsonRpcRequest);
 			if (!parseResult.success) {
+				this._metrics?.counter('http_request_errors_total', 1, { transport: 'sse', error_type: 'validation' }, 'Total HTTP request errors');
 				res.writeHead(200, { 'Content-Type': 'application/json' });
 				res.end(
 					JSON.stringify({
@@ -240,10 +324,12 @@ export class SseTransport extends BaseTransport {
 					res.end(JSON.stringify({ jsonrpc: '2.0', id: jsonRpcRequest?.id ?? null, result: null }));
 				}
 			} else {
+				this._metrics?.counter('http_request_errors_total', 1, { transport: 'sse', error_type: 'server_not_ready' }, 'Total HTTP request errors');
 				res.writeHead(503, { 'Content-Type': 'application/json' });
 				res.end(JSON.stringify({ error: 'Server not ready' }));
 			}
 		} catch {
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'sse', error_type: 'parse_error' }, 'Total HTTP request errors');
 			res.writeHead(400, { 'Content-Type': 'application/json' });
 			res.end(JSON.stringify({ error: 'Invalid JSON' }));
 		}
@@ -272,6 +358,31 @@ export class SseTransport extends BaseTransport {
 		);
 	}
 
+	private _updatePoolMetrics(): void {
+		if (!this._connectionPool || !this._metrics) {
+			return;
+		}
+		const stats = this._connectionPool.getStats();
+		this._metrics.gauge(
+			'sse_pool_active_sessions',
+			stats.activeSessions,
+			{},
+			'Active sessions in connection pool'
+		);
+		this._metrics.gauge(
+			'sse_pool_total_sessions',
+			stats.totalSessions,
+			{},
+			'Total sessions in connection pool'
+		);
+		this._metrics.gauge(
+			'sse_pool_max_sessions',
+			stats.maxSessions,
+			{},
+			'Maximum sessions in connection pool'
+		);
+	}
+
 	/**
 	 * Broadcast a message to all connected clients
 	 */
@@ -296,6 +407,13 @@ export class SseTransport extends BaseTransport {
 	}
 
 	/**
+	 * Get the connection pool, if one was configured.
+	 */
+	get connectionPool(): ConnectionPool | undefined {
+		return this._connectionPool;
+	}
+
+	/**
 	 * Stop the transport server with graceful shutdown.
 	 *
 	 * @param timeout - Maximum time to wait for requests to drain (not used for SSE)
@@ -304,6 +422,11 @@ export class SseTransport extends BaseTransport {
 	async stop(_timeout?: number): Promise<void> {
 		this._isShuttingDown = true;
 		this._stopRateLimitCleanup();
+
+		// Terminate connection pool if present
+		if (this._connectionPool) {
+			await this._connectionPool.terminate();
+		}
 
 		return new Promise((resolve) => {
 			// Close all client connections
@@ -315,6 +438,7 @@ export class SseTransport extends BaseTransport {
 				}
 			}
 			this._clients.clear();
+			this._clientSessionMap.clear();
 			this._updateActiveConnectionsMetric();
 
 			// Close server

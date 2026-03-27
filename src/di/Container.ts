@@ -1,4 +1,5 @@
 import type { ServiceRegistry, ServiceKey } from './ServiceRegistry.js';
+import type { IDisposable } from '../types.js';
 
 /**
  * Lightweight dependency injection container for managing service dependencies.
@@ -41,6 +42,7 @@ export class Container {
 	private _factories: Map<string, () => unknown> = new Map();
 	private _transientFactories: Map<string, () => unknown> = new Map();
 	private _resolving: Set<string> = new Set();
+	private _disposables: Map<string, IDisposable> = new Map();
 
 	/**
 	 * Register a singleton instance that will be returned for all resolutions.
@@ -216,6 +218,7 @@ export class Container {
 		const hadInstance = this._services.delete(name);
 		const hadFactory = this._factories.delete(name);
 		const hadTransient = this._transientFactories.delete(name);
+		this._disposables.delete(name);
 		return hadInstance || hadFactory || hadTransient;
 	}
 
@@ -232,6 +235,7 @@ export class Container {
 		this._factories.clear();
 		this._transientFactories.clear();
 		this._resolving.clear();
+		this._disposables.clear();
 	}
 
 	/**
@@ -265,6 +269,56 @@ export class Container {
 		for (const name of this._factories.keys()) names.add(name);
 		for (const name of this._transientFactories.keys()) names.add(name);
 		return Array.from(names);
+	}
+
+	/**
+	 * Register an instance as disposable for lifecycle management.
+	 * The instance will have its `dispose()` method called when the container is disposed.
+	 *
+	 * @param name - The service name (must already be registered)
+	 * @param instance - The disposable instance to track
+	 *
+	 * @example
+	 * ```typescript
+	 * const pool = new ConnectionPool();
+	 * container.registerInstance('ConnectionPool', pool);
+	 * container.registerDisposable('ConnectionPool', pool);
+	 * ```
+	 */
+	registerDisposable(name: string, instance: IDisposable): void {
+		this._disposables.set(name, instance);
+	}
+
+	/**
+	 * Dispose of all registered disposable services.
+	 * Calls `dispose()` on each registered disposable in reverse registration order.
+	 * Errors during individual disposal are caught and logged to prevent cascading failures.
+	 *
+	 * @example
+	 * ```typescript
+	 * await container.dispose();
+	 * ```
+	 */
+	async dispose(): Promise<void> {
+		const entries = Array.from(this._disposables.entries()).reverse();
+		const errors: Array<{ name: string; error: unknown }> = [];
+
+		for (const [name, disposable] of entries) {
+			try {
+				await disposable.dispose();
+			} catch (error) {
+				errors.push({ name, error });
+			}
+		}
+
+		this._disposables.clear();
+
+		if (errors.length > 0) {
+			const messages = errors.map(
+				(e) => `${e.name}: ${e.error instanceof Error ? e.error.message : String(e.error)}`
+			);
+			throw new Error(`Failed to dispose services: ${messages.join(', ')}`);
+		}
 	}
 }
 
