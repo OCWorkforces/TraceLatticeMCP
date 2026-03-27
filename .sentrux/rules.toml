@@ -1,0 +1,89 @@
+# Sentrux Architectural Rules
+# Constraints checked by `sentrux check` and the `check_rules` MCP tool.
+
+[constraints]
+max_cycles = 1          # PersistenceBackend uses dynamic imports (factory pattern — acceptable)
+max_cc = 25             # Max cyclomatic complexity per function
+max_fn_lines = 100      # Max function length in lines
+no_god_files = false    # Allow large files for now (composition root exception)
+
+# Layer definitions: higher order depends on lower order only.
+# Dependencies must flow downward (lower order → higher order).
+
+[[layers]]
+name = "types"
+paths = ["src/types.ts", "src/IHistoryManager.ts", "src/errors.ts", "src/schema.ts"]
+order = 0
+
+[[layers]]
+name = "crosscutting"
+paths = ["src/context/*", "src/logger/*", "src/metrics/*", "src/telemetry/*", "src/cache/*"]
+order = 1
+
+[[layers]]
+name = "config"
+paths = ["src/config/*", "src/ServerConfig.ts"]
+order = 2
+
+[[layers]]
+name = "core"
+paths = ["src/formatter/*", "src/processor/*", "src/HistoryManager.ts"]
+order = 3
+
+[[layers]]
+name = "domain"
+paths = ["src/persistence/*", "src/registry/*", "src/pool/*", "src/health/*"]
+order = 4
+
+[[layers]]
+name = "infrastructure"
+paths = ["src/transport/*", "src/cluster/*", "src/watchers/*"]
+order = 5
+
+[[layers]]
+name = "di"
+paths = ["src/di/*"]
+order = 6
+
+[[layers]]
+name = "app"
+paths = ["src/lib.ts", "src/index.ts"]
+order = 7
+
+[[layers]]
+name = "cli"
+paths = ["src/cli.ts"]
+order = 8
+
+# Boundary rules: prevent forbidden cross-layer shortcuts.
+# These catch architectural drift where a module reaches across layers.
+
+[[boundaries]]
+from = "src/transport/*"
+to = "src/processor/*"
+reason = "Transports must not depend on thought processor directly"
+
+[[boundaries]]
+from = "src/watchers/*"
+to = "src/persistence/*"
+reason = "Watchers must not depend on persistence directly"
+
+[[boundaries]]
+from = "src/cluster/*"
+to = "src/registry/*"
+reason = "Worker cluster must not depend on registries directly"
+
+[[boundaries]]
+from = "src/persistence/*"
+to = "src/transport/*"
+reason = "Persistence must not depend on transport layer"
+
+[[boundaries]]
+from = "src/transport/*"
+to = "src/registry/*"
+reason = "Transports must not depend on registries directly"
+
+[[boundaries]]
+from = "src/registry/*"
+to = "src/HistoryManager.ts"
+reason = "Registries must not depend on HistoryManager directly"
