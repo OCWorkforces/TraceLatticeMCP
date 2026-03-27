@@ -18,7 +18,7 @@ import type { McpServer } from 'tmcp';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { safeParse } from 'valibot';
 import { JsonRpcRequestSchema } from '../schema.js';
-import type { Metrics } from '../metrics/metrics.impl.js';
+import type { IMetrics } from '../contracts/index.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 
 export interface HttpTransportOptions extends TransportOptions {
@@ -27,7 +27,7 @@ export interface HttpTransportOptions extends TransportOptions {
 	 * @default '/messages'
 	 */
 	path?: string;
-	metrics?: Metrics;
+	metrics?: IMetrics;
 	metricsProvider?: () => string;
 
 	/**
@@ -89,7 +89,7 @@ export class HttpTransport extends BaseTransport {
 	private _requestCount: number = 0;
 	private _activeRequests: number = 0;
 	private _path: string;
-	private _metrics?: Metrics;
+	private _metrics?: IMetrics;
 	private _metricsProvider: (() => string) | null;
 
 	constructor(options: HttpTransportOptions = {}) {

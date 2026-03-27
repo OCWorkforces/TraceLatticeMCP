@@ -19,7 +19,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
-import type { Logger, LogLevel } from '../logger/StructuredLogger.js';
+import type { Logger, LogLevel } from '../contracts/index.js';
 import type { HealthChecker } from '../health/HealthChecker.js';
 
 /**

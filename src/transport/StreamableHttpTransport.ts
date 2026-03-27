@@ -27,7 +27,7 @@ import type { McpServer } from 'tmcp';
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { safeParse } from 'valibot';
 import { JsonRpcRequestSchema } from '../schema.js';
-import type { Metrics } from '../metrics/metrics.impl.js';
+import type { IMetrics } from '../contracts/index.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 
 /**
@@ -43,7 +43,7 @@ export interface StreamableHttpTransportOptions extends TransportOptions {
 	/**
 	 * Metrics collector for transport telemetry
 	 */
-	metrics?: Metrics;
+	metrics?: IMetrics;
 
 	/**
 	 * Prometheus metrics provider function
@@ -144,7 +144,7 @@ export class StreamableHttpTransport extends BaseTransport {
 	private _bodySizeLimitEnabled: boolean;
 	private _maxBodySize: number;
 	private _requestTimeout: number;
-	private _metrics?: Metrics;
+	private _metrics?: IMetrics;
 	private _metricsProvider: (() => string) | null;
 
 	constructor(options: StreamableHttpTransportOptions = {}) {
