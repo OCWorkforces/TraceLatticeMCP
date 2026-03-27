@@ -106,6 +106,84 @@ interface ServerOptions {
 }
 ```
 
+## Transports
+
+The server supports three MCP transport types, selectable via the `TRANSPORT_TYPE` environment variable:
+
+### stdio (Default)
+
+For local development and Claude Desktop integration. Communications happen over standard input/output.
+
+```bash
+TRANSPORT_TYPE=stdio npm start
+```
+
+### SSE (Legacy)
+
+Server-Sent Events transport for multi-user support. Deprecated per MCP spec since March 2025, but still available for backwards compatibility.
+
+```bash
+TRANSPORT_TYPE=sse npm start
+```
+
+Configuration options:
+
+| Variable           | Default | Description |
+| ------------------ | ------- | ----------- |
+| `SSE_PORT`         | `3000`  | Port for SSE server |
+| `SSE_HOST`         | `localhost` | Host for SSE server |
+
+### Streamable HTTP (Recommended for Production)
+
+Modern MCP transport with full session support, bidirectional requests, and improved performance. Recommended for production deployments.
+
+```bash
+TRANSPORT_TYPE=streamable-http npm start
+```
+
+Configuration options:
+
+| Variable           | Default | Description |
+| ------------------ | ------- | ----------- |
+| `HTTP_PORT`        | `3000`  | Port for HTTP server |
+| `HTTP_HOST`        | `localhost` | Host for HTTP server |
+| `AUTH_TOKEN`       | -       | Optional bearer token for authentication |
+
+## Health Endpoints
+
+The server exposes health check endpoints for container orchestration and load balancer integration:
+
+### GET /health
+
+Liveness probe. Returns `200 OK` when the server is running.
+
+```bash
+curl http://localhost:3000/health
+# Response: { "status": "ok" }
+```
+
+### GET /ready
+
+Readiness probe. Returns component status including transport state, registry counts, and session pool status.
+
+```bash
+curl http://localhost:3000/ready
+# Response: { "status": "ready", "components": { ... } }
+```
+
+## Session Pooling
+
+For SSE transport, the server integrates a `ConnectionPool` for multi-user session isolation:
+
+- **Per-session state isolation**: Each session maintains independent thought history and tool/skill registries
+- **Configurable limits**: Control maximum concurrent sessions and session timeout
+
+Configuration options:
+
+| Variable           | Default | Description |
+| ------------------ | ------- | ----------- |
+| `MAX_SESSIONS`     | `100`   | Maximum concurrent sessions |
+| `SESSION_TIMEOUT`  | `3600`  | Session timeout in seconds |
 ## API Reference
 
 ### Methods
