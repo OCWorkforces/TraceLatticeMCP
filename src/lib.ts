@@ -16,7 +16,7 @@ import { StructuredLogger } from './logger/StructuredLogger.js';
 import { ConfigLoader } from './config/ConfigLoader.js';
 import { SkillWatcher } from './watchers/SkillWatcher.js';
 import { ToolWatcher } from './watchers/ToolWatcher.js';
-import { Container } from './di/index.js';
+import { Container } from './di/Container.js';
 import { ToolRegistry } from './registry/ToolRegistry.js';
 import { SkillRegistry } from './registry/SkillRegistry.js';
 import { DiscoveryCache } from './cache/DiscoveryCache.js';
