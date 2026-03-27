@@ -12,21 +12,16 @@ OpenTelemetry integration for distributed tracing. Optional, opt-in observabilit
 ```
 src/telemetry/
 ├── Telemetry.ts     # Core telemetry class with span management
-├── index.ts         # Public exports
-├── CLAUDE.md        # Human-written usage guide
-├── INTEGRATION.md   # Comprehensive integration documentation
 └── __tests__/       # Module tests
 ```
 
 ## WHERE TO LOOK
 
-| Task               | Location                      | Notes                                          |
-| ------------------ | ----------------------------- | ---------------------------------------------- |
-| **Span creation**  | `Telemetry.ts:43`             | `startSpan()` returns span with `end()` method |
-| **Configuration**  | `Telemetry.ts:13`             | `TelemetryOptions` interface                   |
-| **Usage examples** | `CLAUDE.md`, `INTEGRATION.md` | Comprehensive guides                           |
-| **Testing**        | `__tests__/Telemetry.test.ts` | Unit tests                                     |
-
+| Task               | Location                      | Notes                                  |
+| ------------------ | ----------------------------- | -------------------------------------- |
+| **Span creation**  | `Telemetry.ts`                 | `startSpan()` returns span with `end()` |
+| **Configuration**  | `Telemetry.ts`                 | `TelemetryOptions` interface           |
+| **Testing**        | `__tests__/Telemetry.test.ts` | Unit tests                             |
 ## API
 
 ```typescript

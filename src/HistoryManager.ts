@@ -12,7 +12,7 @@ import type { Logger } from './logger/StructuredLogger.js';
 import { NullLogger } from './logger/NullLogger.js';
 import type { PersistenceBackend } from './persistence/PersistenceBackend.js';
 import type { IHistoryManager } from './IHistoryManager.js';
-import type { Metrics } from './metrics/metrics.impl.js';
+import type { IMetrics } from './contracts/index.js';
 
 /**
  * Interface for emitting persistence error events.
@@ -60,7 +60,7 @@ export interface HistoryManagerConfig {
 
 	/** Optional persistence backend for saving/loading history. */
 	persistence?: PersistenceBackend | null;
-	metrics?: Metrics;
+	metrics?: IMetrics;
 
 	/**
 	 * Maximum number of thoughts to buffer before flushing to persistence.
@@ -169,7 +169,7 @@ export class HistoryManager implements IHistoryManager {
 	/** Whether persistence is enabled. */
 	private _persistenceEnabled: boolean;
 
-	private _metrics?: Metrics;
+	private _metrics?: IMetrics;
 
 	/** Write buffer for batching persistence operations. */
 	private _writeBuffer: ThoughtData[] = [];

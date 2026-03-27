@@ -6,10 +6,7 @@ ThoughtFormatter produces human-readable thought output with recommendation, con
 
 ## WHERE TO LOOK
 
-- `src/formatter/ThoughtFormatter.ts` Thought formatting pipeline; builds thought header, content lines, and recommendation summary.
-- `src/formatter/ThoughtFormatter.ts` Recommendation display for tools/skills, priorities, rationales, confidence, alternatives, and suggested inputs.
-- `src/formatter/ThoughtFormatter.ts` Pretty output styling (icons/boxed header) and metadata cues for revisions and branches.
-
+- `src/formatter/ThoughtFormatter.ts` - Thought formatting pipeline; builds thought header, content lines, and recommendation summary.
 ## CONVENTIONS
 
 - Formatter is presentation-only; no business logic or state changes.

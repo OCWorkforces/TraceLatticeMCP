@@ -1,7 +1,5 @@
 # PROCESSOR MODULE
 
-**Generated:** 2026-01-26
-**Parent:** ../AGENTS.md
 
 ## OVERVIEW
 
@@ -10,10 +8,10 @@ Core logic for validating, normalizing, and processing thought requests.
 ## STRUCTURE
 
 ```
+```
 src/processor/
-├── ThoughtProcessor.ts  # Main logic (Validate -> History -> Format)
-├── InputNormalizer.ts   # Fixes common LLM field mistakes (singular vs plural)
-└── index.ts            # Exports
+├── ThoughtProcessor.ts  # Main logic (Validate → History → Format)
+└── InputNormalizer.ts   # Fixes common LLM field mistakes (singular vs plural)
 ```
 
 ## LOGIC FLOW

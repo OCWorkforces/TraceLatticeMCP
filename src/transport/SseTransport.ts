@@ -22,7 +22,7 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
 import { safeParse } from 'valibot';
 import { JsonRpcRequestSchema } from '../schema.js';
-import type { Metrics } from '../metrics/metrics.impl.js';
+import type { IMetrics } from '../contracts/index.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 import type { ConnectionPool } from '../pool/ConnectionPool.js';
 /**
@@ -30,7 +30,7 @@ import type { ConnectionPool } from '../pool/ConnectionPool.js';
  */
 export interface SseTransportOptions extends TransportOptions {
 	path?: string;
-	metrics?: Metrics;
+	metrics?: IMetrics;
 	/**
 	 * Optional connection pool for per-session state isolation.
 	 * When provided, each SSE client gets an isolated thought history.
@@ -63,7 +63,7 @@ export class SseTransport extends BaseTransport {
 	private _clients: Set<ServerResponse> = new Set();
 	private _clientSessionMap: Map<ServerResponse, string> = new Map();
 	private _messageQueue: Map<string, unknown[]> = new Map();
-	private _metrics?: Metrics;
+	private _metrics?: IMetrics;
 	private _connectionPool?: ConnectionPool;
 
 	constructor(options: SseTransportOptions = {}) {

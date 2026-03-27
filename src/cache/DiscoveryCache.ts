@@ -1,4 +1,4 @@
-import type { Metrics } from '../metrics/metrics.impl.js';
+import type { IMetrics } from '../contracts/index.js';
 
 /**
  * LRU Cache for tool/skill discovery results with TTL support.
@@ -61,7 +61,7 @@ export interface DiscoveryCacheOptions {
 	ttl?: number;
 
 	cleanupInterval?: number;
-	metrics?: Metrics;
+	metrics?: IMetrics;
 }
 
 /**
@@ -131,7 +131,7 @@ export class DiscoveryCache<T> {
 
 	/** Time-to-live in milliseconds for cache entries. */
 	private _ttl: number;
-	private _metrics?: Metrics;
+	private _metrics?: IMetrics;
 	private _cleanupTimer: NodeJS.Timeout | null = null;
 
 	/**

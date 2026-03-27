@@ -1,6 +1,6 @@
 import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
 import type { ThoughtData } from '../types.js';
-import type { Metrics } from '../metrics/metrics.impl.js';
+import type { IMetrics } from '../contracts/index.js';
 import { mkdir, writeFile, readFile, readdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
@@ -26,9 +26,9 @@ export class FilePersistence implements PersistenceBackend {
 	private _branchesDir: string;
 	private _maxHistorySize: number;
 	private _persistBranches: boolean;
-	private _metrics?: Metrics;
+	private _metrics?: IMetrics;
 
-	constructor(options?: PersistenceConfig['options'] & { metrics?: Metrics }) {
+	constructor(options?: PersistenceConfig['options'] & { metrics?: IMetrics }) {
 		// Default to .claude/data in current directory or home directory
 		const defaultDataDir = existsSync('.claude/data')
 			? '.claude/data'
