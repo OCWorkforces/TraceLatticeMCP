@@ -146,6 +146,11 @@ export class HistoryManager implements IHistoryManager {
 	/** Branch storage indexed by branch ID. */
 	private _branches: Record<string, ThoughtData[]> = {};
 
+	/** Cached available MCP tools from the most recent thought. */
+	private _availableMcpTools: string[] | undefined;
+
+	/** Cached available skills from the most recent thought. */
+	private _availableSkills: string[] | undefined;
 	/** Maximum history size before auto-trimming. */
 	private _maxHistorySize: number;
 
@@ -262,7 +267,15 @@ export class HistoryManager implements IHistoryManager {
 			{},
 			'Total thought requests added to history'
 		);
-		this._thought_history.push(thought);
+	this._thought_history.push(thought);
+
+	// Cache available_mcp_tools/available_skills for cross-call persistence
+	if (thought.available_mcp_tools) {
+		this._availableMcpTools = thought.available_mcp_tools;
+	}
+	if (thought.available_skills) {
+		this._availableSkills = thought.available_skills;
+	}
 
 		if (this._thought_history.length > this._maxHistorySize) {
 			this._thought_history = this._thought_history.slice(-this._maxHistorySize);
@@ -429,6 +442,37 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	/**
+	 * Gets the most recently available MCP tools from the session.
+	 *
+	 * @returns The last-seen array of MCP tool names, or undefined if never set
+	 *
+	 * @example
+	 * ```typescript
+	 * const tools = manager.getAvailableMcpTools();
+	 * // ['Read', 'Grep', 'Glob'] or undefined
+	 * ```
+	 */
+	public getAvailableMcpTools(): string[] | undefined {
+		return this._availableMcpTools;
+	}
+
+	/**
+	 * Gets the most recently available skills from the session.
+	 *
+	 * @returns The last-seen array of skill names, or undefined if never set
+	 *
+	 * @example
+	 * ```typescript
+	 * const skills = manager.getAvailableSkills();
+	 * // ['commit', 'review-pr'] or undefined
+	 * ```
+	 */
+	public getAvailableSkills(): string[] | undefined {
+		return this._availableSkills;
+	}
+
+
+	/**
 	 * Gets a specific branch by ID.
 	 *
 	 * @param branchId - The branch identifier
@@ -461,10 +505,12 @@ export class HistoryManager implements IHistoryManager {
 	 * ```
 	 */
 	public clear(): void {
-		this._thought_history = [];
-		this._branches = {};
-		this._writeBuffer = [];
-		this.log('History cleared');
+	this._thought_history = [];
+	this._branches = {};
+	this._writeBuffer = [];
+	this._availableMcpTools = undefined;
+	this._availableSkills = undefined;
+	this.log('History cleared');
 
 		// Clear persisted data if enabled
 		if (this._persistenceEnabled && this._persistence) {

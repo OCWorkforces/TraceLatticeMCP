@@ -155,6 +155,16 @@ export class ThoughtProcessor {
 		try {
 			// Normalize input to handle common LLM field name mistakes
 			const normalizedInput = normalizeInput(input);
+
+			// Persist available_mcp_tools/available_skills across calls within a session.
+			// If the caller omits these, reuse the last-seen values from the session.
+			if (!normalizedInput.available_mcp_tools) {
+				normalizedInput.available_mcp_tools = this.historyManager.getAvailableMcpTools();
+			}
+			if (!normalizedInput.available_skills) {
+				normalizedInput.available_skills = this.historyManager.getAvailableSkills();
+			}
+
 			const validatedInput = this.validateInput(normalizedInput);
 
 			this.historyManager.addThought(validatedInput);

@@ -9,48 +9,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ThoughtProcessor } from '../processor/ThoughtProcessor.js';
 import { ThoughtFormatter } from '../formatter/ThoughtFormatter.js';
 import { StructuredLogger } from '../logger/StructuredLogger.js';
-import type { IHistoryManager } from '../IHistoryManager.js';
+import { MockHistoryManager } from './helpers/index.js';
 import type { ThoughtData } from '../types.js';
+import type { IHistoryManager } from '../IHistoryManager.js';
 
-/**
- * Mock HistoryManager for testing.
- */
-class MockHistoryManager implements IHistoryManager {
-	private _history: ThoughtData[] = [];
-	private _branches: Record<string, ThoughtData[]> = {};
-	private _clearCallCount = 0;
 
-	addThought(thought: ThoughtData): void {
-		this._history.push(thought);
-	}
-
-	getHistory(): ThoughtData[] {
-		return this._history;
-	}
-
-	getHistoryLength(): number {
-		return this._history.length;
-	}
-
-	getBranches(): Record<string, ThoughtData[]> {
-		return this._branches;
-	}
-
-	getBranchIds(): string[] {
-		return Object.keys(this._branches);
-	}
-
-	clear(): void {
-		this._history = [];
-		this._branches = {};
-		this._clearCallCount++;
-	}
-
-	// Test helpers
-	getClearCallCount(): number {
-		return this._clearCallCount;
-	}
-}
 
 describe('ThoughtProcessor', () => {
 	let processor: ThoughtProcessor;
@@ -289,24 +252,30 @@ describe('ThoughtProcessor', () => {
 
 		it('should return error response when processing fails', async () => {
 			// Create a HistoryManager that throws on addThought
-			class ThrowingHistoryManager implements IHistoryManager {
-				addThought(): void {
-					throw new Error('Database error');
-				}
-				getHistory(): ThoughtData[] {
-					return [];
-				}
-				getHistoryLength(): number {
-					return 0;
-				}
-				getBranches(): Record<string, ThoughtData[]> {
-					return {};
-				}
-				getBranchIds(): string[] {
-					return [];
-				}
-				clear(): void {}
+		class ThrowingHistoryManager implements IHistoryManager {
+			addThought(): void {
+				throw new Error('Database error');
 			}
+			getHistory(): ThoughtData[] {
+				return [];
+			}
+			getHistoryLength(): number {
+				return 0;
+			}
+			getBranches(): Record<string, ThoughtData[]> {
+				return {};
+			}
+			getBranchIds(): string[] {
+				return [];
+			}
+			clear(): void {}
+			getAvailableMcpTools(): string[] | undefined {
+				return undefined;
+			}
+			getAvailableSkills(): string[] | undefined {
+				return undefined;
+			}
+		}
 
 			const throwingHistory = new ThrowingHistoryManager();
 			const throwingProcessor = new ThoughtProcessor(throwingHistory, formatter, logger);
@@ -483,6 +452,95 @@ describe('ThoughtProcessor', () => {
 
 			// Should work without throwing errors
 			expect(result.content).toBeDefined();
+		});
+	});
+
+	describe('available_mcp_tools / available_skills persistence (Bug 2 fix)', () => {
+		it('should persist available_skills across calls when omitted in subsequent calls', async () => {
+			// Thought 1: send available_skills
+			const result1 = await processor.process({
+				thought: 'First thought',
+				thought_number: 1,
+				total_thoughts: 2,
+				next_thought_needed: true,
+				available_skills: ['vercel-react-native-skills', 'agent-browser'],
+			});
+			const parsed1 = JSON.parse(result1.content[0]!.text);
+			expect(parsed1.available_skills).toEqual(['vercel-react-native-skills', 'agent-browser']);
+
+			// Thought 2: omit available_skills — should carry over from Thought 1
+			const result2 = await processor.process({
+				thought: 'Second thought',
+				thought_number: 2,
+				total_thoughts: 2,
+				next_thought_needed: false,
+			});
+			const parsed2 = JSON.parse(result2.content[0]!.text);
+			expect(parsed2.available_skills).toEqual(['vercel-react-native-skills', 'agent-browser']);
+		});
+
+		it('should persist available_mcp_tools across calls when omitted in subsequent calls', async () => {
+			// Thought 1: send available_mcp_tools
+			const result1 = await processor.process({
+				thought: 'First thought',
+				thought_number: 1,
+				total_thoughts: 2,
+				next_thought_needed: true,
+				available_mcp_tools: ['Read', 'Grep', 'Glob'],
+			});
+			const parsed1 = JSON.parse(result1.content[0]!.text);
+			expect(parsed1.available_mcp_tools).toEqual(['Read', 'Grep', 'Glob']);
+
+			// Thought 2: omit available_mcp_tools — should carry over
+			const result2 = await processor.process({
+				thought: 'Second thought',
+				thought_number: 2,
+				total_thoughts: 2,
+				next_thought_needed: false,
+			});
+			const parsed2 = JSON.parse(result2.content[0]!.text);
+			expect(parsed2.available_mcp_tools).toEqual(['Read', 'Grep', 'Glob']);
+		});
+
+		it('should replace cached skills when a new call provides different values', async () => {
+			// Thought 1
+			await processor.process({
+				thought: 'First thought',
+				thought_number: 1,
+				total_thoughts: 3,
+				next_thought_needed: true,
+				available_skills: ['skill-a', 'skill-b'],
+			});
+
+			// Thought 2: new skills replace the old ones
+			await processor.process({
+				thought: 'Second thought',
+				thought_number: 2,
+				total_thoughts: 3,
+				next_thought_needed: true,
+				available_skills: ['skill-c'],
+			});
+
+			// Thought 3: omit — should carry over the replaced values
+			const result3 = await processor.process({
+				thought: 'Third thought',
+				thought_number: 3,
+				total_thoughts: 3,
+				next_thought_needed: false,
+			});
+			const parsed3 = JSON.parse(result3.content[0]!.text);
+			expect(parsed3.available_skills).toEqual(['skill-c']);
+		});
+
+		it('should return undefined for available_skills when never set', async () => {
+			const result = await processor.process({
+				thought: 'First thought without skills',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+			});
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.available_skills).toBeUndefined();
 		});
 	});
 });

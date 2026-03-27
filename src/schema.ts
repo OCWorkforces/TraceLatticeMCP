@@ -189,13 +189,17 @@ export const ToolRecommendationSchema = v.object({
  */
 export const SkillRecommendationSchema = v.object({
 	skill_name: v.pipe(v.string(), v.description('Name of the skill being recommended')),
-	confidence: v.pipe(
-		v.number(),
-		v.minValue(0),
-		v.maxValue(1),
-		v.description('0-1 indicating confidence in recommendation')
+	confidence: v.optional(
+		v.pipe(
+			v.number(),
+			v.minValue(0),
+			v.maxValue(1),
+			v.description('0-1 indicating confidence in recommendation (default: 0.5)')
+		)
 	),
-	rationale: v.pipe(v.string(), v.description('Why this skill is recommended')),
+	rationale: v.optional(
+		v.pipe(v.string(), v.description('Why this skill is recommended (default: empty string)'))
+	),
 	priority: v.optional(
 		v.pipe(v.number(), v.description('Order in the recommendation sequence (default: 999)'))
 	),

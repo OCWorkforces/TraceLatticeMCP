@@ -459,7 +459,103 @@ describe('InputNormalizer', () => {
 			expect(normalized.next_thought_needed).toBe(false);
 			expect(normalized.available_mcp_tools).toEqual(['tool1', 'tool2']);
 			expect(normalized.available_skills).toEqual(['skill1']);
-			expect(normalized.remaining_steps).toEqual(['Step 3', 'Step 4']);
+		expect(normalized.remaining_steps).toEqual(['Step 3', 'Step 4']);
 		});
+	});
+});
+
+describe('skill normalization (Bug 1 fix)', () => {
+	it('should fill in default confidence (0.5) for missing skill confidence', () => {
+		const input = {
+			thought: 'Test thought',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			current_step: {
+				step_description: 'Test step',
+				recommended_tools: [{ tool_name: 'Read', confidence: 0.9, rationale: 'test' }],
+				recommended_skills: [{ skill_name: 'ast-grep' }],
+				expected_outcome: 'Test outcome',
+			},
+		} as unknown;
+
+		const normalized = normalizeInput(input) as ThoughtData;
+		expect(normalized.current_step?.recommended_skills?.[0]?.confidence).toBe(0.5);
+	});
+
+	it('should fill in default rationale (empty string) for missing skill rationale', () => {
+		const input = {
+			thought: 'Test thought',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			current_step: {
+				step_description: 'Test step',
+				recommended_tools: [{ tool_name: 'Read', confidence: 0.9, rationale: 'test' }],
+				recommended_skills: [{ skill_name: 'ast-grep', confidence: 0.8 }],
+				expected_outcome: 'Test outcome',
+			},
+		} as unknown;
+
+		const normalized = normalizeInput(input) as ThoughtData;
+		expect(normalized.current_step?.recommended_skills?.[0]?.rationale).toBe('');
+	});
+
+	it('should fill in default priority (999) for missing skill priority', () => {
+		const input = {
+			thought: 'Test thought',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			current_step: {
+				step_description: 'Test step',
+				recommended_tools: [{ tool_name: 'Read', confidence: 0.9, rationale: 'test' }],
+				recommended_skills: [{ skill_name: 'ast-grep' }],
+				expected_outcome: 'Test outcome',
+			},
+		} as unknown;
+
+		const normalized = normalizeInput(input) as ThoughtData;
+		expect(normalized.current_step?.recommended_skills?.[0]?.priority).toBe(999);
+	});
+
+	it('should preserve existing skill confidence and rationale when present', () => {
+		const input = {
+			thought: 'Test thought',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			current_step: {
+				step_description: 'Test step',
+				recommended_tools: [{ tool_name: 'Read', confidence: 0.9, rationale: 'test' }],
+				recommended_skills: [{ skill_name: 'ast-grep', confidence: 0.85, rationale: 'AST search' }],
+				expected_outcome: 'Test outcome',
+			},
+		} as unknown;
+
+		const normalized = normalizeInput(input) as ThoughtData;
+		expect(normalized.current_step?.recommended_skills?.[0]?.confidence).toBe(0.85);
+		expect(normalized.current_step?.recommended_skills?.[0]?.rationale).toBe('AST search');
+	});
+
+	it('should normalize skills in previous_steps with defaults', () => {
+		const input = {
+			thought: 'Test thought',
+			thought_number: 2,
+			total_thoughts: 2,
+			next_thought_needed: false,
+			previous_steps: [
+				{
+					step_description: 'Previous step',
+					recommended_tools: [{ tool_name: 'Grep', rationale: 'Search code' }],
+					recommended_skills: [{ skill_name: 'commit' }],
+				},
+			],
+		} as unknown;
+
+		const normalized = normalizeInput(input) as ThoughtData;
+		expect(normalized.previous_steps?.[0]?.recommended_skills?.[0]?.confidence).toBe(0.5);
+		expect(normalized.previous_steps?.[0]?.recommended_skills?.[0]?.rationale).toBe('');
+		expect(normalized.previous_steps?.[0]?.recommended_skills?.[0]?.priority).toBe(999);
 	});
 });
