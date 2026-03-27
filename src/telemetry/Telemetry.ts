@@ -85,8 +85,19 @@ export class Telemetry {
 		};
 	}
 
-	getSpans(): TelemetrySpan[] {
-		return [...this._spans];
+	getSpans(): ReadonlyArray<TelemetrySpan> {
+		return this._spans;
+	}
+
+	exportToJSON(): string {
+		return JSON.stringify(this._spans, null, 2);
+	}
+
+	async exportToFile(filePath: string): Promise<void> {
+		const { writeFile, mkdir } = await import('node:fs/promises');
+		const { dirname } = await import('node:path');
+		await mkdir(dirname(filePath), { recursive: true });
+		await writeFile(filePath, this.exportToJSON(), 'utf-8');
 	}
 
 	clear(): void {

@@ -59,6 +59,8 @@ export interface DiscoveryCacheOptions {
 	 * @default 300000 (5 minutes)
 	 */
 	ttl?: number;
+
+	cleanupInterval?: number;
 	metrics?: Metrics;
 }
 
@@ -130,6 +132,7 @@ export class DiscoveryCache<T> {
 	/** Time-to-live in milliseconds for cache entries. */
 	private _ttl: number;
 	private _metrics?: Metrics;
+	private _cleanupTimer: NodeJS.Timeout | null = null;
 
 	/**
 	 * Creates a new DiscoveryCache instance.
@@ -153,6 +156,24 @@ export class DiscoveryCache<T> {
 		this._maxSize = options.maxSize ?? 100;
 		this._ttl = options.ttl ?? 300000; // 5 minutes default
 		this._metrics = options.metrics;
+
+		if (options.cleanupInterval && options.cleanupInterval > 0) {
+			this._cleanupTimer = setInterval(() => {
+				this._cleanupExpired();
+			}, options.cleanupInterval);
+			if (this._cleanupTimer.unref) this._cleanupTimer.unref();
+		}
+	}
+
+	private _cleanupExpired(): void {
+		const now = Date.now();
+		for (const [key, entry] of this._cache.entries()) {
+			const age = now - entry.timestamp;
+			if (age > this._ttl) {
+				this._cache.delete(key);
+				this._metrics?.counter('cache_eviction_total', 1, { cause: 'ttl_cleanup' });
+			}
+		}
 	}
 
 	/**
@@ -189,6 +210,7 @@ export class DiscoveryCache<T> {
 		// Check TTL
 		if (age > this._ttl) {
 			this._cache.delete(key);
+			this._metrics?.counter('cache_eviction_total', 1, { cause: 'ttl' }, 'Total cache evictions');
 			this._metrics?.counter('cache_miss_total', 1, {}, 'Total discovery cache misses');
 			return null;
 		}
@@ -228,6 +250,12 @@ export class DiscoveryCache<T> {
 			const lruKey = this._cache.keys().next().value;
 			if (lruKey) {
 				this._cache.delete(lruKey);
+				this._metrics?.counter(
+					'cache_eviction_total',
+					1,
+					{ cause: 'lru' },
+					'Total cache evictions'
+				);
 			}
 		}
 
@@ -299,6 +327,13 @@ export class DiscoveryCache<T> {
 	 */
 	clear(): void {
 		this._cache.clear();
+	}
+
+	dispose(): void {
+		if (this._cleanupTimer) {
+			clearInterval(this._cleanupTimer);
+			this._cleanupTimer = null;
+		}
 	}
 
 	/**
