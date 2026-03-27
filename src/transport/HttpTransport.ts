@@ -87,6 +87,7 @@ export class HttpTransport extends BaseTransport {
 	private _bodySizeLimitEnabled: boolean;
 	private _maxBodySize: number;
 	private _requestCount: number = 0;
+	private _activeRequests: number = 0;
 	private _path: string;
 	private _metrics?: Metrics;
 	private _metricsProvider: (() => string) | null;
@@ -107,7 +108,7 @@ export class HttpTransport extends BaseTransport {
 	 * Get number of active HTTP connections.
 	 */
 	get clientCount(): number {
-		return 0;
+		return this._activeRequests;
 	}
 
 	/**
@@ -128,13 +129,18 @@ export class HttpTransport extends BaseTransport {
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		const startTime = Date.now();
+		const requestPath = req.url || '/';
+		const requestMethod = req.method || 'GET';
 		this._metrics?.counter('http_requests_total', 1, {}, 'Total HTTP transport requests');
+		this._metrics?.counter('http_transport_requests_total', 1, { transport: 'http', method: requestMethod, path: requestPath }, 'Total HTTP requests by transport');
 		res.once('finish', () => {
 			const durationSeconds = (Date.now() - startTime) / 1000;
 			this._metrics?.histogram('http_request_duration_seconds', durationSeconds, {});
+			this._metrics?.histogram('http_transport_request_duration_seconds', durationSeconds, { transport: 'http', path: requestPath });
 		});
 
 		if (!this.validateHostHeader(req)) {
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'forbidden' }, 'Total HTTP request errors');
 			res.writeHead(403, { 'Content-Type': 'application/json' });
 			res.end(
 				JSON.stringify({
@@ -147,6 +153,7 @@ export class HttpTransport extends BaseTransport {
 		}
 
 		if (this.isShuttingDown()) {
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'shutting_down' }, 'Total HTTP request errors');
 			res.writeHead(503, { 'Content-Type': 'application/json' });
 			res.end(
 				JSON.stringify({
@@ -160,6 +167,7 @@ export class HttpTransport extends BaseTransport {
 
 		const clientIp = this.getClientIp(req);
 		if (this.checkRateLimit(clientIp)) {
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'rate_limit' }, 'Total HTTP request errors');
 			res.writeHead(429, {
 				'Content-Type': 'application/json',
 				'Retry-After': '60',
@@ -175,6 +183,7 @@ export class HttpTransport extends BaseTransport {
 		}
 
 		if (!this.validateCorsOrigin(req)) {
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'forbidden' }, 'Total HTTP request errors');
 			res.writeHead(403, { 'Content-Type': 'application/json' });
 			res.end(
 				JSON.stringify({
@@ -206,7 +215,40 @@ export class HttpTransport extends BaseTransport {
 			return;
 		}
 
+		// Handle health check (liveness)
+		if (req.method === 'GET' && req.url === '/health') {
+			const healthData: Record<string, unknown> = { status: 'healthy', requests: this._requestCount };
+			if (this._healthChecker) {
+				const liveness = this._healthChecker.checkLiveness();
+				healthData.liveness = liveness;
+			}
+			res.writeHead(200, {
+				'Content-Type': 'application/json',
+			});
+			res.end(JSON.stringify(healthData));
+			return;
+		}
+
+		// Handle readiness check
+		if (req.method === 'GET' && req.url === '/ready') {
+			if (this._healthChecker) {
+				const readiness = await this._healthChecker.checkReadiness();
+				const statusCode = readiness.status === 'ok' ? 200 : 503;
+				res.writeHead(statusCode, {
+					'Content-Type': 'application/json',
+				});
+				res.end(JSON.stringify(readiness));
+			} else {
+				res.writeHead(200, {
+					'Content-Type': 'application/json',
+				});
+				res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString(), components: {} }));
+			}
+			return;
+		}
+
 		if (req.method !== 'POST' || req.url !== this._path) {
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'not_found' }, 'Total HTTP request errors');
 			res.writeHead(404, { 'Content-Type': 'application/json' });
 			res.end(
 				JSON.stringify({
@@ -219,8 +261,11 @@ export class HttpTransport extends BaseTransport {
 		}
 
 		this._requestCount++;
+		this._activeRequests++;
 		// Set up request timeout
 		const timeout = setTimeout(() => {
+			this._activeRequests--;
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'timeout' }, 'Total HTTP request errors');
 			res.writeHead(500, { 'Content-Type': 'application/json' });
 			res.end(
 				JSON.stringify({
@@ -242,6 +287,8 @@ export class HttpTransport extends BaseTransport {
 				// Check body size limit
 				if (this._bodySizeLimitEnabled && bodySize > this._maxBodySize) {
 					clearTimeout(timeout);
+					this._activeRequests--;
+					this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'payload_too_large' }, 'Total HTTP request errors');
 					res.writeHead(413, { 'Content-Type': 'application/json' });
 					res.end(JSON.stringify({ error: 'Request body too large' }));
 					return;
@@ -256,6 +303,8 @@ export class HttpTransport extends BaseTransport {
 				jsonRpcRequest = JSON.parse(body);
 			} catch {
 				clearTimeout(timeout);
+				this._activeRequests--;
+				this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'parse_error' }, 'Total HTTP request errors');
 				res.writeHead(200, { 'Content-Type': 'application/json' });
 				res.end(
 					JSON.stringify({
@@ -270,6 +319,8 @@ export class HttpTransport extends BaseTransport {
 			const parseResult = safeParse(JsonRpcRequestSchema, jsonRpcRequest);
 			if (!parseResult.success) {
 				clearTimeout(timeout);
+				this._activeRequests--;
+				this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'validation' }, 'Total HTTP request errors');
 				res.writeHead(200, { 'Content-Type': 'application/json' });
 				res.end(
 					JSON.stringify({
@@ -288,6 +339,8 @@ export class HttpTransport extends BaseTransport {
 			// Check if MCP server is ready
 			if (!this._mcpServer) {
 				clearTimeout(timeout);
+				this._activeRequests--;
+				this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'server_not_ready' }, 'Total HTTP request errors');
 				res.writeHead(200, { 'Content-Type': 'application/json' });
 				res.end(
 					JSON.stringify({
@@ -305,6 +358,7 @@ export class HttpTransport extends BaseTransport {
 			});
 
 			clearTimeout(timeout);
+			this._activeRequests--;
 
 			if (response) {
 				res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -316,6 +370,8 @@ export class HttpTransport extends BaseTransport {
 			}
 		} catch (error) {
 			clearTimeout(timeout);
+			this._activeRequests--;
+			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'internal_error' }, 'Total HTTP request errors');
 			res.writeHead(200, { 'Content-Type': 'application/json' });
 			res.end(
 				JSON.stringify({

@@ -24,7 +24,7 @@ import {
 	SessionNotFoundError,
 } from '../errors.js';
 import type { Logger } from '../logger/StructuredLogger.js';
-import type { ThoughtData } from '../types.js';
+import type { ThoughtData, IDisposable } from '../types.js';
 
 export interface SessionOptions {
 	/**
@@ -199,8 +199,9 @@ export class Session {
  * Each session has its own server instance with isolated state,
  * allowing multiple users to interact with the system simultaneously.
  */
-export class ConnectionPool {
+export class ConnectionPool implements IDisposable {
 	private _sessions: Map<string, Session> = new Map();
+	private _createSessionLock: Promise<void> | null = null;
 	private _maxSessions: number;
 	private _sessionTimeout: number;
 	private _autoCleanup: boolean;
@@ -244,6 +245,10 @@ export class ConnectionPool {
 	 * @throws Error if max sessions reached
 	 */
 	async createSession(): Promise<string> {
+		while (this._createSessionLock) {
+			await this._createSessionLock;
+		}
+
 		if (this._terminated) {
 			throw new PoolTerminatedError();
 		}
@@ -256,20 +261,30 @@ export class ConnectionPool {
 			throw new Error('ConnectionPool requires a serverFactory option to create sessions');
 		}
 
-		// Generate unique session ID
-		const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+		let resolveLock!: () => void;
+		this._createSessionLock = new Promise<void>((resolve) => {
+			resolveLock = resolve;
+		});
 
-		// Create a new server instance for this session
-		const server = await this._serverFactory();
+		try {
+			// Generate unique session ID
+			const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
-		// Create session
-		const session = new Session(sessionId, server, this._sessionTimeout, this._logger);
-		this._sessions.set(sessionId, session);
+			// Create a new server instance for this session
+			const server = await this._serverFactory();
 
-		this._logger.info(
-			`Created session ${sessionId} (${this._sessions.size}/${this._maxSessions} active sessions)`
-		);
-		return sessionId;
+			// Create session
+			const session = new Session(sessionId, server, this._sessionTimeout, this._logger);
+			this._sessions.set(sessionId, session);
+
+			this._logger.info(
+				`Created session ${sessionId} (${this._sessions.size}/${this._maxSessions} active sessions)`
+			);
+			return sessionId;
+		} finally {
+			resolveLock();
+			this._createSessionLock = null;
+		}
 	}
 
 	/**
@@ -416,6 +431,15 @@ export class ConnectionPool {
 		this._sessions.clear();
 
 		this._logger.info('ConnectionPool terminated');
+	}
+
+	/**
+	 * Dispose of the connection pool, releasing all resources.
+	 * Implements the IDisposable interface.
+	 * Delegates to terminate() for backward compatibility.
+	 */
+	async dispose(): Promise<void> {
+		await this.terminate();
 	}
 
 	/**
