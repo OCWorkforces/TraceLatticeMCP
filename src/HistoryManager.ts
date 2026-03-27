@@ -2,7 +2,7 @@
  * History and branch management for sequential thinking.
  *
  * This module provides the `HistoryManager` class which manages thought history,
- * branching, tool/skill registries, and optional persistence.
+ * branching, and optional persistence.
  *
  * @module HistoryManager
  */
@@ -10,13 +10,17 @@
 import type { ThoughtData } from './types.js';
 import type { Logger } from './logger/StructuredLogger.js';
 import { NullLogger } from './logger/NullLogger.js';
-import type { DiscoveryCacheOptions } from './cache/DiscoveryCache.js';
 import type { PersistenceBackend } from './persistence/PersistenceBackend.js';
 import type { IHistoryManager } from './IHistoryManager.js';
-import { ToolRegistry } from './registry/ToolRegistry.js';
-import { SkillRegistry } from './registry/SkillRegistry.js';
-import { DiscoveryCache } from './cache/DiscoveryCache.js';
 import type { Metrics } from './metrics/metrics.impl.js';
+
+/**
+ * Interface for emitting persistence error events.
+ * Compatible with EventEmitter's emit method signature.
+ */
+export interface PersistenceEventEmitter {
+	emit(event: 'persistenceError', payload: { operation: string; error: Error }): boolean;
+}
 
 /**
  * Configuration options for creating a `HistoryManager` instance.
@@ -28,9 +32,6 @@ import type { Metrics } from './metrics/metrics.impl.js';
  *   maxBranches: 25,
  *   maxBranchSize: 50,
  *   logger: new StructuredLogger(),
- *   skillDirs: ['./custom-skills'],
- *   discoveryCache: { ttl: 300000, maxSize: 100 },
- *   lazyDiscovery: true,
  *   persistence: filePersistence
  * };
  * ```
@@ -57,31 +58,41 @@ export interface HistoryManagerConfig {
 	/** Optional logger for diagnostics. */
 	logger?: Logger;
 
-	/** Directory paths to search for skills. */
-	skillDirs?: string[];
-
-	/** Discovery cache configuration. */
-	discoveryCache?: DiscoveryCacheOptions;
-
-	/**
-	 * Enable lazy skill discovery (discover on first access).
-	 * @default false
-	 */
-	lazyDiscovery?: boolean;
-
 	/** Optional persistence backend for saving/loading history. */
 	persistence?: PersistenceBackend | null;
 	metrics?: Metrics;
-	tools?: ToolRegistry;
-	skills?: SkillRegistry;
+
+	/**
+	 * Maximum number of thoughts to buffer before flushing to persistence.
+	 * @default 100
+	 */
+	persistenceBufferSize?: number;
+
+	/**
+	 * Interval in milliseconds between periodic persistence flushes.
+	 * @default 1000
+	 */
+	persistenceFlushInterval?: number;
+
+	/**
+	 * Maximum number of retries for failed persistence flushes.
+	 * @default 3
+	 */
+	persistenceMaxRetries?: number;
+
+	/**
+	 * Event emitter for persistence error events.
+	 * When provided, persistenceError events are emitted on persistent failures.
+	 */
+	eventEmitter?: PersistenceEventEmitter;
 }
 
 /**
  * Manages thought history and branching for sequential thinking.
  *
  * This class is the central component for managing the state of sequential thinking
- * operations. It handles thought storage, branch management, tool/skill registries,
- * and optional persistence for state recovery.
+ * operations. It handles thought storage, branch management, and optional persistence
+ * for state recovery.
  *
  * @remarks
  * **History Management:**
@@ -155,11 +166,29 @@ export class HistoryManager implements IHistoryManager {
 
 	private _metrics?: Metrics;
 
-	/** Tool registry for managing available tools. */
-	public tools: ToolRegistry;
+	/** Write buffer for batching persistence operations. */
+	private _writeBuffer: ThoughtData[] = [];
 
-	/** Skill registry for managing available skills. */
-	public skills: SkillRegistry;
+	/** Timer for periodic buffer flushes. */
+	private _flushTimer: ReturnType<typeof setInterval> | null = null;
+
+	/** Guard to prevent concurrent flushes. */
+	private _isFlushing: boolean = false;
+
+	/** Tracks consecutive flush failures for backoff. */
+	private _flushRetryCount: number = 0;
+
+	/** Maximum buffer size before triggering immediate flush. */
+	private _persistenceBufferSize: number;
+
+	/** Interval in milliseconds between periodic flushes. */
+	private _persistenceFlushInterval: number;
+
+	/** Maximum number of retries for failed flushes. */
+	private _persistenceMaxRetries: number;
+
+	/** Event emitter for persistence error events. */
+	private _eventEmitter: PersistenceEventEmitter | null;
 
 	/**
 	 * Creates a new HistoryManager instance.
@@ -184,24 +213,15 @@ export class HistoryManager implements IHistoryManager {
 		this._persistence = config.persistence ?? null;
 		this._persistenceEnabled = this._persistence !== null;
 		this._metrics = config.metrics;
-		this.tools =
-			config.tools ??
-			new ToolRegistry({
-				logger: config.logger,
-				cache: config.discoveryCache
-					? new DiscoveryCache({ ...config.discoveryCache, metrics: config.metrics })
-					: undefined,
-			});
-		this.skills =
-			config.skills ??
-			new SkillRegistry({
-				logger: config.logger,
-				cache: config.discoveryCache
-					? new DiscoveryCache({ ...config.discoveryCache, metrics: config.metrics })
-					: undefined,
-				skillDirs: config.skillDirs,
-				lazyDiscovery: config.lazyDiscovery,
-			});
+		this._persistenceBufferSize = config.persistenceBufferSize ?? 100;
+		this._persistenceFlushInterval = config.persistenceFlushInterval ?? 1000;
+		this._persistenceMaxRetries = config.persistenceMaxRetries ?? 3;
+		this._eventEmitter = config.eventEmitter ?? null;
+
+		// Start the periodic flush timer if persistence is enabled
+		if (this._persistenceEnabled) {
+			this._startFlushTimer();
+		}
 	}
 
 	/**
@@ -255,14 +275,22 @@ export class HistoryManager implements IHistoryManager {
 			this.addToBranch(thought.branch_id, thought);
 		}
 
-		// Persist to backend if enabled
+		// Buffer thought for persistence instead of fire-and-forget
 		if (this._persistenceEnabled && this._persistence) {
-			// Fire and forget - don't await to avoid blocking
-			this._persistence.saveThought(thought).catch((err) => {
-				this.log('Failed to persist thought', {
-					error: err instanceof Error ? err.message : String(err),
+			// Backpressure: if buffer is full and flush is failing, log warning
+			if (this._writeBuffer.length >= this._persistenceBufferSize && this._isFlushing) {
+				this.log('Write buffer full and flush in progress, applying backpressure', {
+					bufferSize: this._writeBuffer.length,
+					maxSize: this._persistenceBufferSize,
 				});
-			});
+			}
+
+			this._writeBuffer.push(thought);
+
+			// Trigger immediate flush if buffer is at capacity
+			if (this._writeBuffer.length >= this._persistenceBufferSize) {
+				void this._flushBuffer();
+			}
 		}
 	}
 
@@ -435,6 +463,7 @@ export class HistoryManager implements IHistoryManager {
 	public clear(): void {
 		this._thought_history = [];
 		this._branches = {};
+		this._writeBuffer = [];
 		this.log('History cleared');
 
 		// Clear persisted data if enabled
@@ -529,5 +558,152 @@ export class HistoryManager implements IHistoryManager {
 	 */
 	public getPersistenceBackend(): PersistenceBackend | null {
 		return this._persistence;
+	}
+
+	/**
+	 * Sets the event emitter for persistence error events.
+	 * This allows wiring up the event emitter after construction
+	 * (e.g., when the server instance is the emitter).
+	 *
+	 * @param emitter - The event emitter to use for persistence error events
+	 */
+	public setEventEmitter(emitter: PersistenceEventEmitter): void {
+		this._eventEmitter = emitter;
+	}
+
+	/**
+	 * Gracefully shuts down the write buffer.
+	 * Stops the periodic flush timer and flushes any remaining buffered writes.
+	 * Should be called during server shutdown before closing the persistence backend.
+	 */
+	public async shutdown(): Promise<void> {
+		this._stopFlushTimer();
+		await this._flushBuffer();
+	}
+
+	/**
+	 * Starts the periodic flush timer for the write buffer.
+	 * @private
+	 */
+	private _startFlushTimer(): void {
+		if (this._flushTimer !== null) {
+			return;
+		}
+		this._flushTimer = setInterval(() => {
+			void this._flushBuffer();
+		}, this._persistenceFlushInterval);
+		// Allow the process to exit even if the timer is still running
+		if (this._flushTimer && typeof this._flushTimer === 'object' && 'unref' in this._flushTimer) {
+			this._flushTimer.unref();
+		}
+	}
+
+	/**
+	 * Stops the periodic flush timer.
+	 * @private
+	 */
+	private _stopFlushTimer(): void {
+		if (this._flushTimer !== null) {
+			clearInterval(this._flushTimer);
+			this._flushTimer = null;
+		}
+	}
+
+	/**
+	 * Flushes the write buffer to the persistence backend.
+	 *
+	 * Takes all buffered thoughts and saves them individually with retry logic.
+	 * On persistent failure (all retries exhausted), emits a `persistenceError` event
+	 * and re-queues failed items at the front of the buffer.
+	 *
+	 * This method is safe to call concurrently — duplicate calls are skipped.
+	 * @internal
+	 */
+	public async _flushBuffer(): Promise<void> {
+		if (this._isFlushing || this._writeBuffer.length === 0 || !this._persistence) {
+			return;
+		}
+
+		this._isFlushing = true;
+
+		// Take all items from the buffer
+		const batch = this._writeBuffer.splice(0, this._writeBuffer.length);
+		const failedItems: ThoughtData[] = [];
+
+		try {
+			for (const thought of batch) {
+				let saved = false;
+				const backoffDelays = [100, 500, 2000];
+
+				for (let attempt = 0; attempt <= this._persistenceMaxRetries; attempt++) {
+					try {
+						await this._persistence.saveThought(thought);
+						saved = true;
+						break;
+					} catch (err) {
+						if (attempt < this._persistenceMaxRetries) {
+							const delay = backoffDelays[attempt] ?? backoffDelays[backoffDelays.length - 1]!;
+							this.log(`Persistence retry ${attempt + 1}/${this._persistenceMaxRetries}`, {
+								thoughtNumber: thought.thought_number,
+								delay,
+								error: err instanceof Error ? err.message : String(err),
+							});
+							await this._delay(delay);
+						} else {
+							this.log('All persistence retries exhausted for thought', {
+								thoughtNumber: thought.thought_number,
+								error: err instanceof Error ? err.message : String(err),
+							});
+						}
+					}
+				}
+
+				if (!saved) {
+					failedItems.push(thought);
+				}
+			}
+
+			if (failedItems.length > 0) {
+				// Re-queue failed items at the front of the buffer
+				this._writeBuffer.unshift(...failedItems);
+				this._flushRetryCount++;
+
+				const error = new Error(
+					`Failed to persist ${failedItems.length} thoughts after ${this._persistenceMaxRetries} retries`
+				);
+				this._eventEmitter?.emit('persistenceError', {
+					operation: 'flushBuffer',
+					error,
+				});
+
+				this.log('Flush completed with failures', {
+					failed: failedItems.length,
+					total: batch.length,
+					consecutiveFailures: this._flushRetryCount,
+				});
+			} else {
+				// Reset retry count on full success
+				this._flushRetryCount = 0;
+			}
+		} finally {
+			this._isFlushing = false;
+		}
+	}
+
+	/**
+	 * Returns a promise that resolves after the specified delay.
+	 * @param ms - Delay in milliseconds
+	 * @private
+	 */
+	private _delay(ms: number): Promise<void> {
+		return new Promise((resolve) => setTimeout(resolve, ms));
+	}
+
+	/**
+	 * Gets the current write buffer length.
+	 * Useful for monitoring and testing.
+	 */
+	public getWriteBufferLength(): number {
+		return this._writeBuffer.length;
 	}
 }
