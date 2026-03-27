@@ -23,7 +23,7 @@ import {
 	SessionNotActiveError,
 	SessionNotFoundError,
 } from '../errors.js';
-import type { Logger } from '../logger/StructuredLogger.js';
+import type { Logger } from '../contracts/index.js';
 import type { ThoughtData, IDisposable } from '../types.js';
 
 export interface SessionOptions {

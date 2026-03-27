@@ -8,7 +8,7 @@
  */
 
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
-import type { Logger } from '../logger/StructuredLogger.js';
+import type { Logger } from '../contracts/index.js';
 
 /**
  * Health status of an individual component.
