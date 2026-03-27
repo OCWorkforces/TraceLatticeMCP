@@ -6,7 +6,7 @@
 	"main": "dist/lib.js",
 	"types": "dist/index.d.ts",
 	"bin": {
-		"trace-lattice": "./dist/cli.js"
+		"sequentialthinking-tools": "./dist/cli.js"
 	},
 	"files": [
 		"dist",
