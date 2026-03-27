@@ -82,9 +82,17 @@ codex mcp add sequentialthinking-tools -- sequentialthinking-tools
 {
   "mcpServers": {
     "sequentialthinking-tools": {
-      "command": "sequentialthinking-tools",
-      "type": "stdio"
-    }
+      "type": "local",
+      "command": [
+        "npx",
+        "-y",
+        "sequentialthinking-tools"
+      ],
+      "enabled": true,
+      "environment": {
+        "MAX_HISTORY_SIZE": "10000"
+      }
+    },
   }
 }
 ```
