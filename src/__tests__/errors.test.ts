@@ -1,8 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
 	SequentialThinkingError,
+	ConfigurationError,
 	ToolNotFoundError,
+	DuplicateToolError,
+	InvalidToolError,
 	SkillNotFoundError,
+	DuplicateSkillError,
+	InvalidSkillError,
 	InvalidThoughtError,
 	SkillDiscoveryError,
 	HistoryLimitExceededError,
@@ -10,6 +15,7 @@ import {
 	SessionNotFoundError,
 	MaxSessionsReachedError,
 	PoolTerminatedError,
+	ValidationError,
 } from '../errors.js';
 
 describe('Custom Error Types', () => {
@@ -36,12 +42,79 @@ describe('Custom Error Types', () => {
 		});
 	});
 
+	describe('DuplicateToolError', () => {
+		it('should create duplicate tool error', () => {
+			const error = new DuplicateToolError('test-tool');
+			expect(error.message).toBe("tool 'test-tool' already exists");
+			expect(error.code).toBe('DUPLICATE_TOOL');
+			expect(error.name).toBe('DuplicateToolError');
+		});
+	});
+
+	describe('InvalidToolError', () => {
+		it('should create invalid tool error', () => {
+			const error = new InvalidToolError('Tool must have a valid name');
+			expect(error.message).toBe('Invalid tool: Tool must have a valid name');
+			expect(error.code).toBe('INVALID_TOOL');
+			expect(error.name).toBe('InvalidToolError');
+		});
+	});
+
 	describe('SkillNotFoundError', () => {
 		it('should create skill not found error', () => {
 			const error = new SkillNotFoundError('test-skill');
 			expect(error.message).toBe("Skill 'test-skill' not found");
 			expect(error.code).toBe('SKILL_NOT_FOUND');
 			expect(error.name).toBe('SkillNotFoundError');
+		});
+	});
+
+	describe('DuplicateSkillError', () => {
+		it('should create duplicate skill error', () => {
+			const error = new DuplicateSkillError('test-skill');
+			expect(error.message).toBe("skill 'test-skill' already exists");
+			expect(error.code).toBe('DUPLICATE_SKILL');
+			expect(error.name).toBe('DuplicateSkillError');
+		});
+	});
+
+	describe('InvalidSkillError', () => {
+		it('should create invalid skill error', () => {
+			const error = new InvalidSkillError('Skill must have a valid name');
+			expect(error.message).toBe('Invalid skill: Skill must have a valid name');
+			expect(error.code).toBe('INVALID_SKILL');
+			expect(error.name).toBe('InvalidSkillError');
+		});
+	});
+
+	describe('ConfigurationError', () => {
+		it('constructs with message and configuration error code', () => {
+			const error = new ConfigurationError('Invalid configuration value');
+			expect(error.message).toBe('Invalid configuration value');
+			expect(error.code).toBe('CONFIGURATION_ERROR');
+			expect(error.name).toBe('ConfigurationError');
+		});
+
+		it('is instance of SequentialThinkingError and Error', () => {
+			const error = new ConfigurationError('Invalid configuration value');
+			expect(error).toBeInstanceOf(SequentialThinkingError);
+			expect(error).toBeInstanceOf(Error);
+		});
+
+		it('can be caught as SequentialThinkingError and has stack trace', () => {
+			let caught: SequentialThinkingError | undefined;
+
+			try {
+				throw new ConfigurationError('Invalid configuration value');
+			} catch (error) {
+				if (error instanceof SequentialThinkingError) {
+					caught = error;
+				}
+			}
+
+			expect(caught).toBeDefined();
+			expect(caught?.name).toBe('ConfigurationError');
+			expect(caught?.stack).toBeDefined();
 		});
 	});
 
@@ -71,6 +144,16 @@ describe('Custom Error Types', () => {
 			expect(error.message).toBe('History size 1500 exceeds limit 1000');
 			expect(error.code).toBe('HISTORY_LIMIT_EXCEEDED');
 			expect(error.name).toBe('HistoryLimitExceededError');
+		});
+	});
+
+	describe('ValidationError', () => {
+		it('should create validation error', () => {
+			const error = new ValidationError('branchId', 'Invalid format');
+			expect(error.message).toBe("Validation failed for 'branchId': Invalid format");
+			expect(error.code).toBe('VALIDATION_ERROR');
+			expect(error.name).toBe('ValidationError');
+			expect(error.field).toBe('branchId');
 		});
 	});
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Container, createDefaultContainer } from '../di/Container.js';
 
 // Test classes and interfaces
@@ -402,6 +402,181 @@ describe('Container', () => {
 
 			expect(services).toEqual(expect.arrayContaining(['Logger', 'Config', 'Service']));
 			expect(services).toHaveLength(3);
+		});
+	});
+
+	describe('Container Disposal', () => {
+		describe('registerDisposable()', () => {
+			it('should register a disposable instance by name', async () => {
+				const mockDisposable = { dispose: vi.fn().mockResolvedValue(undefined) };
+
+				container.registerDisposable('Logger', mockDisposable);
+				await container.dispose();
+
+				expect(mockDisposable.dispose).toHaveBeenCalledTimes(1);
+			});
+
+			it('should register multiple disposables', async () => {
+				const firstDisposable = { dispose: vi.fn().mockResolvedValue(undefined) };
+				const secondDisposable = { dispose: vi.fn().mockResolvedValue(undefined) };
+
+				container.registerDisposable('First', firstDisposable);
+				container.registerDisposable('Second', secondDisposable);
+				await container.dispose();
+
+				expect(firstDisposable.dispose).toHaveBeenCalledTimes(1);
+				expect(secondDisposable.dispose).toHaveBeenCalledTimes(1);
+			});
+
+			it('should allow registering disposable for unregistered service name', async () => {
+				const mockDisposable = { dispose: vi.fn().mockResolvedValue(undefined) };
+
+				expect(() => {
+					container.registerDisposable('UnregisteredService', mockDisposable);
+				}).not.toThrow();
+
+				await container.dispose();
+				expect(mockDisposable.dispose).toHaveBeenCalledTimes(1);
+			});
+		});
+
+		describe('dispose()', () => {
+			it('should call dispose() on all registered disposables', async () => {
+				const loggerDisposable = { dispose: vi.fn().mockResolvedValue(undefined) };
+				const configDisposable = { dispose: vi.fn().mockResolvedValue(undefined) };
+
+				container.registerDisposable('Logger', loggerDisposable);
+				container.registerDisposable('Config', configDisposable);
+
+				await expect(container.dispose()).resolves.toBeUndefined();
+
+				expect(loggerDisposable.dispose).toHaveBeenCalledTimes(1);
+				expect(configDisposable.dispose).toHaveBeenCalledTimes(1);
+			});
+
+			it('should dispose services in reverse registration order', async () => {
+				const callOrder: string[] = [];
+				const firstDisposable = {
+					dispose: vi.fn().mockImplementation(async () => {
+						callOrder.push('First');
+					}),
+				};
+				const secondDisposable = {
+					dispose: vi.fn().mockImplementation(async () => {
+						callOrder.push('Second');
+					}),
+				};
+				const thirdDisposable = {
+					dispose: vi.fn().mockImplementation(async () => {
+						callOrder.push('Third');
+					}),
+				};
+
+				container.registerDisposable('First', firstDisposable);
+				container.registerDisposable('Second', secondDisposable);
+				container.registerDisposable('Third', thirdDisposable);
+
+				await container.dispose();
+
+				expect(callOrder).toEqual(['Third', 'Second', 'First']);
+			});
+
+			it('should throw aggregate error when one or more disposables fail', async () => {
+				const okDisposable = { dispose: vi.fn().mockResolvedValue(undefined) };
+				const failingDisposable = {
+					dispose: vi.fn().mockRejectedValue(new Error('failed to dispose resource')),
+				};
+
+				container.registerDisposable('OkService', okDisposable);
+				container.registerDisposable('FailingService', failingDisposable);
+
+				await expect(container.dispose()).rejects.toThrow('Failed to dispose services:');
+			});
+
+			it('should include failed service names in aggregate error message', async () => {
+				container.registerDisposable('ConnectionPool', {
+					dispose: vi.fn().mockRejectedValue(new Error('pool failure')),
+				});
+				container.registerDisposable('Cache', {
+					dispose: vi.fn().mockRejectedValue(new Error('cache failure')),
+				});
+
+				await expect(container.dispose()).rejects.toThrow(
+					'Failed to dispose services: Cache: cache failure, ConnectionPool: pool failure'
+				);
+			});
+
+			it('should continue disposing remaining services after first error', async () => {
+				const firstDisposable = { dispose: vi.fn().mockResolvedValue(undefined) };
+				const failingDisposable = {
+					dispose: vi.fn().mockRejectedValue(new Error('dispose failed')),
+				};
+				const lastDisposable = { dispose: vi.fn().mockResolvedValue(undefined) };
+
+				container.registerDisposable('First', firstDisposable);
+				container.registerDisposable('Failing', failingDisposable);
+				container.registerDisposable('Last', lastDisposable);
+
+				await expect(container.dispose()).rejects.toThrow('Failed to dispose services:');
+
+				expect(lastDisposable.dispose).toHaveBeenCalledTimes(1);
+				expect(failingDisposable.dispose).toHaveBeenCalledTimes(1);
+				expect(firstDisposable.dispose).toHaveBeenCalledTimes(1);
+			});
+
+			it('should not throw when all dispose() calls succeed', async () => {
+				container.registerDisposable('Logger', {
+					dispose: vi.fn().mockResolvedValue(undefined),
+				});
+				container.registerDisposable('Config', {
+					dispose: vi.fn().mockResolvedValue(undefined),
+				});
+
+				await expect(container.dispose()).resolves.toBeUndefined();
+			});
+
+			it('should work correctly when no disposables are registered', async () => {
+				await expect(container.dispose()).resolves.toBeUndefined();
+			});
+
+			it('should be idempotent when dispose() is called multiple times', async () => {
+				const mockDisposable = { dispose: vi.fn().mockResolvedValue(undefined) };
+
+				container.registerDisposable('Logger', mockDisposable);
+
+				await expect(container.dispose()).resolves.toBeUndefined();
+				await expect(container.dispose()).resolves.toBeUndefined();
+
+				expect(mockDisposable.dispose).toHaveBeenCalledTimes(1);
+			});
+
+			it('should aggregate synchronous throw and promise rejection errors', async () => {
+				container.registerDisposable('SyncThrower', {
+					dispose: vi.fn().mockImplementation(() => {
+						throw new Error('sync failure');
+					}),
+				});
+				container.registerDisposable('AsyncRejector', {
+					dispose: vi.fn().mockRejectedValue(new Error('async failure')),
+				});
+
+				await expect(container.dispose()).rejects.toThrow(
+					'Failed to dispose services: AsyncRejector: async failure, SyncThrower: sync failure'
+				);
+			});
+
+			it('should clear tracked disposables even when dispose throws', async () => {
+				const failingDisposable = {
+					dispose: vi.fn().mockRejectedValue(new Error('failed once')),
+				};
+
+				container.registerDisposable('Failing', failingDisposable);
+
+				await expect(container.dispose()).rejects.toThrow('Failed to dispose services:');
+				await expect(container.dispose()).resolves.toBeUndefined();
+
+				expect(failingDisposable.dispose).toHaveBeenCalledTimes(1);
+			});
 		});
 	});
 
