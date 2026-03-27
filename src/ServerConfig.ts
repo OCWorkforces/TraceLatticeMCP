@@ -10,6 +10,7 @@
 
 import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { ConfigurationError } from './errors.js';
 import type { PersistenceConfig } from './persistence/PersistenceBackend.js';
 
 /**
@@ -72,6 +73,24 @@ export interface ServerConfigOptions {
 	 * Persistence configuration for storing history and state.
 	 */
 	persistence?: PersistenceConfig;
+
+	/**
+	 * Maximum number of thoughts to buffer before flushing to persistence.
+	 * @default 100
+	 */
+	persistenceBufferSize?: number;
+
+	/**
+	 * Interval in milliseconds between periodic persistence flushes.
+	 * @default 1000
+	 */
+	persistenceFlushInterval?: number;
+
+	/**
+	 * Maximum number of retries for failed persistence flushes.
+	 * @default 3
+	 */
+	persistenceMaxRetries?: number;
 }
 
 /**
@@ -121,6 +140,15 @@ export class ServerConfig {
 	/** Persistence configuration. */
 	public persistence: PersistenceConfig;
 
+	/** Maximum number of thoughts to buffer before flushing to persistence. */
+	public persistenceBufferSize: number;
+
+	/** Interval in milliseconds between periodic persistence flushes. */
+	public persistenceFlushInterval: number;
+
+	/** Maximum number of retries for failed persistence flushes. */
+	public persistenceMaxRetries: number;
+
 	/**
 	 * Creates a new ServerConfig instance with validation.
 	 *
@@ -144,6 +172,11 @@ export class ServerConfig {
 		this.skillDirs = this.validateSkillDirs(options.skillDirs);
 		this.discoveryCache = this.validateDiscoveryCache(options.discoveryCache);
 		this.persistence = this.validatePersistence(options.persistence);
+		this.persistenceBufferSize = this.validatePersistenceBufferSize(options.persistenceBufferSize);
+		this.persistenceFlushInterval = this.validatePersistenceFlushInterval(
+			options.persistenceFlushInterval
+		);
+		this.persistenceMaxRetries = this.validatePersistenceMaxRetries(options.persistenceMaxRetries);
 	}
 
 	/**
@@ -154,13 +187,15 @@ export class ServerConfig {
 	 */
 	private validateMaxHistorySize(value?: number): number {
 		const defaultValue = 1000;
-		if (!value) return defaultValue;
+		if (value === undefined || value === null) return defaultValue;
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			throw new ConfigurationError(`maxHistorySize must be a finite number, got ${value}`);
+		}
 		if (value < 1) {
-			console.warn(`maxHistorySize must be at least 1, using ${defaultValue}`);
-			return defaultValue;
+			throw new ConfigurationError(`maxHistorySize must be at least 1, got ${value}`);
 		}
 		if (value > 10000) {
-			console.warn(`maxHistorySize ${value} exceeds recommended maximum 10000, using anyway`);
+			throw new ConfigurationError(`maxHistorySize must not exceed 10000, got ${value}`);
 		}
 		return value;
 	}
@@ -173,13 +208,15 @@ export class ServerConfig {
 	 */
 	private validateMaxBranches(value?: number): number {
 		const defaultValue = 50;
-		if (!value) return defaultValue;
+		if (value === undefined || value === null) return defaultValue;
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			throw new ConfigurationError(`maxBranches must be a finite number, got ${value}`);
+		}
 		if (value < 0) {
-			console.warn(`maxBranches must be non-negative, using ${defaultValue}`);
-			return defaultValue;
+			throw new ConfigurationError(`maxBranches must be non-negative, got ${value}`);
 		}
 		if (value > 1000) {
-			console.warn(`maxBranches ${value} exceeds recommended maximum 1000, using anyway`);
+			throw new ConfigurationError(`maxBranches must not exceed 1000, got ${value}`);
 		}
 		return value;
 	}
@@ -192,13 +229,15 @@ export class ServerConfig {
 	 */
 	private validateMaxBranchSize(value?: number): number {
 		const defaultValue = 100;
-		if (!value) return defaultValue;
+		if (value === undefined || value === null) return defaultValue;
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			throw new ConfigurationError(`maxBranchSize must be a finite number, got ${value}`);
+		}
 		if (value < 1) {
-			console.warn(`maxBranchSize must be at least 1, using ${defaultValue}`);
-			return defaultValue;
+			throw new ConfigurationError(`maxBranchSize must be at least 1, got ${value}`);
 		}
 		if (value > 1000) {
-			console.warn(`maxBranchSize ${value} exceeds recommended maximum 1000, using anyway`);
+			throw new ConfigurationError(`maxBranchSize must not exceed 1000, got ${value}`);
 		}
 		return value;
 	}
@@ -250,10 +289,9 @@ export class ServerConfig {
 		const validBackends = ['file', 'sqlite', 'memory'];
 		const backend = value.backend ?? 'memory';
 		if (!validBackends.includes(backend)) {
-			console.warn(
-				`Invalid persistence backend: ${backend}. Defaulting to 'memory'. Valid options: ${validBackends.join(', ')}`
+			throw new ConfigurationError(
+				`persistence.backend must be one of ${validBackends.join(', ')}, got ${backend}`
 			);
-			return { enabled: false, backend: 'memory' };
 		}
 
 		return {
@@ -261,6 +299,71 @@ export class ServerConfig {
 			backend,
 			options: value.options ?? {},
 		};
+	}
+
+	/**
+	 * Validates the persistence buffer size value.
+	 * @param value - The value to validate
+	 * @returns The validated value or default (100)
+	 * @private
+	 */
+	private validatePersistenceBufferSize(value?: number): number {
+		const defaultValue = 100;
+		if (value === undefined || value === null) return defaultValue;
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			throw new ConfigurationError(`persistenceBufferSize must be a finite number, got ${value}`);
+		}
+		if (value < 1) {
+			throw new ConfigurationError(`persistenceBufferSize must be at least 1, got ${value}`);
+		}
+		if (value > 10000) {
+			throw new ConfigurationError(`persistenceBufferSize must not exceed 10000, got ${value}`);
+		}
+		return value;
+	}
+
+	/**
+	 * Validates the persistence flush interval value.
+	 * @param value - The value to validate
+	 * @returns The validated value or default (1000)
+	 * @private
+	 */
+	private validatePersistenceFlushInterval(value?: number): number {
+		const defaultValue = 1000;
+		if (value === undefined || value === null) return defaultValue;
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			throw new ConfigurationError(
+				`persistenceFlushInterval must be a finite number, got ${value}`
+			);
+		}
+		if (value < 100) {
+			throw new ConfigurationError(`persistenceFlushInterval must be at least 100, got ${value}`);
+		}
+		if (value > 60000) {
+			throw new ConfigurationError(`persistenceFlushInterval must not exceed 60000, got ${value}`);
+		}
+		return value;
+	}
+
+	/**
+	 * Validates the persistence max retries value.
+	 * @param value - The value to validate
+	 * @returns The validated value or default (3)
+	 * @private
+	 */
+	private validatePersistenceMaxRetries(value?: number): number {
+		const defaultValue = 3;
+		if (value === undefined || value === null) return defaultValue;
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			throw new ConfigurationError(`persistenceMaxRetries must be a finite number, got ${value}`);
+		}
+		if (value < 0) {
+			throw new ConfigurationError(`persistenceMaxRetries must be non-negative, got ${value}`);
+		}
+		if (value > 10) {
+			throw new ConfigurationError(`persistenceMaxRetries must not exceed 10, got ${value}`);
+		}
+		return value;
 	}
 
 	/**
@@ -286,6 +389,9 @@ export class ServerConfig {
 			skillDirs: this.skillDirs,
 			discoveryCache: this.discoveryCache,
 			persistence: this.persistence,
+			persistenceBufferSize: this.persistenceBufferSize,
+			persistenceFlushInterval: this.persistenceFlushInterval,
+			persistenceMaxRetries: this.persistenceMaxRetries,
 		};
 	}
 }

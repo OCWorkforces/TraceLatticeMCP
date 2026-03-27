@@ -79,6 +79,13 @@ export class SequentialThinkingError extends Error {
 	}
 }
 
+export class ConfigurationError extends SequentialThinkingError {
+	constructor(message: string) {
+		super(message, 'CONFIGURATION_ERROR');
+		this.name = 'ConfigurationError';
+	}
+}
+
 /**
  * Error thrown when a requested tool is not found in the registry.
  *
