@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Tool } from '../types.js';
+import type { Tool } from '../types/tool.js';
 import { ToolRegistry } from '../registry/ToolRegistry.js';
 import { ConfigLoader } from '../config/ConfigLoader.js';
 

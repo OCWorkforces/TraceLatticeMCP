@@ -8,7 +8,7 @@
  * @module processor
  */
 
-import type { ThoughtData } from '../types.js';
+import type { ThoughtData } from '../types/thought.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { IHistoryManager } from '../IHistoryManager.js';
 import { ThoughtFormatter } from '../formatter/ThoughtFormatter.js';

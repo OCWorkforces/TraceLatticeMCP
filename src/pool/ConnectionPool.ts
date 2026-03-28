@@ -24,7 +24,8 @@ import {
 	SessionNotFoundError,
 } from '../errors.js';
 import type { Logger } from '../contracts/index.js';
-import type { ThoughtData, IDisposable } from '../types.js';
+import type { ThoughtData } from '../types/thought.js';
+import type { IDisposable } from '../types/disposable.js';
 
 export interface SessionOptions {
 	/**

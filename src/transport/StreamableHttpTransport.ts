@@ -197,12 +197,7 @@ export class StreamableHttpTransport extends BaseTransport {
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		const startTime = Date.now();
-		this._metrics?.counter(
-			'streamable_http_requests_total',
-			1,
-			{},
-			'Total Streamable HTTP transport requests'
-		);
+		this._metrics?.counter('streamable_http_requests_total', 1, {}, 'Total Streamable HTTP transport requests');
 		res.once('finish', () => {
 			const durationSeconds = (Date.now() - startTime) / 1000;
 			this._metrics?.histogram('streamable_http_request_duration_seconds', durationSeconds, {});
@@ -210,57 +205,27 @@ export class StreamableHttpTransport extends BaseTransport {
 
 		// Host validation
 		if (!this.validateHostHeader(req)) {
-			res.writeHead(403, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32000, message: 'Forbidden - invalid host header' },
-				})
-			);
+			this._sendJsonRpcError(res, 403, -32000, 'Forbidden - invalid host header');
 			return;
 		}
 
 		// Shutdown check
 		if (this.isShuttingDown()) {
-			res.writeHead(503, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32603, message: 'Server is shutting down' },
-				})
-			);
+			this._sendJsonRpcError(res, 503, -32603, 'Server is shutting down');
 			return;
 		}
 
 		// Rate limiting
 		const clientIp = this.getClientIp(req);
 		if (this.checkRateLimit(clientIp)) {
-			res.writeHead(429, {
-				'Content-Type': 'application/json',
-				'Retry-After': '60',
-			});
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32000, message: 'Too many requests' },
-				})
-			);
+			res.setHeader('Retry-After', '60');
+			this._sendJsonRpcError(res, 429, -32000, 'Too many requests');
 			return;
 		}
 
 		// CORS validation
 		if (!this.validateCorsOrigin(req)) {
-			res.writeHead(403, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32000, message: 'Forbidden - invalid origin' },
-				})
-			);
+			this._sendJsonRpcError(res, 403, -32000, 'Forbidden - invalid origin');
 			return;
 		}
 
@@ -305,31 +270,25 @@ export class StreamableHttpTransport extends BaseTransport {
 				this._handleMcpGet(req, res);
 				return;
 			}
-
-			// Method not allowed for MCP endpoint
-			res.writeHead(405, {
-				'Content-Type': 'application/json',
-				Allow: 'GET, POST',
-			});
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32601, message: 'Method not allowed' },
-				})
-			);
+			res.writeHead(405, { 'Content-Type': 'application/json', Allow: 'GET, POST' });
+			res.end(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32601, message: 'Method not allowed' } }));
 			return;
 		}
 
 		// 404 for unknown paths
-		res.writeHead(404, { 'Content-Type': 'application/json' });
-		res.end(
-			JSON.stringify({
-				jsonrpc: '2.0',
-				id: null,
-				error: { code: -32601, message: 'Not Found' },
-			})
-		);
+		this._sendJsonRpcError(res, 404, -32601, 'Not Found');
+	}
+
+	/**
+	 * Send a JSON-RPC error response.
+	 */
+	private _sendJsonRpcError(res: ServerResponse, statusCode: number, code: number, message: string, id: unknown = null, extra?: Record<string, unknown>): void {
+		const error: Record<string, unknown> = { code, message };
+		if (extra) {
+			Object.assign(error, extra);
+		}
+		res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+		res.end(JSON.stringify({ jsonrpc: '2.0', id, error }));
 	}
 
 	/**
@@ -345,34 +304,18 @@ export class StreamableHttpTransport extends BaseTransport {
 		this._requestCount++;
 		this._activeRequests++;
 
-		// Set up request timeout
 		const timeout = setTimeout(() => {
 			this._activeRequests--;
-			res.writeHead(500, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32603, message: 'Request timeout' },
-				})
-			);
+			this._sendJsonRpcError(res, 500, -32603, 'Request timeout');
 		}, this._requestTimeout);
 
 		try {
 			// Read request body with size limit
 			const body = await this._readRequestBody(req);
-
 			if (body === null) {
 				clearTimeout(timeout);
 				this._activeRequests--;
-				res.writeHead(413, { 'Content-Type': 'application/json' });
-				res.end(
-					JSON.stringify({
-						jsonrpc: '2.0',
-						id: null,
-						error: { code: -32000, message: 'Request body too large' },
-					})
-				);
+				this._sendJsonRpcError(res, 413, -32000, 'Request body too large');
 				return;
 			}
 
@@ -383,14 +326,7 @@ export class StreamableHttpTransport extends BaseTransport {
 			} catch {
 				clearTimeout(timeout);
 				this._activeRequests--;
-				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(
-					JSON.stringify({
-						jsonrpc: '2.0',
-						id: null,
-						error: { code: -32700, message: 'Parse error' },
-					})
-				);
+				this._sendJsonRpcError(res, 200, -32700, 'Parse error');
 				return;
 			}
 
@@ -399,19 +335,7 @@ export class StreamableHttpTransport extends BaseTransport {
 			if (!parseResult.success) {
 				clearTimeout(timeout);
 				this._activeRequests--;
-				const requestId = jsonRpcRequest?.id ?? null;
-				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(
-					JSON.stringify({
-						jsonrpc: '2.0',
-						id: requestId,
-						error: {
-							code: -32600,
-							message: 'Invalid Request',
-							data: parseResult.issues,
-						},
-					})
-				);
+				this._sendJsonRpcError(res, 200, -32600, 'Invalid Request', jsonRpcRequest?.id ?? null, { data: parseResult.issues });
 				return;
 			}
 
@@ -420,7 +344,6 @@ export class StreamableHttpTransport extends BaseTransport {
 			if (this._stateful) {
 				const sessionResult = this._resolveSession(req, res);
 				if (sessionResult === false) {
-					// Response already sent (invalid session)
 					clearTimeout(timeout);
 					this._activeRequests--;
 					return;
@@ -432,61 +355,36 @@ export class StreamableHttpTransport extends BaseTransport {
 			if (!this._mcpServer) {
 				clearTimeout(timeout);
 				this._activeRequests--;
-				res.writeHead(503, { 'Content-Type': 'application/json' });
-				res.end(
-					JSON.stringify({
-						jsonrpc: '2.0',
-						id: jsonRpcRequest?.id ?? null,
-						error: { code: -32603, message: 'Server not ready' },
-					})
-				);
+				this._sendJsonRpcError(res, 503, -32603, 'Server not ready', jsonRpcRequest?.id ?? null);
 				return;
 			}
 
 			// Process JSON-RPC request through MCP server
-			const response = await this._mcpServer.receive(jsonRpcRequest, {
-				sessionInfo: {},
-			});
-
+			const response = await this._mcpServer.receive(jsonRpcRequest, { sessionInfo: {} });
 			clearTimeout(timeout);
 			this._activeRequests--;
 
-			// Set Mcp-Session-Id header for stateful responses
-			const responseHeaders: Record<string, string> = {
-				'Content-Type': 'application/json',
-			};
-			if (sessionId) {
-				responseHeaders['Mcp-Session-Id'] = sessionId;
-			}
+			// Send response with session header if applicable
+			const responseHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+			if (sessionId) responseHeaders['Mcp-Session-Id'] = sessionId;
 
 			if (response) {
 				res.writeHead(200, responseHeaders);
 				res.end(JSON.stringify(response));
 			} else {
-				// JSON-RPC notification — no response body per spec
-				if (sessionId) {
-					res.setHeader('Mcp-Session-Id', sessionId);
-				}
+				if (sessionId) res.setHeader('Mcp-Session-Id', sessionId);
 				res.writeHead(202);
 				res.end();
 			}
 		} catch (error) {
 			clearTimeout(timeout);
 			this._activeRequests--;
-			res.writeHead(200, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: {
-						code: -32603,
-						message: 'Internal error',
-						data: error instanceof Error ? error.message : String(error),
-					},
-				})
-			);
+			this._sendJsonRpcError(res, 200, -32603, 'Internal error', null, {
+				data: error instanceof Error ? error.message : String(error),
+			});
 		}
 	}
+
 
 	/**
 	 * Handle GET /mcp — Optional SSE notification stream.

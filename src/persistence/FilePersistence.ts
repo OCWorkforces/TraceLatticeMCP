@@ -1,5 +1,5 @@
 import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
-import type { ThoughtData } from '../types.js';
+import type { ThoughtData } from '../types/thought.js';
 import type { IMetrics } from '../contracts/index.js';
 import { mkdir, writeFile, readFile, readdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
