@@ -22,7 +22,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { cpus } from 'node:os';
-import type { ThoughtData, IDisposable } from '../types.js';
+import type { ThoughtData } from '../types/thought.js';
+import type { IDisposable } from '../types/disposable.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 
 export interface WorkerManagerOptions {

@@ -5,7 +5,8 @@
 import { EventEmitter } from 'node:events';
 import * as v from 'valibot';
 import { SequentialThinkingSchema, SEQUENTIAL_THINKING_TOOL } from './schema.js';
-import { ThoughtData, IDisposable } from './types.js';
+import { ThoughtData } from './types/thought.js';
+import { IDisposable } from './types/disposable.js';
 
 // New component imports
 import { HistoryManager } from './HistoryManager.js';

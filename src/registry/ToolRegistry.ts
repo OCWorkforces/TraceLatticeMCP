@@ -8,7 +8,7 @@
  * @module registry
  */
 
-import type { Tool } from '../types.js';
+import type { Tool } from '../types/tool.js';
 import type { Logger } from '../contracts/index.js';
 import { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { homedir } from 'node:os';

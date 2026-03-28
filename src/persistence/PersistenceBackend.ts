@@ -1,4 +1,4 @@
-import type { ThoughtData } from '../types.js';
+import type { ThoughtData } from '../types/thought.js';
 
 /**
  * Persistence backend interface for storing thought history and branches.

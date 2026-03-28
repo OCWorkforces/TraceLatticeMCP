@@ -7,7 +7,7 @@
  * @module HistoryManager
  */
 
-import type { ThoughtData } from './types.js';
+import type { ThoughtData } from './types/thought.js';
 import type { Logger } from './logger/StructuredLogger.js';
 import { NullLogger } from './logger/NullLogger.js';
 import type { PersistenceBackend } from './persistence/PersistenceBackend.js';

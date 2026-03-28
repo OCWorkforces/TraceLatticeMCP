@@ -1,5 +1,5 @@
 import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
-import type { ThoughtData } from '../types.js';
+import type { ThoughtData } from '../types/thought.js';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';

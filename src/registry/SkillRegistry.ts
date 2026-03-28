@@ -8,7 +8,7 @@
  * @module registry
  */
 
-import type { Skill } from '../types.js';
+import type { Skill } from '../types/skill.js';
 import type { Logger } from '../contracts/index.js';
 import { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { homedir } from 'node:os';

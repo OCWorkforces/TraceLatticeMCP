@@ -15,7 +15,7 @@
 export type { Logger, LogLevel, LogEntry, LoggerOptions } from '../logger/StructuredLogger.js';
 
 // Re-export IDisposable from types (already an interface)
-export type { IDisposable } from '../types.js';
+export type { IDisposable } from '../types/disposable.js';
 
 // Re-export PersistenceBackend from persistence (already an interface)
 export type { PersistenceBackend, PersistenceConfig } from '../persistence/PersistenceBackend.js';

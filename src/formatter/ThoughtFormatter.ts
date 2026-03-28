@@ -8,7 +8,8 @@
  * @module formatter
  */
 
-import type { ThoughtData, StepRecommendation } from '../types.js';
+import type { ThoughtData } from '../types/thought.js';
+import type { StepRecommendation } from '../types/step.js';
 import chalk from 'chalk';
 
 /**
