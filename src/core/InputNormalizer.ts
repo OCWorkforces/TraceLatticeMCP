@@ -11,7 +11,7 @@
  * @module processor
  */
 
-import type { ThoughtData } from '../types/thought.js';
+import type { ThoughtData } from './thought.js';
 import { ValidationError } from '../errors.js';
 
 /**
