@@ -98,149 +98,149 @@ cleanup() {
     fi
 }
 
-main() {
-    local skip_deps_check=false
-    local use_npm_link=false
-    local verbose=false
+parse_args() {
+	local skip_deps_check=false
+	local use_npm_link=false
+	local verbose=false
 
-    # Parse command line arguments
-    while [[ $# -gt 0 ]]; do
-        case $1 in
-            -h|--help)
-                print_usage
-                exit 0
-                ;;
-            -v|--verbose)
-                verbose=true
-                set -x
-                ;;
-            --skip-deps-check)
-                skip_deps_check=true
-                ;;
-            --link)
-                use_npm_link=true
-                ;;
-            *)
-                log_error "Unknown option: $1"
-                print_usage
-                exit 1
-                ;;
-        esac
-        shift
-    done
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+			-h|--help)
+				print_usage
+				exit 0
+				;;
+			-v|--verbose)
+				verbose=true
+				set -x
+				;;
+			--skip-deps-check)
+				skip_deps_check=true
+				;;
+			--link)
+				use_npm_link=true
+				;;
+			*)
+				log_error "Unknown option: $1"
+				print_usage
+				exit 1
+				;;
+		esac
+		shift
+	done
 
-    # Set up cleanup trap
-    trap cleanup EXIT
+	echo "$skip_deps_check $use_npm_link $verbose"
+}
 
-    # Print banner
-    print_banner
+check_prerequisites() {
+	local skip_deps_check=$1
 
-    log_info "Installing ${PACKAGE_NAME} v${PACKAGE_VERSION} globally..."
-    echo ""
+	log_info "Checking prerequisites..."
 
-    # Check prerequisites
-    log_info "Checking prerequisites..."
+	if [ "$skip_deps_check" = false ]; then
+		check_command "node" || exit 1
+		check_command "npm" || exit 1
+		check_node_version || exit 1
+	else
+		log_warn "Skipping dependency checks (--skip-deps-check)"
+	fi
 
-    if [ "$skip_deps_check" = false ]; then
-        check_command "node" || exit 1
-        check_command "npm" || exit 1
-        check_node_version || exit 1
-    else
-        log_warn "Skipping dependency checks (--skip-deps-check)"
-    fi
+	# Verify we're in the correct directory
+	if [ ! -f "package.json" ]; then
+		log_error "package.json not found. Please run this script from the project root."
+		exit 1
+	fi
 
-    # Verify we're in the correct directory
-    if [ ! -f "package.json" ]; then
-        log_error "package.json not found. Please run this script from the project root."
-        exit 1
-    fi
+	if [ ! -f "tsconfig.json" ]; then
+		log_error "tsconfig.json not found. Please run this script from the project root."
+		exit 1
+	fi
 
-    if [ ! -f "tsconfig.json" ]; then
-        log_error "tsconfig.json not found. Please run this script from the project root."
-        exit 1
-    fi
+	log_success "Project directory verified"
+}
 
-    log_success "Project directory verified"
+build_project() {
+	# Clean previous build
+	log_info "Cleaning previous build..."
+	if [ -d "dist" ]; then
+		rm -rf dist
+		log_success "Cleaned previous build"
+	fi
 
-    # Clean previous build
-    log_info "Cleaning previous build..."
-    if [ -d "dist" ]; then
-        rm -rf dist
-        log_success "Cleaned previous build"
-    fi
+	# Install dependencies
+	log_info "Installing dependencies..."
+	if ! npm install; then
+		log_error "Failed to install dependencies"
+		exit 1
+	fi
+	log_success "Dependencies installed"
 
-    # Install dependencies
-    log_info "Installing dependencies..."
-    if ! npm install; then
-        log_error "Failed to install dependencies"
-        exit 1
-    fi
-    log_success "Dependencies installed"
+	# Build the project
+	log_info "Building project..."
+	if ! npm run build; then
+		log_error "Build failed"
+		exit 1
+	fi
+	log_success "Build completed"
 
-    # Build the project
-    log_info "Building project..."
-    if ! npm run build; then
-        log_error "Build failed"
-        exit 1
-    fi
-    log_success "Build completed"
+	# Verify the build output
+	if [ ! -f "dist/index.js" ]; then
+		log_error "Build output dist/index.js not found"
+		exit 1
+	fi
 
-    # Verify the build output
-    if [ ! -f "dist/index.js" ]; then
-        log_error "Build output dist/index.js not found"
-        exit 1
-    fi
+	if [ ! -x "dist/index.js" ]; then
+		log_warn "dist/index.js is not executable, fixing..."
+		chmod +x dist/index.js
+	fi
 
-    if [ ! -x "dist/index.js" ]; then
-        log_warn "dist/index.js is not executable, fixing..."
-        chmod +x dist/index.js
-    fi
+	log_success "Build output verified"
+}
 
-    log_success "Build output verified"
+install_globally() {
+	local use_npm_link=$1
 
-    # Global installation
-    if [ "$use_npm_link" = true ]; then
-        log_info "Using npm link for development..."
-        if ! npm link; then
-            log_error "npm link failed"
-            log_warn "You may need to run this script with sudo privileges"
-            exit 1
-        fi
-        log_success "Package linked globally"
-    else
-        log_info "Installing package globally..."
-        if ! npm install -g .; then
-            log_error "Global installation failed"
-            log_warn "You may need to run this script with sudo privileges"
-            exit 1
-        fi
-        log_success "Package installed globally"
-    fi
+	if [ "$use_npm_link" = true ]; then
+		log_info "Using npm link for development..."
+		if ! npm link; then
+			log_error "npm link failed"
+			log_warn "You may need to run this script with sudo privileges"
+			exit 1
+		fi
+		log_success "Package linked globally"
+	else
+		log_info "Installing package globally..."
+		if ! npm install -g .; then
+			log_error "Global installation failed"
+			log_warn "You may need to run this script with sudo privileges"
+			exit 1
+		fi
+		log_success "Package installed globally"
+	fi
+}
 
-    # Verify installation
-    echo ""
-    log_info "Verifying installation..."
+verify_installation() {
+	echo ""
+	log_info "Verifying installation..."
 
-    if command -v "$PACKAGE_NAME" &> /dev/null; then
-        local installed_path
-        installed_path=$(command -v "$PACKAGE_NAME")
-        log_success "Package is available at: $installed_path"
+	if command -v "$PACKAGE_NAME" &> /dev/null; then
+		local installed_path
+		installed_path=$(command -v "$PACKAGE_NAME")
+		log_success "Package is available at: $installed_path"
 
-        # Get the global npm prefix
-        local npm_prefix
-        npm_prefix=$(npm config get prefix)
-        log_success "Global npm prefix: $npm_prefix"
-    else
-        log_warn "Package binary not found in PATH"
-        log_info "You may need to add the npm global bin directory to your PATH"
-        log_info "Run: npm config get prefix to see where npm installs global packages"
-    fi
+		local npm_prefix
+		npm_prefix=$(npm config get prefix)
+		log_success "Global npm prefix: $npm_prefix"
+	else
+		log_warn "Package binary not found in PATH"
+		log_info "You may need to add the npm global bin directory to your PATH"
+		log_info "Run: npm config get prefix to see where npm installs global packages"
+	fi
 
-    # Print completion message
-    echo ""
-    log_success "Installation completed successfully!"
-    echo ""
-    cat << EOF
+	# Print completion message
+	echo ""
+	log_success "Installation completed successfully!"
+	echo ""
+	cat << EOF
 ${GREEN}Next steps:${NC}
 
 1. Verify the installation:
@@ -262,6 +262,27 @@ ${GREEN}Next steps:${NC}
    rebuilding with ${YELLOW}npm run build${NC}
 
 EOF
+}
+
+main() {
+	local args
+	args=$(parse_args "$@")
+	local skip_deps_check=$(echo "$args" | cut -d' ' -f1)
+	local use_npm_link=$(echo "$args" | cut -d' ' -f2)
+
+	# Set up cleanup trap
+	trap cleanup EXIT
+
+	# Print banner
+	print_banner
+
+	log_info "Installing ${PACKAGE_NAME} v${PACKAGE_VERSION} globally..."
+	echo ""
+
+	check_prerequisites "$skip_deps_check"
+	build_project
+	install_globally "$use_npm_link"
+	verify_installation
 }
 
 # Run main function
