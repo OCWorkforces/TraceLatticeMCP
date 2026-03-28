@@ -8,17 +8,9 @@
  */
 
 export {
-	type Logger,
-	type LogLevel,
-	type LogEntry,
-	type LoggerOptions,
-	type IDisposable,
-	type PersistenceBackend,
-	type PersistenceConfig,
 	type IMetrics,
 	type IDiscoveryCache,
 	type DiscoveryCacheOptions,
-	type IHistoryManager,
 	type IThoughtProcessor,
 	type IServerConfig,
 	type IToolRegistry,
