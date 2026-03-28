@@ -172,43 +172,52 @@ export class SseTransport extends BaseTransport {
 
 		// Handle health check (liveness)
 		if (url.pathname === '/health') {
-			const healthData: Record<string, unknown> = { status: 'healthy', clients: this._clients.size };
-			if (this._connectionPool) {
-				const poolStats = this._connectionPool.getStats();
-				healthData.pool = poolStats;
-			}
-			if (this._healthChecker) {
-				const liveness = this._healthChecker.checkLiveness();
-				healthData.liveness = liveness;
-			}
-			res.writeHead(200, {
-				'Content-Type': 'application/json',
-			});
-			res.end(JSON.stringify(healthData));
+			this._handleHealthCheck(res);
 			return;
 		}
 
 		// Handle readiness check
 		if (url.pathname === '/ready') {
-			if (this._healthChecker) {
-				const readiness = await this._healthChecker.checkReadiness();
-				const statusCode = readiness.status === 'ok' ? 200 : 503;
-				res.writeHead(statusCode, {
-					'Content-Type': 'application/json',
-				});
-				res.end(JSON.stringify(readiness));
-			} else {
-				res.writeHead(200, {
-					'Content-Type': 'application/json',
-				});
-				res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString(), components: {} }));
-			}
+			await this._handleReadinessCheck(res);
 			return;
 		}
+
 
 		// 404 for unknown paths
 		res.writeHead(404, { 'Content-Type': 'text/plain' });
 		res.end('Not Found');
+	}
+
+	/**
+	 * Handle health check (liveness) endpoint
+	 */
+	private _handleHealthCheck(res: ServerResponse): void {
+		const healthData: Record<string, unknown> = { status: 'healthy', clients: this._clients.size };
+		if (this._connectionPool) {
+			const poolStats = this._connectionPool.getStats();
+			healthData.pool = poolStats;
+		}
+		if (this._healthChecker) {
+			const liveness = this._healthChecker.checkLiveness();
+			healthData.liveness = liveness;
+		}
+		res.writeHead(200, { 'Content-Type': 'application/json' });
+		res.end(JSON.stringify(healthData));
+	}
+
+	/**
+	 * Handle readiness check endpoint
+	 */
+	private async _handleReadinessCheck(res: ServerResponse): Promise<void> {
+		if (this._healthChecker) {
+			const readiness = await this._healthChecker.checkReadiness();
+			const statusCode = readiness.status === 'ok' ? 200 : 503;
+			res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+			res.end(JSON.stringify(readiness));
+		} else {
+			res.writeHead(200, { 'Content-Type': 'application/json' });
+			res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString(), components: {} }));
+		}
 	}
 
 	/**
