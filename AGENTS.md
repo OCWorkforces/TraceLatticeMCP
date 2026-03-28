@@ -13,6 +13,7 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 ```
 ./
 ├── src/                  # Source code (see src/AGENTS.md)
+│   ├── core/            # Core domain: HistoryManager, ThoughtProcessor, types
 │   ├── persistence/      # State persistence backends (File/SQLite/Memory)
 │   ├── transport/        # MCP transports (SSE/HTTP/StreamableHTTP)
 │   ├── di/               # DI container + service registry
@@ -23,14 +24,12 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 │   ├── logger/           # Structured logging (JSON/pretty)
 │   ├── pool/             # Multi-user session pool
 │   ├── config/           # YAML + env var config loading
-│   ├── formatter/        # Thought output formatting
 │   ├── watchers/         # File system watchers for tool/skill discovery
-│   ├── processor/        # Thought validation + processing pipeline
 │   ├── metrics/          # Prometheus metrics collection
 │   ├── telemetry/        # OpenTelemetry distributed tracing
 │   ├── health/           # Aggregate health checking
 │   ├── context/          # Request context via AsyncLocalStorage
-│   └── __tests__/        # Test suite (Vitest, 870+ tests)
+│   └── __tests__/        # Test suite (Vitest, 872+ tests)
 ├── .agents/             # Agent skills (vercel-react-*)
 ├── .sentrux/            # sentrux architectural rules
 └── docs/                # Documentation assets
@@ -41,8 +40,8 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 | Task | Location | Notes |
 |---|---|---|
 | **Core Logic** | `src/lib.ts`, `src/index.ts` | Entry point, wiring, ToolAwareSequentialThinkingServer |
-| **State Management** | `src/HistoryManager.ts` | Thought history, branching, persistence buffering |
-| **Shared Interfaces** | `src/contracts/interfaces.ts` | IMetrics, IDiscoveryCache, IHistoryManager, etc. |
+| **State Management** | `src/core/HistoryManager.ts` | Thought history, branching, persistence buffering |
+| **Shared Interfaces** | `src/contracts/interfaces.ts` | IMetrics, IDiscoveryCache, etc. (`IHistoryManager` in `src/core/`) |
 | **Persistence** | `src/persistence/` | File/SQLite/Memory backends |
 | **DI Container** | `src/di/Container.ts` | IoC container + ServiceRegistry type |
 | **Transports** | `src/transport/` | SSE, HTTP, StreamableHTTP implementations |
@@ -58,11 +57,12 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 |---|---|---|---|
 | `ToolAwareSequentialThinkingServer` | class | src/lib.ts | Main server: DI wiring, MCP tool registration |
 | `createServer` | function | src/lib.ts | Factory for server instantiation |
-| `HistoryManager` | class | src/HistoryManager.ts | Thought history, branching, buffered persistence |
+| `HistoryManager` | class | src/core/HistoryManager.ts | Thought history, branching, buffered persistence |
 | `BaseRegistry` | class | src/registry/BaseRegistry.ts | Generic CRUD + discovery + cache + frontmatter |
 | `ToolRegistry` | class | src/registry/ToolRegistry.ts | MCP tool discovery (extends BaseRegistry) |
 | `SkillRegistry` | class | src/registry/SkillRegistry.ts | Claude skill discovery (extends BaseRegistry) |
-| `ThoughtProcessor` | class | src/processor/ThoughtProcessor.ts | Validate → normalize → persist → format |
+| `ThoughtProcessor` | class | src/core/ThoughtProcessor.ts | Validate → normalize → persist → format |
+| `IHistoryManager` | interface | src/core/IHistoryManager.ts | History manager contract (8+ methods) |
 | `StreamableHttpTransport` | class | src/transport/StreamableHttpTransport.ts | MCP Streamable HTTP transport (826L) |
 | `SseTransport` | class | src/transport/SseTransport.ts | SSE transport for multi-user streaming |
 | `HttpTransport` | class | src/transport/HttpTransport.ts | HTTP JSON-RPC transport |
@@ -81,7 +81,7 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 - **Factory Pattern**: `createServer()`, `createPersistenceBackend()`, `createTransport()` functions.
 - **DI**: Inject via `src/di` container; typed via `ServiceRegistry` interface; no global state.
 - **Error Handling**: `SequentialThinkingError` hierarchy (13 types); never swallow errors.
-- **Contracts Module**: Cross-module type imports go through `src/contracts/` — single coupling point.
+- **Contracts Module**: Cross-module type imports go through `src/contracts/` — single coupling point. Core domain types (IHistoryManager, ThoughtData) live in `src/core/`.
 - **No Barrel Files**: Submodules import directly from source files (barrels deleted, only `src/index.ts` public API remains).
 
 ## ANTI-PATTERNS (THIS PROJECT)
@@ -100,7 +100,7 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 - **Lint/Security**: CI `continue-on-error: true` for lint + audit.
 - **Coverage**: 81.95% statements (870+ tests, 31 test files).
 - **Test Helpers**: `src/__tests__/helpers/index.ts` (test convenience barrel).
-- **Large Files**: `StreamableHttpTransport.ts` (826L), `HistoryManager.ts` (755L), `sequentialthinking-tools.test.ts` (1076L).
+- **Large Files**: `StreamableHttpTransport.ts` (826L), `core/HistoryManager.ts` (755L), `sequentialthinking-tools.test.ts` (1076L).
 - **Architectural Rules**: `.sentrux/rules.toml` — 9 layers, 6 boundaries, enforced by sentrux.
 
 ## COMMANDS

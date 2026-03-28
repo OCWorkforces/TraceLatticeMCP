@@ -11,15 +11,14 @@ Core application source code organized by domain (Infrastructure, Core, Persiste
 
 ```
 src/
+src/
 ├── Core
 │   ├── lib.ts            # Server class + DI wiring + factory
 │   ├── index.ts          # 1-line re-export to lib.js (public API)
-│   ├── HistoryManager.ts # State & Branching logic (755L)
+│   ├── core/             # Core domain logic (see below)
 │   ├── ServerConfig.ts   # Config validation
 │   ├── errors.ts         # Error class hierarchy (13 types)
 │   ├── schema.ts         # Valibot validation schemas
-│   ├── types.ts          # Central type definitions
-│   ├── IHistoryManager.ts# Legacy interface (superceded by contracts)
 │   └── cli.ts            # CLI entry point
 ├── Infrastructure
 │   ├── di/               # DI container (see di/AGENTS.md)
@@ -28,7 +27,6 @@ src/
 │   ├── config/           # Config loading (see config/AGENTS.md)
 │   ├── logger/           # Structured logging (see logger/AGENTS.md)
 │   ├── context/          # Request context via AsyncLocalStorage
-│   ├── formatter/        # Output formatting (see formatter/AGENTS.md)
 │   ├── persistence/      # State backends (see persistence/AGENTS.md)
 │   ├── transport/        # MCP transports (see transport/AGENTS.md)
 │   ├── registry/         # Tool/Skill registries (see registry/AGENTS.md)
@@ -36,7 +34,6 @@ src/
 │   ├── pool/             # Session pooling (see pool/AGENTS.md)
 │   ├── health/           # Aggregate health checking
 │   ├── watchers/         # File watchers (see watchers/AGENTS.md)
-│   ├── processor/        # Thought processing (see processor/AGENTS.md)
 │   ├── metrics/          # Prometheus metrics (see metrics/AGENTS.md)
 │   └── telemetry/        # OpenTelemetry tracing (see telemetry/AGENTS.md)
 └── Quality
@@ -49,5 +46,5 @@ src/
 - **Validation**: `valibot` schemas in `schema.ts`.
 - **Factory Functions**: `createServer()`, `createPersistenceBackend()`, `createTransport()`.
 - **BaseRegistry<T>**: Generic base with CRUD, frontmatter parsing, LRU cache; `ToolRegistry` and `SkillRegistry` extend it.
-- **Contracts Module**: `src/contracts/` centralizes shared interfaces (IMetrics, IDiscoveryCache, IHistoryManager, etc.) — single coupling point for cross-module types.
+- **Contracts Module**: `src/contracts/` centralizes shared interfaces (IMetrics, IDiscoveryCache, etc.) — single coupling point for cross-module types. `IHistoryManager` lives in `src/core/`.
 - **No Barrels**: Submodule barrel files deleted; direct imports only. Only `src/index.ts` (public API) and `src/contracts/index.ts` (module aggregation) remain.

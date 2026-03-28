@@ -12,7 +12,7 @@ no_god_files = false    # Allow large files for now (composition root exception)
 
 [[layers]]
 name = "types"
-paths = ["src/types/*", "src/types.ts", "src/IHistoryManager.ts", "src/errors.ts", "src/schema.ts"]
+paths = ["src/types/*", "src/types.ts", "src/errors.ts", "src/schema.ts"]
 order = 0
 
 [[layers]]
@@ -27,7 +27,7 @@ order = 2
 
 [[layers]]
 name = "core"
-paths = ["src/formatter/*", "src/processor/*", "src/HistoryManager.ts"]
+paths = ["src/core/*"]
 order = 3
 
 [[layers]]
@@ -60,8 +60,8 @@ order = 8
 
 [[boundaries]]
 from = "src/transport/*"
-to = "src/processor/*"
-reason = "Transports must not depend on thought processor directly"
+to = "src/core/*"
+reason = "Transports must not depend on core processing directly"
 
 [[boundaries]]
 from = "src/watchers/*"
@@ -85,5 +85,5 @@ reason = "Transports must not depend on registries directly"
 
 [[boundaries]]
 from = "src/registry/*"
-to = "src/HistoryManager.ts"
+to = "src/core/HistoryManager.ts"
 reason = "Registries must not depend on HistoryManager directly"
