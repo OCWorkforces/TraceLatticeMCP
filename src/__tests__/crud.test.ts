@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolAwareSequentialThinkingServer } from '../index.js';
-import type { Tool, Skill, ThoughtData } from '../types.js';
+import type { Tool } from '../types/tool.js';
+import type { Skill } from '../types/skill.js';
+import type { ThoughtData } from '../types/thought.js';
 
 describe('CRUD Operations', () => {
 	let server: ToolAwareSequentialThinkingServer;

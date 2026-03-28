@@ -3,7 +3,7 @@ import { HistoryManager } from '../HistoryManager.js';
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
 import { createTestThought } from './helpers/index.js';
 import { useFakeTimers, useRealTimers } from './helpers/index.js';
-import type { ThoughtData } from '../types.js';
+import type { ThoughtData } from '../types/thought.js';
 
 class MockPersistence implements PersistenceBackend {
 	private _history: ThoughtData[] = [];

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ThoughtFormatter } from '../formatter/ThoughtFormatter.js';
-import type { ThoughtData, StepRecommendation } from '../types.js';
+import type { ThoughtData } from '../types/thought.js';
+import type { StepRecommendation } from '../types/step.js';
 
 describe('ThoughtFormatter', () => {
 	let formatter: ThoughtFormatter;

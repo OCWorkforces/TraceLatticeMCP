@@ -1,9 +1,7 @@
-import type {
-	ThoughtData,
-	ToolRecommendation,
-	SkillRecommendation,
-	StepRecommendation,
-} from '../../types.js';
+import type { ThoughtData } from '../../types/thought.js';
+import type { ToolRecommendation } from '../../types/tool.js';
+import type { SkillRecommendation } from '../../types/skill.js';
+import type { StepRecommendation } from '../../types/step.js';
 import type { IHistoryManager } from '../../IHistoryManager.js';
 import type { ThoughtFormatter } from '../../formatter/ThoughtFormatter.js';
 
