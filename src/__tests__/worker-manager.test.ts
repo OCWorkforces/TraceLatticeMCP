@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { WorkerManager, createWorkerManager } from '../cluster/WorkerManager.js';
-import type { ThoughtData } from '../types/thought.js';
+import type { ThoughtData } from '../core/thought.js';
 
 // Mock Worker class to avoid spawning real threads
 vi.mock('node:worker_threads', () => {

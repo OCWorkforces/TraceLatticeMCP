@@ -9,7 +9,7 @@
  * @module registry
  */
 
-import type { Logger } from '../contracts/index.js';
+import type { Logger } from '../logger/StructuredLogger.js';
 import { NullLogger } from '../logger/NullLogger.js';
 import { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { readdir, readFile } from 'node:fs/promises';

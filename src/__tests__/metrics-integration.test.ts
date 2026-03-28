@@ -11,7 +11,7 @@ import { Metrics } from '../metrics/metrics.impl.js';
 import { FilePersistence } from '../persistence/FilePersistence.js';
 import { HttpTransport } from '../transport/HttpTransport.js';
 import { SseTransport } from '../transport/SseTransport.js';
-import type { ThoughtData } from '../types/thought.js';
+import type { ThoughtData } from '../core/thought.js';
 
 function createMetrics(): Metrics {
 	return new Metrics({ prefix: 'sequentialthinking' });

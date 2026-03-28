@@ -9,7 +9,7 @@
  */
 
 import type { Tool } from '../types/tool.js';
-import type { Logger } from '../contracts/index.js';
+import type { Logger } from '../logger/StructuredLogger.js';
 import { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';

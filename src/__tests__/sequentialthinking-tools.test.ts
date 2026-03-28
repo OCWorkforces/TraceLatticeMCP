@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolAwareSequentialThinkingServer } from '../index.js';
-import type { ThoughtData } from '../types/thought.js';
+import type { ThoughtData } from '../core/thought.js';
 import type { ToolRecommendation } from '../types/tool.js';
 import type { SkillRecommendation } from '../types/skill.js';
-import type { StepRecommendation } from '../types/step.js';
+import type { StepRecommendation } from '../core/step.js';
 
 /**
  * Helper function for creating test thoughts with minimal required fields

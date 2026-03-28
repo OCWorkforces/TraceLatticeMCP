@@ -1,4 +1,4 @@
-import type { Logger } from '../contracts/index.js';
+import type { Logger } from '../logger/StructuredLogger.js';
 
 export interface TelemetrySpan {
 	name: string;

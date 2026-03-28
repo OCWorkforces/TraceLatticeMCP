@@ -1,4 +1,4 @@
-import type { ThoughtData } from '../types/thought.js';
+import type { ThoughtData } from '../core/thought.js';
 
 /**
  * Persistence backend interface for storing thought history and branches.
@@ -64,101 +64,15 @@ export interface PersistenceBackend {
 	close(): Promise<void>;
 }
 
-/**
- * Configuration options for persistence backends.
- */
 export interface PersistenceConfig {
-	/**
-	 * Enable or disable persistence.
-	 * When disabled, all data is kept in-memory only.
-	 * @default false
-	 */
 	enabled?: boolean;
-
-	/**
-	 * The type of persistence backend to use.
-	 * - 'file': JSON file storage (simple, no dependencies)
-	 * - 'sqlite': SQLite database (requires better-sqlite3)
-	 * - 'memory': In-memory only (useful for testing, default)
-	 * @default 'memory'
-	 */
 	backend?: 'file' | 'sqlite' | 'memory';
-
-	/**
-	 * Backend-specific configuration options.
-	 */
 	options?: {
-		/**
-		 * For 'file' backend: directory to store JSON files
-		 * Default: '.claude/data'
-		 */
 		dataDir?: string;
-
-		/**
-		 * For 'sqlite' backend: path to the database file
-		 * Default: '.claude/data/history.db'
-		 */
 		dbPath?: string;
-
-		/**
-		 * For 'sqlite' backend: enable WAL mode for better concurrency
-		 * Default: true
-		 */
 		enableWAL?: boolean;
-
-		/**
-		 * Maximum number of thoughts to keep in history before pruning.
-		 * Default: 10000 (matches maxHistorySize default)
-		 */
 		maxHistorySize?: number;
-
-		/**
-		 * Whether to persist branches.
-		 * Default: true
-		 */
 		persistBranches?: boolean;
 	};
 }
 
-/**
- * Create a persistence backend based on the provided configuration.
- *
- * @param config - Persistence configuration
- * @returns A configured persistence backend, or null if disabled
- *
- * @example
- * ```typescript
- * const backend = createPersistenceBackend({
- *   enabled: true,
- *   backend: 'file',
- *   options: { dataDir: './data' }
- * });
- * ```
- */
-export async function createPersistenceBackend(
-	config: PersistenceConfig
-): Promise<PersistenceBackend | null> {
-	if (!config.enabled) {
-		return null;
-	}
-
-	switch (config.backend) {
-		case 'file': {
-			const { FilePersistence } = await import('./FilePersistence.js');
-			return new FilePersistence(config.options);
-		}
-
-		case 'sqlite': {
-			const { SqlitePersistence } = await import('./SqlitePersistence.js');
-			return await SqlitePersistence.create(config.options);
-		}
-
-		case 'memory': {
-			const { MemoryPersistence } = await import('./MemoryPersistence.js');
-			return new MemoryPersistence();
-		}
-
-		default:
-			throw new Error(`Unknown persistence backend: ${config.backend}`);
-	}
-}
