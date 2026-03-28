@@ -355,6 +355,64 @@ export abstract class BaseTransport implements ITransport {
 	}
 
 	/**
+	 * Handle GET /health endpoint — liveness check.
+	 *
+	 * Builds a standard health response with optional liveness data from the health checker.
+	 * Transports can pass extra data (e.g. client counts, session info).
+	 *
+	 * @param res - The server response
+	 * @param extraData - Optional additional health metadata
+	 */
+	protected handleHealthEndpoint(res: ServerResponse, extraData?: Record<string, unknown>): void {
+		const healthData: Record<string, unknown> = { status: 'healthy', ...extraData };
+		if (this._healthChecker) {
+			const liveness = this._healthChecker.checkLiveness();
+			healthData.liveness = liveness;
+		}
+		res.writeHead(200, { 'Content-Type': 'application/json' });
+		res.end(JSON.stringify(healthData));
+	}
+
+	/**
+	 * Handle GET /ready endpoint — readiness check.
+	 *
+	 * Delegates to the health checker if available, otherwise returns a default OK response.
+	 *
+	 * @param res - The server response
+	 */
+	protected async handleReadinessEndpoint(res: ServerResponse): Promise<void> {
+		if (this._healthChecker) {
+			const readiness = await this._healthChecker.checkReadiness();
+			const statusCode = readiness.status === 'ok' ? 200 : 503;
+			res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+			res.end(JSON.stringify(readiness));
+		} else {
+			res.writeHead(200, { 'Content-Type': 'application/json' });
+			res.end(
+				JSON.stringify({ status: 'ok', timestamp: new Date().toISOString(), components: {} })
+			);
+		}
+	}
+
+	/**
+	 * Handle GET /metrics endpoint — Prometheus metrics.
+	 *
+	 * Returns 404 if no metrics provider is configured.
+	 *
+	 * @param res - The server response
+	 * @param metricsProvider - Function that returns Prometheus-format metrics text
+	 */
+	protected handleMetricsEndpoint(res: ServerResponse, metricsProvider: (() => string) | null): void {
+		if (!metricsProvider) {
+			res.writeHead(404, { 'Content-Type': 'text/plain' });
+			res.end('Not Found');
+			return;
+		}
+		res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' });
+		res.end(metricsProvider());
+	}
+
+	/**
 	 * Connect to MCP server.
 	 */
 	abstract connect(mcpServer: unknown): Promise<void>;

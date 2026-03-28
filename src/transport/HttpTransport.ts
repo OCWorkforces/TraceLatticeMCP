@@ -20,6 +20,12 @@ import { safeParse } from 'valibot';
 import { JsonRpcRequestSchema } from '../schema.js';
 import type { IMetrics } from '../contracts/index.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
+import {
+	sendJsonRpcError,
+	sendJsonRpcResponse,
+	readRequestBody,
+	sendCorsPreflight,
+} from './HttpHelpers.js';
 
 export interface HttpTransportOptions extends TransportOptions {
 	/**
@@ -125,194 +131,124 @@ export class HttpTransport extends BaseTransport {
 	}
 
 	/**
-	 * Handles incoming HTTP requests.
+	 * Track an error in metrics.
+	 */
+	private _trackError(errorType: string): void {
+		this._metrics?.counter(
+			'http_request_errors_total',
+			1,
+			{ transport: 'http', error_type: errorType },
+			'Total HTTP request errors'
+		);
+	}
+
+	/**
+	 * Route and handle incoming HTTP requests.
+	 *
+	 * Performs security checks (host, shutdown, rate limit, CORS) then
+	 * dispatches to the appropriate endpoint handler.
 	 */
 	private async _handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		const startTime = Date.now();
 		const requestPath = req.url || '/';
 		const requestMethod = req.method || 'GET';
 		this._metrics?.counter('http_requests_total', 1, {}, 'Total HTTP transport requests');
-		this._metrics?.counter('http_transport_requests_total', 1, { transport: 'http', method: requestMethod, path: requestPath }, 'Total HTTP requests by transport');
+		this._metrics?.counter(
+			'http_transport_requests_total',
+			1,
+			{ transport: 'http', method: requestMethod, path: requestPath },
+			'Total HTTP requests by transport'
+		);
 		res.once('finish', () => {
 			const durationSeconds = (Date.now() - startTime) / 1000;
 			this._metrics?.histogram('http_request_duration_seconds', durationSeconds, {});
-			this._metrics?.histogram('http_transport_request_duration_seconds', durationSeconds, { transport: 'http', path: requestPath });
+			this._metrics?.histogram('http_transport_request_duration_seconds', durationSeconds, {
+				transport: 'http',
+				path: requestPath,
+			});
 		});
 
+		// Security middleware chain
 		if (!this.validateHostHeader(req)) {
-			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'forbidden' }, 'Total HTTP request errors');
-			res.writeHead(403, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32000, message: 'Forbidden - invalid host header' },
-				})
-			);
+			this._trackError('forbidden');
+			sendJsonRpcError(res, 403, -32000, 'Forbidden - invalid host header');
 			return;
 		}
 
 		if (this.isShuttingDown()) {
-			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'shutting_down' }, 'Total HTTP request errors');
-			res.writeHead(503, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32603, message: 'Server is shutting down' },
-				})
-			);
+			this._trackError('shutting_down');
+			sendJsonRpcError(res, 503, -32603, 'Server is shutting down');
 			return;
 		}
 
 		const clientIp = this.getClientIp(req);
 		if (this.checkRateLimit(clientIp)) {
-			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'rate_limit' }, 'Total HTTP request errors');
-			res.writeHead(429, {
-				'Content-Type': 'application/json',
-				'Retry-After': '60',
-			});
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32000, message: 'Too many requests' },
-				})
-			);
+			this._trackError('rate_limit');
+			res.setHeader('Retry-After', '60');
+			sendJsonRpcError(res, 429, -32000, 'Too many requests');
 			return;
 		}
 
 		if (!this.validateCorsOrigin(req)) {
-			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'forbidden' }, 'Total HTTP request errors');
-			res.writeHead(403, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32000, message: 'Forbidden - invalid origin' },
-				})
-			);
+			this._trackError('forbidden');
+			sendJsonRpcError(res, 403, -32000, 'Forbidden - invalid origin');
 			return;
 		}
 
 		this.setCorsHeaders(res);
 
-		if (req.method === 'GET' && req.url === '/metrics') {
-			if (!this._metricsProvider) {
-				res.writeHead(404, { 'Content-Type': 'text/plain' });
-				res.end('Not Found');
-				return;
-			}
+		// Static endpoints
+		if (req.method === 'GET' && req.url === '/metrics')
+			return this.handleMetricsEndpoint(res, this._metricsProvider);
+		if (req.method === 'OPTIONS') return sendCorsPreflight(res);
+		if (req.method === 'GET' && req.url === '/health')
+			return this.handleHealthEndpoint(res, { requests: this._requestCount });
+		if (req.method === 'GET' && req.url === '/ready') return this.handleReadinessEndpoint(res);
 
-			res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4; charset=utf-8' });
-			res.end(this._metricsProvider());
-			return;
-		}
+		// MCP endpoint
+		if (req.method === 'POST' && req.url === this._path) return this._handlePostRequest(req, res);
 
-		if (req.method === 'OPTIONS') {
-			res.writeHead(204);
-			res.end();
-			return;
-		}
+		// 404
+		this._trackError('not_found');
+		sendJsonRpcError(res, 404, -32601, 'Not Found');
+	}
 
-		// Handle health check (liveness)
-		if (req.method === 'GET' && req.url === '/health') {
-			const healthData: Record<string, unknown> = { status: 'healthy', requests: this._requestCount };
-			if (this._healthChecker) {
-				const liveness = this._healthChecker.checkLiveness();
-				healthData.liveness = liveness;
-			}
-			res.writeHead(200, {
-				'Content-Type': 'application/json',
-			});
-			res.end(JSON.stringify(healthData));
-			return;
-		}
-
-		// Handle readiness check
-		if (req.method === 'GET' && req.url === '/ready') {
-			if (this._healthChecker) {
-				const readiness = await this._healthChecker.checkReadiness();
-				const statusCode = readiness.status === 'ok' ? 200 : 503;
-				res.writeHead(statusCode, {
-					'Content-Type': 'application/json',
-				});
-				res.end(JSON.stringify(readiness));
-			} else {
-				res.writeHead(200, {
-					'Content-Type': 'application/json',
-				});
-				res.end(JSON.stringify({ status: 'ok', timestamp: new Date().toISOString(), components: {} }));
-			}
-			return;
-		}
-
-		if (req.method !== 'POST' || req.url !== this._path) {
-			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'not_found' }, 'Total HTTP request errors');
-			res.writeHead(404, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32601, message: 'Not Found' },
-				})
-			);
-			return;
-		}
-
+	/**
+	 * Handle POST to the MCP messages endpoint.
+	 *
+	 * Reads the request body, validates JSON-RPC format, and delegates
+	 * processing to the MCP server.
+	 */
+	private async _handlePostRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
 		this._requestCount++;
 		this._activeRequests++;
-		// Set up request timeout
+
 		const timeout = setTimeout(() => {
 			this._activeRequests--;
-			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'timeout' }, 'Total HTTP request errors');
-			res.writeHead(500, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: { code: -32603, message: 'Request timeout' },
-				})
-			);
+			this._trackError('timeout');
+			sendJsonRpcError(res, 500, -32603, 'Request timeout');
 		}, this._requestTimeout);
 
 		try {
-			// Read request body with size limit
-			let body = '';
-			let bodySize = 0;
+			const maxBodySize = this._bodySizeLimitEnabled ? this._maxBodySize : 0;
+			const body = await readRequestBody(req, maxBodySize);
 
-			for await (const chunk of req) {
-				bodySize += chunk.length;
-
-				// Check body size limit
-				if (this._bodySizeLimitEnabled && bodySize > this._maxBodySize) {
-					clearTimeout(timeout);
-					this._activeRequests--;
-					this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'payload_too_large' }, 'Total HTTP request errors');
-					res.writeHead(413, { 'Content-Type': 'application/json' });
-					res.end(JSON.stringify({ error: 'Request body too large' }));
-					return;
-				}
-
-				body += chunk.toString();
+			if (body === null) {
+				clearTimeout(timeout);
+				this._activeRequests--;
+				this._trackError('payload_too_large');
+				sendJsonRpcError(res, 413, -32000, 'Request body too large');
+				return;
 			}
 
-			// Validate JSON
 			let jsonRpcRequest;
 			try {
 				jsonRpcRequest = JSON.parse(body);
 			} catch {
 				clearTimeout(timeout);
 				this._activeRequests--;
-				this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'parse_error' }, 'Total HTTP request errors');
-				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(
-					JSON.stringify({
-						jsonrpc: '2.0',
-						id: null,
-						error: { code: -32700, message: 'Parse error' },
-					})
-				);
+				this._trackError('parse_error');
+				sendJsonRpcError(res, 200, -32700, 'Parse error');
 				return;
 			}
 
@@ -320,39 +256,26 @@ export class HttpTransport extends BaseTransport {
 			if (!parseResult.success) {
 				clearTimeout(timeout);
 				this._activeRequests--;
-				this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'validation' }, 'Total HTTP request errors');
-				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(
-					JSON.stringify({
-						jsonrpc: '2.0',
-						id: jsonRpcRequest?.id ?? null,
-						error: {
-							code: -32600,
-							message: 'Invalid Request',
-							data: parseResult.issues,
-						},
-					})
+				this._trackError('validation');
+				sendJsonRpcError(
+					res,
+					200,
+					-32600,
+					'Invalid Request',
+					jsonRpcRequest?.id ?? null,
+					parseResult.issues
 				);
 				return;
 			}
 
-			// Check if MCP server is ready
 			if (!this._mcpServer) {
 				clearTimeout(timeout);
 				this._activeRequests--;
-				this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'server_not_ready' }, 'Total HTTP request errors');
-				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(
-					JSON.stringify({
-						jsonrpc: '2.0',
-						id: jsonRpcRequest?.id ?? null,
-						error: { code: -32603, message: 'Server not ready' },
-					})
-				);
+				this._trackError('server_not_ready');
+				sendJsonRpcError(res, 200, -32603, 'Server not ready', jsonRpcRequest?.id ?? null);
 				return;
 			}
 
-			// Process JSON-RPC request through MCP server
 			const response = await this._mcpServer.receive(jsonRpcRequest, {
 				sessionInfo: {},
 			});
@@ -361,28 +284,22 @@ export class HttpTransport extends BaseTransport {
 			this._activeRequests--;
 
 			if (response) {
-				res.writeHead(200, { 'Content-Type': 'application/json' });
-				res.end(JSON.stringify(response));
+				sendJsonRpcResponse(res, response);
 			} else {
-				// No response (notification)
 				res.writeHead(204);
 				res.end();
 			}
 		} catch (error) {
 			clearTimeout(timeout);
 			this._activeRequests--;
-			this._metrics?.counter('http_request_errors_total', 1, { transport: 'http', error_type: 'internal_error' }, 'Total HTTP request errors');
-			res.writeHead(200, { 'Content-Type': 'application/json' });
-			res.end(
-				JSON.stringify({
-					jsonrpc: '2.0',
-					id: null,
-					error: {
-						code: -32603,
-						message: 'Internal error',
-						data: error instanceof Error ? error.message : String(error),
-					},
-				})
+			this._trackError('internal_error');
+			sendJsonRpcError(
+				res,
+				200,
+				-32603,
+				'Internal error',
+				null,
+				error instanceof Error ? error.message : String(error)
 			);
 		}
 	}
@@ -402,7 +319,6 @@ export class HttpTransport extends BaseTransport {
 		this._stopRateLimitCleanup();
 
 		return new Promise((resolve) => {
-			// Close server
 			this._server.close(() => {
 				this.log('info', 'HTTP transport stopped');
 				resolve();
