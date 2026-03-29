@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { cpus } from 'node:os';
-import type { ThoughtData } from '../types/thought.js';
+import type { ThoughtData } from '../core/thought.js';
 import type { IDisposable } from '../types/disposable.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 

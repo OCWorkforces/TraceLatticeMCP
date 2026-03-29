@@ -6,12 +6,12 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ThoughtProcessor } from '../processor/ThoughtProcessor.js';
-import { ThoughtFormatter } from '../formatter/ThoughtFormatter.js';
+import { ThoughtProcessor } from '../core/ThoughtProcessor.js';
+import { ThoughtFormatter } from '../core/ThoughtFormatter.js';
 import { StructuredLogger } from '../logger/StructuredLogger.js';
 import { MockHistoryManager } from './helpers/index.js';
-import type { ThoughtData } from '../types/thought.js';
-import type { IHistoryManager } from '../IHistoryManager.js';
+import type { ThoughtData } from '../core/thought.js';
+import type { IHistoryManager } from '../core/IHistoryManager.js';
 
 
 

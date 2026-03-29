@@ -1,9 +1,9 @@
-import type { ThoughtData } from '../../types/thought.js';
+import type { ThoughtData } from '../../core/thought.js';
 import type { ToolRecommendation } from '../../types/tool.js';
 import type { SkillRecommendation } from '../../types/skill.js';
-import type { StepRecommendation } from '../../types/step.js';
-import type { IHistoryManager } from '../../IHistoryManager.js';
-import type { ThoughtFormatter } from '../../formatter/ThoughtFormatter.js';
+import type { StepRecommendation } from '../../core/step.js';
+import type { IHistoryManager } from '../../core/IHistoryManager.js';
+import type { ThoughtFormatter } from '../../core/ThoughtFormatter.js';
 
 // === Data Factories ===
 

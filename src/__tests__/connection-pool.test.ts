@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ConnectionPool, createConnectionPool } from '../pool/ConnectionPool.js';
-import type { ThoughtData } from '../types/thought.js';
+import type { ThoughtData } from '../core/thought.js';
 
 const createMockServer = () => ({
 	processThought: vi.fn().mockResolvedValue({

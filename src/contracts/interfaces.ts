@@ -11,17 +11,6 @@
  * @module contracts
  */
 
-// Re-export Logger from logger module (already an interface)
-export type { Logger, LogLevel, LogEntry, LoggerOptions } from '../logger/StructuredLogger.js';
-
-// Re-export IDisposable from types (already an interface)
-export type { IDisposable } from '../types/disposable.js';
-
-// Re-export PersistenceBackend from persistence (already an interface)
-export type { PersistenceBackend, PersistenceConfig } from '../persistence/PersistenceBackend.js';
-
-// Local import for use within this file
-import type { PersistenceConfig as PersistenceConfigType } from '../persistence/PersistenceBackend.js';
 
 /**
  * Metrics interface for observability.
@@ -70,20 +59,6 @@ export interface DiscoveryCacheOptions {
 }
 
 /**
- * History manager interface for thought state management.
- *
- * Defines the contract for history operations used by the server
- * and other modules that need access to thought history.
- */
-export interface IHistoryManager {
-	getHistory(): Record<string, unknown>[];
-	clear(): void;
-	shutdown(): Promise<void>;
-	loadFromPersistence(): Promise<void>;
-	setEventEmitter(emitter: { emit(event: string, payload: unknown): boolean }): void;
-}
-
-/**
  * Thought processor interface for processing thought data.
  *
  * Defines the contract for the main processing pipeline.
@@ -103,7 +78,7 @@ export interface IServerConfig {
 	maxBranchSize: number;
 	skillDirs?: string[];
 	discoveryCache?: DiscoveryCacheOptions;
-	persistence?: PersistenceConfigType;
+	persistence?: Record<string, unknown>;
 	persistenceBufferSize?: number;
 	persistenceFlushInterval?: number;
 	persistenceMaxRetries?: number;

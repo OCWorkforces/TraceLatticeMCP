@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { normalizeInput } from '../processor/InputNormalizer.js';
-import type { ThoughtData } from '../types/thought.js';
+import { normalizeInput } from '../core/InputNormalizer.js';
+import type { ThoughtData } from '../core/thought.js';
 
 /**
  * Helper for creating tool recommendations.

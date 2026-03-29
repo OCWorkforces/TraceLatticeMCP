@@ -1,9 +1,9 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { HistoryManager } from '../HistoryManager.js';
+import { HistoryManager } from '../core/HistoryManager.js';
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
 import { createTestThought } from './helpers/index.js';
 import { useFakeTimers, useRealTimers } from './helpers/index.js';
-import type { ThoughtData } from '../types/thought.js';
+import type { ThoughtData } from '../core/thought.js';
 
 class MockPersistence implements PersistenceBackend {
 	private _history: ThoughtData[] = [];

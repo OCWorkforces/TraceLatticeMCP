@@ -9,8 +9,8 @@ import { MemoryPersistence } from '../persistence/MemoryPersistence.js';
 import { FilePersistence } from '../persistence/FilePersistence.js';
 import {
 	createPersistenceBackend,
-	type PersistenceConfig,
-} from '../persistence/PersistenceBackend.js';
+	} from '../persistence/PersistenceFactory.js';
+import type { PersistenceConfig } from '../persistence/PersistenceBackend.js';
 
 describe('MemoryPersistence', () => {
 	let backend: MemoryPersistence;

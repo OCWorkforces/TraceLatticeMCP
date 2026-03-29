@@ -6,14 +6,13 @@
  * Concrete types are imported only where needed for DI resolution.
  */
 
-import type { PersistenceBackend } from '../contracts/index.js';
-
+import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
 // Concrete types — needed for DI container resolution type safety
 import type { StructuredLogger } from '../logger/StructuredLogger.js';
 import type { ServerConfig } from '../ServerConfig.js';
-import type { HistoryManager } from '../HistoryManager.js';
-import type { ThoughtProcessor } from '../processor/ThoughtProcessor.js';
-import type { ThoughtFormatter } from '../formatter/ThoughtFormatter.js';
+import type { HistoryManager } from '../core/HistoryManager.js';
+import type { ThoughtProcessor } from '../core/ThoughtProcessor.js';
+import type { ThoughtFormatter } from '../core/ThoughtFormatter.js';
 import type { ToolRegistry } from '../registry/ToolRegistry.js';
 import type { SkillRegistry } from '../registry/SkillRegistry.js';
 import type { Metrics } from '../metrics/metrics.impl.js';

@@ -7,12 +7,12 @@
  * @module HistoryManager
  */
 
-import type { ThoughtData } from './types/thought.js';
-import type { Logger } from './logger/StructuredLogger.js';
-import { NullLogger } from './logger/NullLogger.js';
-import type { PersistenceBackend } from './persistence/PersistenceBackend.js';
+import type { ThoughtData } from './thought.js';
+import type { Logger } from '../logger/StructuredLogger.js';
+import { NullLogger } from '../logger/NullLogger.js';
+import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
 import type { IHistoryManager } from './IHistoryManager.js';
-import type { IMetrics } from './contracts/index.js';
+import type { IMetrics } from '../contracts/index.js';
 
 /**
  * Interface for emitting persistence error events.

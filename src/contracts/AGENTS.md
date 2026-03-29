@@ -1,6 +1,6 @@
 # CONTRACTS MODULE
 
-**Created:** 2026-03-27
+**Updated:** 2026-03-29
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW
@@ -22,22 +22,15 @@ src/contracts/
 | `IMetrics`              | Metrics abstraction (counter, gauge, histogram) | `counter()`, `gauge()`, `histogram()`, `inc()`, `dec()`, `export()` |
 | `IDiscoveryCache`       | Discovery result caching                        | `get()`, `set()`, `has()`, `invalidate()`, `clear()`                |
 | `DiscoveryCacheOptions` | Cache configuration                             | `ttl`, `maxSize`, `cleanupInterval`                                 |
-| `IHistoryManager`       | Thought history operations                      | `getHistory()`, `clear()`, `loadFromPersistence()`, `shutdown()`    |
 | `IThoughtProcessor`     | Thought processing contract                     | `process()`                                                         |
 | `IServerConfig`         | Server configuration shape                      | `maxHistorySize`, `maxBranches`, `persistence`, `skillDirs`         |
 | `IToolRegistry`         | Tool registry contract                          | `addTool()`, `getTool()`, `discover()`, `listTools()`               |
 | `ISkillRegistry`        | Skill registry contract                         | `addSkill()`, `getSkill()`, `discover()`, `listSkills()`            |
 
-## RE-EXPORTS
-
-`index.ts` also re-exports from other modules for convenience:
-
-- `Logger`, `LogLevel` from `logger/`
-- `IDisposable` from `types.ts`
-- `PersistenceBackend`, `PersistenceConfig` from `persistence/`
 
 ## CONVENTIONS
 
-- This is the **single coupling point** — all cross-module type imports should come through here.
+- This is the **single coupling point** — cross-module type imports come through here.
+- `IHistoryManager` moved to `src/core/IHistoryManager.ts` (the real interface with 8+ methods).
 - Interfaces are defined here; implementations live in their respective modules.
 - `IMetrics` and `IDiscoveryCache` are the most widely used (10+ consumer files each).

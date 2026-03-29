@@ -7,7 +7,7 @@
  * @module IHistoryManager
  */
 
-import type { ThoughtData } from './types/thought.js';
+import type { ThoughtData } from './thought.js';
 
 /**
  * Interface for history and branch management.

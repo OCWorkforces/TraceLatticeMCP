@@ -1,5 +1,5 @@
 import type { PersistenceBackend } from './PersistenceBackend.js';
-import type { ThoughtData } from '../types/thought.js';
+import type { ThoughtData } from '../core/thought.js';
 
 /**
  * Configuration options for MemoryPersistence.

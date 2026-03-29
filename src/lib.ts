@@ -5,13 +5,13 @@
 import { EventEmitter } from 'node:events';
 import * as v from 'valibot';
 import { SequentialThinkingSchema, SEQUENTIAL_THINKING_TOOL } from './schema.js';
-import { ThoughtData } from './types/thought.js';
+import { ThoughtData } from './core/thought.js';
 import { IDisposable } from './types/disposable.js';
 
 // New component imports
-import { HistoryManager } from './HistoryManager.js';
-import { ThoughtProcessor } from './processor/ThoughtProcessor.js';
-import { ThoughtFormatter } from './formatter/ThoughtFormatter.js';
+import { HistoryManager } from './core/HistoryManager.js';
+import { ThoughtProcessor } from './core/ThoughtProcessor.js';
+import { ThoughtFormatter } from './core/ThoughtFormatter.js';
 import { ServerConfig } from './ServerConfig.js';
 import { StructuredLogger } from './logger/StructuredLogger.js';
 import { ConfigLoader } from './config/ConfigLoader.js';
@@ -22,10 +22,8 @@ import { ToolRegistry } from './registry/ToolRegistry.js';
 import { SkillRegistry } from './registry/SkillRegistry.js';
 import { DiscoveryCache } from './cache/DiscoveryCache.js';
 import { Metrics } from './metrics/metrics.impl.js';
-import {
-	createPersistenceBackend,
-	type PersistenceBackend,
-} from './persistence/PersistenceBackend.js';
+import type { PersistenceBackend } from './persistence/PersistenceBackend.js';
+import { createPersistenceBackend } from './persistence/PersistenceFactory.js';
 import type { SseTransportOptions } from './transport/SseTransport.js';
 import type { ConfigFileOptions } from './config/ConfigLoader.js';
 

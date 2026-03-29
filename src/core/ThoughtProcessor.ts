@@ -8,10 +8,10 @@
  * @module processor
  */
 
-import type { ThoughtData } from '../types/thought.js';
+import type { ThoughtData } from './thought.js';
 import type { Logger } from '../logger/StructuredLogger.js';
-import type { IHistoryManager } from '../IHistoryManager.js';
-import { ThoughtFormatter } from '../formatter/ThoughtFormatter.js';
+import type { IHistoryManager } from './IHistoryManager.js';
+import { ThoughtFormatter } from './ThoughtFormatter.js';
 import { normalizeInput } from './InputNormalizer.js';
 import { NullLogger } from '../logger/NullLogger.js';
 
