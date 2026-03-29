@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Updated:** 2026-03-27
-**Commit:** d5cab9d
+**Updated:** 2026-03-29
+**Commit:** 0c0f4c3
 **Branch:** develop
 
 ## OVERVIEW
@@ -29,7 +29,7 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 │   ├── telemetry/        # OpenTelemetry distributed tracing
 │   ├── health/           # Aggregate health checking
 │   ├── context/          # Request context via AsyncLocalStorage
-│   └── __tests__/        # Test suite (Vitest, 872+ tests)
+│   └── __tests__/        # Test suite (Vitest, 872 tests, 31 files)
 ├── .agents/             # Agent skills (vercel-react-*)
 ├── .sentrux/            # sentrux architectural rules
 └── docs/                # Documentation assets
@@ -55,61 +55,76 @@ MCP Sequential Thinking Server - TypeScript/Node.js server providing structured 
 
 | Symbol | Type | Location | Role |
 |---|---|---|---|
-| `ToolAwareSequentialThinkingServer` | class | src/lib.ts | Main server: DI wiring, MCP tool registration |
-| `createServer` | function | src/lib.ts | Factory for server instantiation |
-| `HistoryManager` | class | src/core/HistoryManager.ts | Thought history, branching, buffered persistence |
-| `BaseRegistry` | class | src/registry/BaseRegistry.ts | Generic CRUD + discovery + cache + frontmatter |
-| `ToolRegistry` | class | src/registry/ToolRegistry.ts | MCP tool discovery (extends BaseRegistry) |
-| `SkillRegistry` | class | src/registry/SkillRegistry.ts | Claude skill discovery (extends BaseRegistry) |
-| `ThoughtProcessor` | class | src/core/ThoughtProcessor.ts | Validate → normalize → persist → format |
-| `IHistoryManager` | interface | src/core/IHistoryManager.ts | History manager contract (8+ methods) |
-| `StreamableHttpTransport` | class | src/transport/StreamableHttpTransport.ts | MCP Streamable HTTP transport (826L) |
+| `ToolAwareSequentialThinkingServer` | class | src/lib.ts | Main server: DI wiring, MCP tool registration, lifecycle |
+| `createServer` | function | src/lib.ts | Async factory with persistence + discovery |
+| `initializeServer` | function | src/lib.ts | Convenience factory with config + logger + watchers |
+| `HistoryManager` | class | src/core/HistoryManager.ts | Thought history, branching, buffered persistence (755L) |
+| `IHistoryManager` | interface | src/core/IHistoryManager.ts | History manager contract (8 methods) |
+| `ThoughtProcessor` | class | src/core/ThoughtProcessor.ts | Validate → normalize → persist → format pipeline |
+| `InputNormalizer` | function | src/core/InputNormalizer.ts | Fixes LLM field mistakes, fills defaults |
+| `ThoughtFormatter` | class | src/core/ThoughtFormatter.ts | Display formatting with chalk (💭/🔄/🌿) |
+| `SequentialThinkingError` | class | src/errors.ts | Base error (13 subclasses, each with unique `code`) |
+| `BaseRegistry<T>` | class | src/registry/BaseRegistry.ts | Generic CRUD + discovery + cache + frontmatter (Template Method) |
+| `ToolRegistry` | class | src/registry/ToolRegistry.ts | MCP tool discovery (extends BaseRegistry<Tool>) |
+| `SkillRegistry` | class | src/registry/SkillRegistry.ts | Claude skill discovery (extends BaseRegistry<Skill>) |
+| `StreamableHttpTransport` | class | src/transport/StreamableHttpTransport.ts | MCP Streamable HTTP transport (724L, stateful/stateless) |
 | `SseTransport` | class | src/transport/SseTransport.ts | SSE transport for multi-user streaming |
-| `HttpTransport` | class | src/transport/HttpTransport.ts | HTTP JSON-RPC transport |
-| `DIContainer` | class | src/di/Container.ts | IoC container (singleton/transient/lazy) |
-| `ServiceRegistry` | interface | src/di/ServiceRegistry.ts | Typed service key interface |
-| `DiscoveryCache` | class | src/cache/DiscoveryCache.ts | LRU+TTL cache for tool/skill discovery |
-| `Metrics` | class | src/metrics/Metrics.impl.ts | Prometheus-compatible metrics |
-| `Telemetry` | class | src/telemetry/Telemetry.ts | OpenTelemetry span management |
-| `ConfigLoader` | class | src/config/ConfigLoader.ts | YAML + env var config |
-| `ConnectionPool` | class | src/pool/ConnectionPool.ts | Multi-user session isolation |
-| `WorkerManager` | class | src/cluster/WorkerManager.ts | Worker pool management |
+| `HttpTransport` | class | src/transport/HttpTransport.ts | HTTP JSON-RPC transport (stateless) |
+| `BaseTransport` | abstract class | src/transport/BaseTransport.ts | Security, rate limiting, CORS, health endpoints |
+| `DIContainer` | class | src/di/Container.ts | IoC container (singleton/transient/lazy, circular detection) |
+| `ServiceRegistry` | interface | src/di/ServiceRegistry.ts | Typed service key map (10 services) |
+| `DiscoveryCache` | class | src/cache/DiscoveryCache.ts | LRU+TTL cache (TTL 300s, max 100 entries) |
+| `Metrics` | class | src/metrics/Metrics.impl.ts | Prometheus counters, gauges, histograms |
+| `Telemetry` | class | src/telemetry/Telemetry.ts | OpenTelemetry span management (opt-in) |
+| `ConfigLoader` | class | src/config/ConfigLoader.ts | YAML + env var config (env > project > user > defaults) |
+| `ConnectionPool` | class | src/pool/ConnectionPool.ts | Multi-user session isolation with timeouts |
+| `WorkerManager` | class | src/cluster/WorkerManager.ts | Worker thread pool with auto-restart |
 
 ## CONVENTIONS
 
 - **Async-First**: All I/O and discovery is async.
-- **Factory Pattern**: `createServer()`, `createPersistenceBackend()`, `createTransport()` functions.
-- **DI**: Inject via `src/di` container; typed via `ServiceRegistry` interface; no global state.
-- **Error Handling**: `SequentialThinkingError` hierarchy (13 types); never swallow errors.
-- **Contracts Module**: Cross-module type imports go through `src/contracts/` — single coupling point. Core domain types (IHistoryManager, ThoughtData) live in `src/core/`.
-- **No Barrel Files**: Submodules import directly from source files (barrels deleted, only `src/index.ts` public API remains).
+- **Factory Pattern**: `createServer()`, `createPersistenceBackend()`, `createStreamableHttpTransport()` etc.
+- **DI**: Inject via `src/di` container; typed via `ServiceRegistry` (10 keys); no global state.
+- **Error Handling**: `SequentialThinkingError` hierarchy (13 types + `ValidationError` with `field`); never swallow.
+- **Contracts Module**: Cross-module type imports go through `src/contracts/` — single coupling point. `IHistoryManager` + `ThoughtData` live in `src/core/`.
+- **No Barrels**: Submodules import directly from source files. Only `src/index.ts` (public API) and `src/contracts/index.ts` (coupling point) are barrels.
+- **ESM-only**: `"type": "module"`, imports use `.js` extensions.
+- **Valibot**: Validation uses `valibot` (not zod/joi). Schemas in `src/schema.ts`.
+- **Tabs**: Prettier configured for tabs (tabWidth 2), single quotes, printWidth 100.
+- **`override` keyword**: Required by `noImplicitOverride`.
+- **Private `_` prefix**: `_container`, `_logger`, `_historyManager` etc.
+- **Unused params `_`**: ESLint `argsIgnorePattern: '^_'`.
+- **JSDoc**: All public APIs have full TSDoc with `@example`, `@param`, `@returns`.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 
-- **No `as any`**: Strict type safety required.
+- **No `as any`**: Strict type safety. ESLint `no-explicit-any` = warn.
 - **No `@ts-ignore` / `@ts-expect-error`**: Fix type issues properly.
-- **No Global State**: Use the DI container.
+- **No Global State**: Use the DI container. `AsyncLocalStorage` for request context.
 - **No Sync I/O**: Use async equivalents (except strictly sync startup).
-- **No Empty Catch**: Never swallow errors.
-- **No Barrel Re-exports**: No `index.ts` re-export files in submodules.
-- **Entry Points**: `src/index.ts` is a 1-line re-export to `src/lib.ts`; avoid mixing CLI and library code.
+- **No Empty Catch**: Never swallow errors. All catch blocks log, rethrow, or collect.
+- **No Barrel Re-exports**: Only `src/index.ts` and `src/contracts/index.ts` are allowed.
+- **Entry Points**: `src/index.ts` is 1-line re-export to `src/lib.ts`; `src/cli.ts` is CLI entry. Don't mix.
+- **Max CC 25**: Cyclomatic complexity per function (enforced by sentrux).
+- **Max function 100 lines**: Function length limit (enforced by sentrux).
 
 ## SETUP NOTES
 
-- **CI**: `.github/workflows/ci.yml` (type-check, lint, test, build).
-- **Lint/Security**: CI `continue-on-error: true` for lint + audit.
-- **Coverage**: 81.95% statements (870+ tests, 31 test files).
-- **Test Helpers**: `src/__tests__/helpers/index.ts` (test convenience barrel).
-- **Large Files**: `StreamableHttpTransport.ts` (826L), `core/HistoryManager.ts` (755L), `sequentialthinking-tools.test.ts` (1076L).
-- **Architectural Rules**: `.sentrux/rules.toml` — 9 layers, 6 boundaries, enforced by sentrux.
+- **CI**: `.github/workflows/ci.yml` — Node 22.x + 24.x matrix. Hard gates: type-check, test+coverage, build. Soft gates (continue-on-error): lint, audit.
+- **Coverage**: 81.95% statements (872 tests, 31 files). Thresholds: branches 55%, functions 60%, lines 65%, statements 65%.
+- **Test Helpers**: `src/__tests__/helpers/index.ts` — `createTestThought()`, `MockHistoryManager`, timer helpers.
+- **Large Files**: `HistoryManager.ts` (755L), `StreamableHttpTransport.ts` (724L), `errors.ts` (561L), `schema.ts` (541L), `lib.ts` (479L).
+- **Architectural Layers**: `.sentrux/rules.toml` — 9 layers (types→crosscutting→config→core→domain→infrastructure→di→app→cli), 6 forbidden boundaries.
+- **Duplicate env files**: Both `.env.example` (minimal) and `.example.env` (full) exist — non-standard.
 
 ## COMMANDS
 
 ```bash
-npm run build       # Build project
-npm run start       # Start server
-npm run dev         # Dev mode with inspector
-npm test            # Run all tests (870+ tests)
-npm run type-check  # Validate types
-npm run lint        # ESLint (CI has continue-on-error)
+npm run build       # tsc && chmod +x dist/cli.js
+npm run start       # node dist/cli.js
+npm run dev         # MCP inspector mode
+npm test            # vitest run (872 tests)
+npm run test:coverage # vitest run --coverage
+npm run type-check  # tsc --noEmit
+npm run lint        # eslint src/
 ```

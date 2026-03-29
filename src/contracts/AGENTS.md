@@ -1,6 +1,6 @@
 # CONTRACTS MODULE
 
-**Created:** 2026-03-27
+**Updated:** 2026-03-29
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW
@@ -32,7 +32,5 @@ src/contracts/
 
 - This is the **single coupling point** — cross-module type imports come through here.
 - `IHistoryManager` moved to `src/core/IHistoryManager.ts` (the real interface with 8+ methods).
-- Interfaces are defined here; implementations live in their respective modules.
-- `IMetrics` and `IDiscoveryCache` are the most widely used (10+ consumer files each).
 - Interfaces are defined here; implementations live in their respective modules.
 - `IMetrics` and `IDiscoveryCache` are the most widely used (10+ consumer files each).
