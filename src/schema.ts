@@ -383,6 +383,9 @@ export const PartialStepRecommendationSchema = v.object({
  * - `total_thoughts` must be >= 1
  * - `branch_id` must be 1-50 characters, alphanumeric/hyphens/underscores only
  * - `confidence` values must be between 0 and 1
+ * - `thought_type` must be one of: regular, hypothesis, verification, critique, synthesis, meta
+ * - `quality_score` and `confidence` must be between 0 and 1
+ * - `hypothesis_id` must be 1-50 characters, alphanumeric/hyphens/underscores only
  *
  * @example
  * ```typescript
@@ -469,6 +472,76 @@ export const SequentialThinkingSchema = v.object({
 	),
 	remaining_steps: v.optional(
 		v.pipe(v.array(v.string()), v.description('High-level descriptions of upcoming steps'))
+	),
+	thought_type: v.optional(
+		v.pipe(
+			v.picklist(['regular', 'hypothesis', 'verification', 'critique', 'synthesis', 'meta']),
+			v.description(
+				'Classified purpose: regular, hypothesis, verification, critique, synthesis, meta'
+			)
+		)
+	),
+	quality_score: v.optional(
+		v.pipe(
+			v.number(),
+			v.minValue(0),
+			v.maxValue(1),
+			v.description('Self-assessed quality score (0-1)')
+		)
+	),
+	confidence: v.optional(
+		v.pipe(
+			v.number(),
+			v.minValue(0),
+			v.maxValue(1),
+			v.description('Explicit confidence in correctness (0-1)')
+		)
+	),
+	hypothesis_id: v.optional(
+		v.pipe(
+			v.string(),
+			v.regex(
+				/^[a-zA-Z0-9_-]+$/,
+				'Hypothesis ID must contain only letters, numbers, hyphens, and underscores'
+			),
+			v.minLength(1),
+			v.maxLength(50),
+			v.description('Identifier linking hypothesis to verification thoughts')
+		)
+	),
+	verification_target: v.optional(
+		v.pipe(
+			v.number(),
+			v.minValue(1),
+			v.description('Thought number being verified or critiqued')
+		)
+	),
+	synthesis_sources: v.optional(
+		v.pipe(
+			v.array(v.pipe(v.number(), v.minValue(1))),
+			v.description('Thought numbers being synthesized')
+		)
+	),
+	merge_from_thoughts: v.optional(
+		v.pipe(
+			v.array(v.pipe(v.number(), v.minValue(1))),
+			v.description('Thought numbers from other branches being merged (DAG)')
+		)
+	),
+	merge_branch_ids: v.optional(
+		v.pipe(
+			v.array(v.pipe(v.string(), v.regex(/^[a-zA-Z0-9_-]+$/), v.maxLength(50))),
+			v.description('Branch IDs being merged into current context')
+		)
+	),
+	meta_observation: v.optional(
+		v.pipe(v.string(), v.description('Metacognitive observation about reasoning process'))
+	),
+	reasoning_depth: v.optional(
+		v.pipe(
+			v.picklist(['shallow', 'moderate', 'deep']),
+			v.description('Effort signal: how deep reasoning should go')
+		)
 	),
 });
 
