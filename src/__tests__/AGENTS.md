@@ -1,11 +1,11 @@
 # TESTING MODULE
 
-**Updated:** 2026-03-27
+**Updated:** 2026-03-31
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW
 
-Test suite using Vitest with V8 coverage. 870+ tests across 31 test files. Coverage: 81.95% statements.
+Test suite using Vitest with V8 coverage. 941 tests across 34 test files. Coverage: 81.95% statements.
 
 ## STRUCTURE
 
@@ -18,15 +18,16 @@ src/__tests__/
 ├── container.test.ts                 # DI container tests (712L)
 ├── persistence.test.ts               # Persistence backend tests (615L)
 ├── base-registry.test.ts             # BaseRegistry tests (609L)
+├── thought-evaluator.test.ts         # ThoughtEvaluator quality signal tests
 └── [module].test.ts                  # Other module tests
 ```
 
 ## PATTERNS
 
 - **Aggregation**: All tests collected in `src/__tests__/`, co-located with source.
-- **Helpers**: `src/__tests__/helpers/index.ts` — shared utilities (createTestThought, etc.).
+- **Helpers**: `src/__tests__/helpers/index.ts` — shared utilities (createTestThought, MockHistoryManager, etc.).
 - **Mocking**: Manual dependency injection via container or constructor.
-- **Coverage**: V8 provider, thresholds at branches 55%, functions 60%, lines 65%.
+- **Coverage**: V8 provider, thresholds at branches 55%, functions 60%, lines 65%, statements 65%.
 
 ## COMMANDS
 
