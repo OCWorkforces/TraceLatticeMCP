@@ -300,7 +300,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 			const formatter = container.resolve<ThoughtFormatter>('ThoughtFormatter');
 			const evaluator = container.resolve<ThoughtEvaluator>('ThoughtEvaluator');
 			const log = container.resolve<StructuredLogger>('Logger');
-			return new ThoughtProcessor(history, formatter, log, evaluator);
+			return new ThoughtProcessor(history, formatter, evaluator, log);
 		});
 
 		return container;

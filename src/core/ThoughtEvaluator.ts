@@ -33,7 +33,7 @@ const ALL_THOUGHT_TYPES: ThoughtType[] = [
  * ```typescript
  * const evaluator = new ThoughtEvaluator();
  *
- * const signals = evaluator.computeConfidenceSignals(currentThought, history, branches);
+ * const signals = evaluator.computeConfidenceSignals(history, branches);
  * console.log(signals.reasoning_depth); // 5
  *
  * const stats = evaluator.computeReasoningStats(history, branches);
@@ -45,7 +45,6 @@ export class ThoughtEvaluator {
 	 * Compute confidence signals from history context.
 	 * Pure computation — no side effects, no I/O.
 	 *
-	 * @param currentThought - The thought currently being processed
 	 * @param history - All thoughts in the current session
 	 * @param branches - Map of branch IDs to their thought arrays
 	 * @returns Computed confidence signals reflecting reasoning quality
@@ -53,11 +52,10 @@ export class ThoughtEvaluator {
 	 * @example
 	 * ```typescript
 	 * const evaluator = new ThoughtEvaluator();
-	 * const signals = evaluator.computeConfidenceSignals(
-	 *   currentThought,
-	 *   [thought1, thought2, thought3],
-	 *   { 'branch-a': [branchThought1] }
-	 * );
+ * const signals = evaluator.computeConfidenceSignals(
+ *   [thought1, thought2, thought3],
+ *   { 'branch-a': [branchThought1] }
+ * );
 	 *
 	 * console.log(signals.reasoning_depth);   // 3
 	 * console.log(signals.branch_count);      // 1
@@ -66,7 +64,6 @@ export class ThoughtEvaluator {
 	 * ```
 	 */
 	public computeConfidenceSignals(
-		_currentThought: ThoughtData,
 		history: ThoughtData[],
 		branches: Record<string, ThoughtData[]>
 	): ConfidenceSignals {

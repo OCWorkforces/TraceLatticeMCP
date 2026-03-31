@@ -8,14 +8,13 @@
  * @module processor
  */
 
-import type { ThoughtData } from './thought.js';
+import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { IHistoryManager } from './IHistoryManager.js';
-import { ThoughtFormatter } from './ThoughtFormatter.js';
 import { normalizeInput } from './InputNormalizer.js';
-import { NullLogger } from '../logger/NullLogger.js';
+import type { ThoughtData } from './thought.js';
 import type { ThoughtEvaluator } from './ThoughtEvaluator.js';
-import type { ConfidenceSignals, ReasoningStats } from './reasoning.js';
+import { ThoughtFormatter } from './ThoughtFormatter.js';
 
 /**
  * The return type expected by MCP tool invocations.
@@ -58,8 +57,8 @@ export interface CallToolResult {
  * 1. Validate and normalize the input thought
  * 2. Add the thought to history (triggers auto-trimming if needed)
  * 3. Format the thought for logging/display
- * 4. Compute quality signals via ThoughtEvaluator (if available)
- * 5. Return structured response with metadata and optional reasoning enrichment
+ * 4. Compute quality signals via ThoughtEvaluator
+ * 5. Return structured response with metadata and reasoning enrichment
  *
  * **Validation Rules:**
  * - `thought_number` must be >= 1
@@ -72,7 +71,7 @@ export interface CallToolResult {
  *
  * @example
  * ```typescript
- * const processor = new ThoughtProcessor(historyManager, formatter, logger);
+ * const processor = new ThoughtProcessor(historyManager, formatter, new ThoughtEvaluator());
  *
  * const result = await processor.process({
  *   thought: 'I need to analyze the codebase structure',
@@ -97,34 +96,35 @@ export class ThoughtProcessor {
 	/** Logger for debugging and monitoring. */
 	private _logger: Logger;
 
-	/** Optional evaluator for quality signal computation. */
-	protected readonly thoughtEvaluator?: ThoughtEvaluator;
+	/** Evaluator for quality signal computation. */
+	private readonly _thoughtEvaluator: ThoughtEvaluator;
 
 	/**
 	 * Creates a new ThoughtProcessor instance.
 	 *
 	 * @param historyManager - The history manager for storing thoughts
 	 * @param thoughtFormatter - The formatter for output formatting
+	 * @param thoughtEvaluator - Evaluator for quality signal computation
 	 * @param logger - Optional logger for diagnostics (defaults to NullLogger)
-	 * @param _thoughtEvaluator - Optional evaluator for quality signal computation
 	 *
 	 * @example
 	 * ```typescript
 	 * const processor = new ThoughtProcessor(
 	 *   historyManager,
 	 *   new ThoughtFormatter(),
-	 *   new StructuredLogger({ context: 'Processor' })
+	 *   new ThoughtEvaluator(),
+	 *   logger,
 	 * );
 	 * ```
 	 */
 	constructor(
 		private historyManager: IHistoryManager,
 		private thoughtFormatter: ThoughtFormatter,
-		logger?: Logger,
-		thoughtEvaluator?: ThoughtEvaluator
+		thoughtEvaluator: ThoughtEvaluator,
+		logger?: Logger
 	) {
+		this._thoughtEvaluator = thoughtEvaluator;
 		this._logger = logger ?? new NullLogger();
-		this.thoughtEvaluator = thoughtEvaluator;
 	}
 
 	/**
@@ -141,7 +141,7 @@ export class ThoughtProcessor {
 	 * Processes a thought through the sequential thinking pipeline.
 	 *
 	 * This method validates the input, adds it to history, formats the output,
-	 * optionally computes quality signals via the ThoughtEvaluator, and returns
+	 * computes quality signals via the ThoughtEvaluator, and returns
 	 * a structured response with metadata about the current state.
 	 *
 	 * @param input - The thought data to process
@@ -160,8 +160,8 @@ export class ThoughtProcessor {
 	 *   - `quality_score` — Self-assessed quality score 0-1 (optional)
 	 *   - `confidence` — Self-assessed confidence 0-1 (optional)
 	 *   - `hypothesis_id` — Hypothesis link for verification chains (optional)
-	 *   - `confidence_signals` — Computed reasoning quality signals (optional, requires evaluator)
-	 *   - `reasoning_stats` — Aggregated reasoning analytics (optional, requires evaluator)
+	 *   - `confidence_signals` — Computed reasoning quality signals
+	 *   - `reasoning_stats` — Aggregated reasoning analytics
 	 *
 	 * @example
 	 * ```typescript
@@ -198,20 +198,15 @@ export class ThoughtProcessor {
 			const formattedThought = this.thoughtFormatter.formatThought(validatedInput);
 			this.log(formattedThought);
 
-			// Compute quality signals if evaluator is available
-			let confidenceSignals: ConfidenceSignals | undefined;
-			let reasoningStats: ReasoningStats | undefined;
-			if (this.thoughtEvaluator) {
-				confidenceSignals = this.thoughtEvaluator.computeConfidenceSignals(
-					validatedInput,
-					this.historyManager.getHistory(),
-					this.historyManager.getBranches()
-				);
-				reasoningStats = this.thoughtEvaluator.computeReasoningStats(
-					this.historyManager.getHistory(),
-					this.historyManager.getBranches()
-				);
-			}
+			// Compute quality signals
+			const confidenceSignals = this._thoughtEvaluator.computeConfidenceSignals(
+				this.historyManager.getHistory(),
+				this.historyManager.getBranches()
+			);
+			const reasoningStats = this._thoughtEvaluator.computeReasoningStats(
+				this.historyManager.getHistory(),
+				this.historyManager.getBranches()
+			);
 
 			return {
 				content: [
@@ -229,7 +224,7 @@ export class ThoughtProcessor {
 								current_step: validatedInput.current_step,
 								previous_steps: validatedInput.previous_steps,
 								remaining_steps: validatedInput.remaining_steps,
-								// Reasoning enrichment fields (optional for backward compatibility)
+								// Reasoning enrichment fields
 								thought_type: validatedInput.thought_type,
 								quality_score: validatedInput.quality_score,
 								confidence: validatedInput.confidence,

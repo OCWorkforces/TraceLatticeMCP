@@ -13,8 +13,7 @@ describe('ThoughtEvaluator', () => {
 
 	describe('computeConfidenceSignals', () => {
 		it('returns zeros/nulls for empty history', () => {
-			const current = makeThought();
-			const signals = evaluator.computeConfidenceSignals(current, [], {});
+			const signals = evaluator.computeConfidenceSignals([], {});
 
 			expect(signals.reasoning_depth).toBe(0);
 			expect(signals.revision_count).toBe(0);
@@ -34,7 +33,7 @@ describe('ThoughtEvaluator', () => {
 
 		it('returns correct values for single thought', () => {
 			const thought = makeThought({ thought_number: 1 });
-			const signals = evaluator.computeConfidenceSignals(thought, [thought], {});
+			const signals = evaluator.computeConfidenceSignals([thought], {});
 
 			expect(signals.reasoning_depth).toBe(1);
 			expect(signals.revision_count).toBe(0);
@@ -49,8 +48,7 @@ describe('ThoughtEvaluator', () => {
 				makeThought({ thought_type: 'critique' }),
 				makeThought({ thought_type: 'hypothesis' }),
 			];
-			const current = makeThought();
-			const signals = evaluator.computeConfidenceSignals(current, history, {});
+			const signals = evaluator.computeConfidenceSignals(history, {});
 
 			expect(signals.thought_type_distribution.regular).toBe(1);
 			expect(signals.thought_type_distribution.hypothesis).toBe(2);
@@ -69,8 +67,7 @@ describe('ThoughtEvaluator', () => {
 				makeThought({}), // no confidence
 				makeThought({ confidence: 1.0 }),
 			];
-			const current = makeThought();
-			const signals = evaluator.computeConfidenceSignals(current, history, {});
+			const signals = evaluator.computeConfidenceSignals(history, {});
 
 			expect(signals.average_confidence).toBeCloseTo(0.8, 5);
 		});
@@ -82,8 +79,7 @@ describe('ThoughtEvaluator', () => {
 				makeThought({}),
 				makeThought({ is_revision: true, revises_thought: 3 }),
 			];
-			const current = makeThought();
-			const signals = evaluator.computeConfidenceSignals(current, history, {});
+			const signals = evaluator.computeConfidenceSignals(history, {});
 
 			expect(signals.revision_count).toBe(2);
 		});
@@ -94,7 +90,7 @@ describe('ThoughtEvaluator', () => {
 				'branch-b': [makeThought({ branch_id: 'branch-b' })],
 				'branch-c': [makeThought({ branch_id: 'branch-c' })],
 			};
-			const signals = evaluator.computeConfidenceSignals(makeThought(), [], branches);
+			const signals = evaluator.computeConfidenceSignals([], branches);
 
 			expect(signals.branch_count).toBe(3);
 		});
@@ -104,8 +100,7 @@ describe('ThoughtEvaluator', () => {
 				makeThought({}), // no thought_type → defaults to regular
 				makeThought({}),
 			];
-			const current = makeThought();
-			const signals = evaluator.computeConfidenceSignals(current, history, {});
+			const signals = evaluator.computeConfidenceSignals(history, {});
 
 			expect(signals.thought_type_distribution.regular).toBe(2);
 		});

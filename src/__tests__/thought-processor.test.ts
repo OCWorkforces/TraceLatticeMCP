@@ -26,7 +26,7 @@ describe('ThoughtProcessor', () => {
 		mockHistory = new MockHistoryManager();
 		formatter = new ThoughtFormatter();
 		logger = new StructuredLogger({ context: 'Test', pretty: false });
-		processor = new ThoughtProcessor(mockHistory, formatter, logger);
+		processor = new ThoughtProcessor(mockHistory, formatter, new ThoughtEvaluator(), logger);
 	});
 
 	describe('Input Validation', () => {
@@ -89,7 +89,7 @@ describe('ThoughtProcessor', () => {
 			await processor.process(input);
 
 			expect(mockHistory.getHistoryLength()).toBe(1);
-			expect(mockHistory.getHistory()[0]).toEqual(input);
+			expect(mockHistory.getHistory()[0]).toMatchObject(input);
 		});
 
 		it('should respect max history size through HistoryManager', async () => {
@@ -279,7 +279,7 @@ describe('ThoughtProcessor', () => {
 		}
 
 			const throwingHistory = new ThrowingHistoryManager();
-			const throwingProcessor = new ThoughtProcessor(throwingHistory, formatter, logger);
+			const throwingProcessor = new ThoughtProcessor(throwingHistory, formatter, new ThoughtEvaluator(), logger);
 
 			const input: ThoughtData = {
 				thought: 'Test thought',
@@ -440,7 +440,7 @@ describe('ThoughtProcessor', () => {
 		});
 
 		it('should use NullLogger as default when no logger provided', async () => {
-			const processorWithoutLogger = new ThoughtProcessor(mockHistory, formatter);
+			const processorWithoutLogger = new ThoughtProcessor(mockHistory, formatter, new ThoughtEvaluator());
 
 			const input: ThoughtData = {
 				thought: 'Test thought',
@@ -551,7 +551,7 @@ describe('ThoughtProcessor', () => {
 
 		beforeEach(() => {
 			evaluator = new ThoughtEvaluator();
-			processorWithEvaluator = new ThoughtProcessor(mockHistory, formatter, logger, evaluator);
+			processorWithEvaluator = new ThoughtProcessor(mockHistory, formatter, evaluator, logger);
 		});
 
 		it('should include reasoning fields when present in input', async () => {
@@ -620,31 +620,8 @@ describe('ThoughtProcessor', () => {
 			expect(typeof parsed.reasoning_stats.average_confidence).toBe('number');
 		});
 
-		it('should omit confidence_signals and reasoning_stats when evaluator is absent', async () => {
-			const processorNoEval = new ThoughtProcessor(mockHistory, formatter, logger);
 
-			const input: ThoughtData = {
-				thought: 'Test without evaluator',
-				thought_number: 1,
-				total_thoughts: 1,
-				next_thought_needed: false,
-				thought_type: 'hypothesis',
-				quality_score: 0.9,
-			};
-
-			const result = await processorNoEval.process(input);
-			const parsed = JSON.parse(result.content[0]!.text);
-
-			// Reasoning input fields should still appear
-			expect(parsed.thought_type).toBe('hypothesis');
-			expect(parsed.quality_score).toBe(0.9);
-
-			// Computed signals should be absent
-			expect(parsed.confidence_signals).toBeUndefined();
-			expect(parsed.reasoning_stats).toBeUndefined();
-		});
-
-		it('should maintain backward compatibility with standard input', async () => {
+		it('should produce reasoning fields with standard input', async () => {
 			const input = createTestThought();
 
 			const result = await processorWithEvaluator.process(input);
@@ -657,13 +634,10 @@ describe('ThoughtProcessor', () => {
 			expect(parsed.branches).toEqual([]);
 			expect(parsed.thought_history_length).toBe(1);
 
-			// Reasoning fields are undefined when not set in input
-			expect(parsed.thought_type).toBeUndefined();
-			expect(parsed.quality_score).toBeUndefined();
-			expect(parsed.confidence).toBeUndefined();
-			expect(parsed.hypothesis_id).toBeUndefined();
+			// thought_type is always defaulted to 'regular' by normalizer
+			expect(parsed.thought_type).toBe('regular');
 
-			// Evaluator still produces signals (they compute from history)
+			// Evaluator always produces signals
 			expect(parsed.confidence_signals).toBeDefined();
 			expect(parsed.reasoning_stats).toBeDefined();
 		});

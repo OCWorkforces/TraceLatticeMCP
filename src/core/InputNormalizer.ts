@@ -212,24 +212,10 @@ function normalizeStepRecommendation(
 	return normalized;
 }
 
-/**
- * Reasoning field keys used to detect whether reasoning normalization should apply defaults.
- */
-const REASONING_FIELD_KEYS = [
-	'thought_type',
-	'quality_score',
-	'confidence',
-	'hypothesis_id',
-	'verification_target',
-	'synthesis_sources',
-	'merge_from_thoughts',
-	'merge_branch_ids',
-	'meta_observation',
-	'reasoning_depth',
-] as const;
 
 /**
  * Normalizes reasoning-specific fields on a thought input object.
+ * Always applies reasoning normalization — reasoning is the default pipeline.
  * Applies the following normalization rules:
  * - Defaults `thought_type` to `'regular'` if not provided
  * - Clamps `quality_score` to [0, 1] range
@@ -250,12 +236,9 @@ const REASONING_FIELD_KEYS = [
  * ```
  */
 export function normalizeReasoningFields(input: Record<string, unknown>): void {
-	const hasReasoningFields = REASONING_FIELD_KEYS.some((key) => key in input);
-	if (!hasReasoningFields) {
-		return;
-	}
-
+	// Always apply reasoning field normalization — reasoning is the default pipeline
 	// Default thought_type to 'regular'
+
 	if (!('thought_type' in input) || input.thought_type === undefined) {
 		input.thought_type = 'regular';
 	}

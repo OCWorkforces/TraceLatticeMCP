@@ -13,6 +13,7 @@ import type { ServerConfig } from '../ServerConfig.js';
 import type { HistoryManager } from '../core/HistoryManager.js';
 import type { ThoughtProcessor } from '../core/ThoughtProcessor.js';
 import type { ThoughtFormatter } from '../core/ThoughtFormatter.js';
+import type { ThoughtEvaluator } from '../core/ThoughtEvaluator.js';
 import type { ToolRegistry } from '../registry/ToolRegistry.js';
 import type { SkillRegistry } from '../registry/SkillRegistry.js';
 import type { Metrics } from '../metrics/metrics.impl.js';
@@ -24,6 +25,7 @@ export interface ServiceRegistry {
 	HistoryManager: HistoryManager;
 	ThoughtProcessor: ThoughtProcessor;
 	ThoughtFormatter: ThoughtFormatter;
+	ThoughtEvaluator: ThoughtEvaluator;
 	Persistence: PersistenceBackend | null;
 	ToolRegistry: ToolRegistry;
 	SkillRegistry: SkillRegistry;

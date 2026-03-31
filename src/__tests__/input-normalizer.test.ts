@@ -574,7 +574,7 @@ describe('reasoning fields normalization', () => {
 	describe('thought_type', () => {
 		it('should default thought_type to regular when missing', () => {
 			const normalized = normalizeInput(
-				createMinimalInput({ quality_score: 0.5 })
+				createMinimalInput()
 			) as ThoughtData;
 			expect(normalized.thought_type).toBe('regular');
 		});
@@ -759,9 +759,8 @@ describe('reasoning fields normalization', () => {
 
 	describe('normalizeReasoningFields direct usage', () => {
 		it('should mutate the input object in place', () => {
-			const input: Record<string, unknown> = { quality_score: 1.5 };
+			const input: Record<string, unknown> = {};
 			normalizeReasoningFields(input);
-			expect(input.quality_score).toBe(1);
 			expect(input.thought_type).toBe('regular');
 		});
 	});

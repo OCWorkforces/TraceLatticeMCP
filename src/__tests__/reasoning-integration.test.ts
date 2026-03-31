@@ -87,7 +87,7 @@ describe('Reasoning Integration', () => {
 		formatter = new ThoughtFormatter();
 		logger = new StructuredLogger({ context: 'ReasoningIntegration', pretty: false });
 		evaluator = new ThoughtEvaluator();
-		processor = new ThoughtProcessor(historyManager, formatter, logger, evaluator);
+		processor = new ThoughtProcessor(historyManager, formatter, evaluator, logger);
 	});
 
 	it('should track hypothesis through verification to synthesis', async () => {
@@ -202,7 +202,7 @@ describe('Reasoning Integration', () => {
 		expect(json.total_thoughts).toBe(1);
 		expect(json.next_thought_needed).toBe(false);
 		// New reasoning fields are undefined when not provided
-		expect(json.thought_type).toBeUndefined();
+		expect(json.thought_type).toBe('regular');
 		expect(json.quality_score).toBeUndefined();
 		expect(json.confidence).toBeUndefined();
 		// Evaluator still provides stats even for basic thoughts

@@ -384,7 +384,7 @@ describe('ThoughtFormatter', () => {
 				expect(output).toContain('Thought');
 			});
 
-			it('should show default thought icon when thought_type is undefined (backward compat)', () => {
+			it('should show default thought icon when thought_type is undefined', () => {
 				const data: ThoughtData = {
 					thought: 'No thought type specified',
 					thought_number: 1,
