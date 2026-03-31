@@ -525,4 +525,29 @@ describe('HistoryManager', () => {
 			expect(manager.getWriteBufferLength()).toBe(1);
 		});
 	});
+
+	describe('merge topology tracking', () => {
+		it('should store thoughts with merge metadata', () => {
+			const manager = new HistoryManager();
+			const thought = createTestThought({
+				merge_from_thoughts: [1, 3],
+				merge_branch_ids: ['branch-a', 'branch-b'],
+			});
+			manager.addThought(thought);
+
+			const history = manager.getHistory();
+			expect(history[history.length - 1]?.merge_from_thoughts).toEqual([1, 3]);
+			expect(history[history.length - 1]?.merge_branch_ids).toEqual(['branch-a', 'branch-b']);
+		});
+
+		it('should store thoughts without merge metadata normally', () => {
+			const manager = new HistoryManager();
+			const thought = createTestThought();
+			manager.addThought(thought);
+
+			const history = manager.getHistory();
+			expect(history[history.length - 1]?.merge_from_thoughts).toBeUndefined();
+			expect(history[history.length - 1]?.merge_branch_ids).toBeUndefined();
+		});
+	});
 });

@@ -288,6 +288,16 @@ export class HistoryManager implements IHistoryManager {
 			this.addToBranch(thought.branch_id, thought);
 		}
 
+		// Track merge operations for analytics
+		if (thought.merge_from_thoughts?.length || thought.merge_branch_ids?.length) {
+			this._metrics?.counter(
+				'thought_merge_operations_total',
+				1,
+				{},
+				'Total merge operations (graph topology)'
+			);
+		}
+
 		// Buffer thought for persistence instead of fire-and-forget
 		if (this._persistenceEnabled && this._persistence) {
 			// Backpressure: if buffer is full and flush is failing, log warning
