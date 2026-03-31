@@ -1,6 +1,7 @@
 # SOURCE MODULE
 
 **Updated:** 2026-03-31
+**Commit:** 509ece3
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW

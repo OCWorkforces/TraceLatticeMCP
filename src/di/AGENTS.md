@@ -1,7 +1,7 @@
 # DEPENDENCY INJECTION MODULE
 
 **Updated:** 2026-03-31
-**Parent:** ../AGENTS.md
+**Commit:** 509ece3
 
 ## OVERVIEW
 
@@ -11,7 +11,7 @@ Lightweight DI container for managing service dependencies and testability.
 
 ```
 src/di/
-├── Container.ts        # DIContainer class (singleton/transient/lazy)
+├── Container.ts        # DIContainer class (singleton/transient/lazy) (363L)
 └── ServiceRegistry.ts # Typed service key interface (11 keys)
 ```
 

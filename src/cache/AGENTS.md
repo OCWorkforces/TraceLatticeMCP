@@ -1,5 +1,7 @@
 # CACHE MODULE
 
+**Updated:** 2026-03-31
+**Commit:** 509ece3
 ## OVERVIEW
 
 LRU + TTL cache for tool/skill discovery results.

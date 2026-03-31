@@ -1,7 +1,7 @@
 # CORE MODULE
 
 **Updated:** 2026-03-31
-**Parent:** ../AGENTS.md
+**Commit:** 509ece3
 
 ## OVERVIEW
 
@@ -11,12 +11,12 @@ Domain heart of the project. Thought processing pipeline, history management, br
 
 ```
 src/core/
-├── HistoryManager.ts      # Thought history, branching, buffered persistence (755L)
+├── HistoryManager.ts      # Thought history, branching, buffered persistence (780L)
 ├── IHistoryManager.ts     # History manager contract (8 methods)
-├── ThoughtProcessor.ts    # Validate → normalize → persist → format → evaluate pipeline
+├── ThoughtProcessor.ts    # Validate → normalize → persist → format → evaluate pipeline (421L)
 ├── ThoughtEvaluator.ts    # Stateless quality signals + reasoning analytics (190L)
 ├── ThoughtFormatter.ts    # Display formatting with chalk 💭🔄🌿🔬✅🔍🧬🧠📝 (231L)
-├── InputNormalizer.ts     # Fixes LLM field mistakes, fills defaults (303L)
+├── InputNormalizer.ts     # Fixes LLM field mistakes, fills defaults (433L)
 ├── thought.ts             # ThoughtData interface with 11 optional reasoning fields (193L)
 ├── reasoning.ts           # ThoughtType union, ConfidenceSignals, ReasoningStats (143L)
 └── step.ts                # StepRecommendation interface (50L)
@@ -74,13 +74,13 @@ ThoughtProcessor.process(input)
 
 | Symbol                 | Type      | Lines | Role                                                                                                                              |
 | ---------------------- | --------- | ----- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `HistoryManager`       | class     | 755   | History + branching + buffered persistence. 14 private fields, 4 concerns: linear history, branching, persistence buffer, metrics |
+| `HistoryManager`       | class     | 780   | History + branching + buffered persistence. 14 private fields, 4 concerns: linear history, branching, persistence buffer, metrics |
 | `HistoryManagerConfig` | interface | ~50   | 10 config options (maxHistorySize, maxBranches, maxBranchSize, persistence, etc.)                                                 |
 | `IHistoryManager`      | interface | 97    | 8-method contract for decoupling + testability                                                                                    |
 | `ThoughtData`          | interface | 193   | Core data structure with 11 optional reasoning fields (thought_type, confidence, hypothesis_id, etc.)                             |
-| `ThoughtProcessor`     | class     | ~250  | Pipeline orchestrator. Holds historyManager + formatter + evaluator references                                                    |
+| `ThoughtProcessor`     | class     | 421   | Pipeline orchestrator. Holds historyManager + formatter + evaluator references                                                    |
 | `ThoughtEvaluator`     | class     | 190   | Stateless quality signal computation + reasoning analytics. All methods pure — no side effects                                    |
-| `normalizeInput`       | function  | 303   | Field correction, default filling, branch_id sanitization, reasoning field normalization                                          |
+| `normalizeInput`       | function  | 433   | Field correction, default filling, branch_id sanitization, reasoning field normalization                                          |
 | `sanitizeBranchId`     | function  | —     | Path traversal prevention for branch IDs                                                                                          |
 | `ThoughtFormatter`     | class     | 231   | Chalk-based console output with per-type icons (8 types)                                                                          |
 | `ThoughtType`          | union     | 143   | `'regular' \| 'hypothesis' \| 'verification' \| 'critique' \| 'synthesis' \| 'meta'`                                              |

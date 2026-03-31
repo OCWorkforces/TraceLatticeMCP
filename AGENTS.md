@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
 **Updated:** 2026-03-31
-**Commit:** HEAD
+**Commit:** 509ece3
 **Branch:** develop
 
 ## OVERVIEW
@@ -20,7 +20,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 │   ├── registry/         # Tool/Skill registries (BaseRegistry<T> + subclasses)
 │   ├── contracts/        # Shared interfaces (IMetrics, IDiscoveryCache, etc.)
 │   ├── cluster/          # Worker pool for parallel thought processing
-│   ├── __tests__/        # Test suite (Vitest, 941 tests, 34 files)
+│   ├── __tests__/        # Test suite (Vitest, 1006 tests, 35 files)
 │   ├── cache/            # LRU+TTL discovery cache
 │   ├── logger/           # Structured logging (JSON/pretty)
 │   ├── pool/             # Multi-user session pool
@@ -61,11 +61,11 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `ToolAwareSequentialThinkingServer` | class     | src/lib.ts                               | Main server: DI wiring, MCP tool registration, lifecycle                             |
 | `createServer`                      | function  | src/lib.ts                               | Async factory with persistence + discovery                                           |
 | `initializeServer`                  | function  | src/lib.ts                               | Convenience factory with config + logger + watchers                                  |
-| `HistoryManager`                    | class     | src/core/HistoryManager.ts               | Thought history, branching, buffered persistence (755L)                              |
+| `HistoryManager`                    | class     | src/core/HistoryManager.ts               | Thought history, branching, buffered persistence (780L)                              |
 | `IHistoryManager`                   | interface | src/core/IHistoryManager.ts              | History manager contract (8 methods)                                                 |
 | `ThoughtProcessor`                  | class     | src/core/ThoughtProcessor.ts             | Validate → normalize → persist → format → evaluate pipeline                          |
 | `ThoughtEvaluator`                  | class     | src/core/ThoughtEvaluator.ts             | Stateless quality signals + reasoning analytics (190L)                               |
-| `normalizeInput`                    | function  | src/core/InputNormalizer.ts              | Field correction, default filling, branch_id sanitization (303L)                     |
+| `normalizeInput`                    | function  | src/core/InputNormalizer.ts              | Field correction, default filling, branch_id sanitization (433L)                     |
 | `ThoughtFormatter`                  | class     | src/core/ThoughtFormatter.ts             | Chalk display: 💭🔄🌿🔬✅🔍🧬🧠📝 (231L)                                             |
 | `ThoughtData`                       | interface | src/core/thought.ts                      | Core data structure with 11 optional reasoning fields (193L)                         |
 | `ThoughtType`                       | union     | src/core/reasoning.ts                    | `'regular' \| 'hypothesis' \| 'verification' \| 'critique' \| 'synthesis' \| 'meta'` |
@@ -118,9 +118,9 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 ## SETUP NOTES
 
 - **CI**: `.github/workflows/ci.yml` — Node 22.x + 24.x matrix. Hard gates: type-check, test+coverage, build. Soft gates (continue-on-error): lint, audit.
-- **Coverage**: 81.95% statements (941 tests, 34 files). Thresholds: branches 55%, functions 60%, lines 65%, statements 65%.
+- **Coverage**: 83.47% statements (1006 tests, 35 files). Thresholds: branches 55%, functions 60%, lines 65%, statements 65%.
 - **Test Helpers**: `src/__tests__/helpers/index.ts` — `createTestThought()`, `MockHistoryManager`, timer helpers.
-- **Large Files**: `HistoryManager.ts` (755L), `StreamableHttpTransport.ts` (724L), `errors.ts` (561L), `schema.ts` (541L), `lib.ts` (479L).
+- **Large Files**: `HistoryManager.ts` (780L), `StreamableHttpTransport.ts` (724L), `schema.ts` (633L), `errors.ts` (561L), `lib.ts` (484L).
 - **Architectural Layers**: `.sentrux/rules.toml` — 9 layers (types→crosscutting→config→core→domain→infrastructure→di→app→cli), 6 forbidden boundaries.
 - **Duplicate env files**: Both `.env.example` (minimal) and `.example.env` (full) exist — non-standard.
 
@@ -130,7 +130,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 npm run build       # tsc && chmod +x dist/cli.js
 npm run start       # node dist/cli.js
 npm run dev         # MCP inspector mode
-npm test            # vitest run (941 tests)
+npm test            # vitest run (1006 tests)
 npm run test:coverage # vitest run --coverage
 npm run type-check  # tsc --noEmit
 npm run lint        # eslint src/

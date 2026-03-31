@@ -1,6 +1,6 @@
 # METRICS MODULE
 
-**Updated:** 2026-03-27
+**Updated:** 2026-03-31
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW

@@ -1,7 +1,7 @@
 # TELEMETRY MODULE
 
-**Generated:** 2026-03-09
-**Parent:** ../AGENTS.md
+**Updated:** 2026-03-31
+**Commit:** 509ece3
 
 ## OVERVIEW
 
