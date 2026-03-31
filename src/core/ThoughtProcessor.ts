@@ -14,6 +14,8 @@ import type { IHistoryManager } from './IHistoryManager.js';
 import { ThoughtFormatter } from './ThoughtFormatter.js';
 import { normalizeInput } from './InputNormalizer.js';
 import { NullLogger } from '../logger/NullLogger.js';
+import type { ThoughtEvaluator } from './ThoughtEvaluator.js';
+import type { ConfidenceSignals, ReasoningStats } from './reasoning.js';
 
 /**
  * The return type expected by MCP tool invocations.
@@ -56,7 +58,8 @@ export interface CallToolResult {
  * 1. Validate and normalize the input thought
  * 2. Add the thought to history (triggers auto-trimming if needed)
  * 3. Format the thought for logging/display
- * 4. Return structured response with metadata
+ * 4. Compute quality signals via ThoughtEvaluator (if available)
+ * 5. Return structured response with metadata and optional reasoning enrichment
  *
  * **Validation Rules:**
  * - `thought_number` must be >= 1
@@ -94,12 +97,16 @@ export class ThoughtProcessor {
 	/** Logger for debugging and monitoring. */
 	private _logger: Logger;
 
+	/** Optional evaluator for quality signal computation. */
+	protected readonly thoughtEvaluator?: ThoughtEvaluator;
+
 	/**
 	 * Creates a new ThoughtProcessor instance.
 	 *
 	 * @param historyManager - The history manager for storing thoughts
 	 * @param thoughtFormatter - The formatter for output formatting
 	 * @param logger - Optional logger for diagnostics (defaults to NullLogger)
+	 * @param _thoughtEvaluator - Optional evaluator for quality signal computation
 	 *
 	 * @example
 	 * ```typescript
@@ -113,9 +120,11 @@ export class ThoughtProcessor {
 	constructor(
 		private historyManager: IHistoryManager,
 		private thoughtFormatter: ThoughtFormatter,
-		logger?: Logger
+		logger?: Logger,
+		thoughtEvaluator?: ThoughtEvaluator
 	) {
 		this._logger = logger ?? new NullLogger();
+		this.thoughtEvaluator = thoughtEvaluator;
 	}
 
 	/**
@@ -132,10 +141,27 @@ export class ThoughtProcessor {
 	 * Processes a thought through the sequential thinking pipeline.
 	 *
 	 * This method validates the input, adds it to history, formats the output,
-	 * and returns a structured response with metadata about the current state.
+	 * optionally computes quality signals via the ThoughtEvaluator, and returns
+	 * a structured response with metadata about the current state.
 	 *
 	 * @param input - The thought data to process
-	 * @returns A Promise resolving to the formatted tool result
+	 * @returns A Promise resolving to the formatted tool result containing:
+	 *   - `thought_number` — Current thought index
+	 *   - `total_thoughts` — Estimated total thoughts
+	 *   - `next_thought_needed` — Whether to continue
+	 *   - `branches` — Active branch IDs
+	 *   - `thought_history_length` — Number of thoughts in history
+	 *   - `available_mcp_tools` — MCP tools available for recommendation
+	 *   - `available_skills` — Skills available for recommendation
+	 *   - `current_step` — Current step recommendation
+	 *   - `previous_steps` — Previously recommended steps
+	 *   - `remaining_steps` — Upcoming step descriptions
+	 *   - `thought_type` — Classification of thought purpose (optional)
+	 *   - `quality_score` — Self-assessed quality score 0-1 (optional)
+	 *   - `confidence` — Self-assessed confidence 0-1 (optional)
+	 *   - `hypothesis_id` — Hypothesis link for verification chains (optional)
+	 *   - `confidence_signals` — Computed reasoning quality signals (optional, requires evaluator)
+	 *   - `reasoning_stats` — Aggregated reasoning analytics (optional, requires evaluator)
 	 *
 	 * @example
 	 * ```typescript
@@ -172,6 +198,21 @@ export class ThoughtProcessor {
 			const formattedThought = this.thoughtFormatter.formatThought(validatedInput);
 			this.log(formattedThought);
 
+			// Compute quality signals if evaluator is available
+			let confidenceSignals: ConfidenceSignals | undefined;
+			let reasoningStats: ReasoningStats | undefined;
+			if (this.thoughtEvaluator) {
+				confidenceSignals = this.thoughtEvaluator.computeConfidenceSignals(
+					validatedInput,
+					this.historyManager.getHistory(),
+					this.historyManager.getBranches()
+				);
+				reasoningStats = this.thoughtEvaluator.computeReasoningStats(
+					this.historyManager.getHistory(),
+					this.historyManager.getBranches()
+				);
+			}
+
 			return {
 				content: [
 					{
@@ -188,6 +229,13 @@ export class ThoughtProcessor {
 								current_step: validatedInput.current_step,
 								previous_steps: validatedInput.previous_steps,
 								remaining_steps: validatedInput.remaining_steps,
+								// Reasoning enrichment fields (optional for backward compatibility)
+								thought_type: validatedInput.thought_type,
+								quality_score: validatedInput.quality_score,
+								confidence: validatedInput.confidence,
+								hypothesis_id: validatedInput.hypothesis_id,
+								confidence_signals: confidenceSignals,
+								reasoning_stats: reasoningStats,
 							},
 							null,
 							2

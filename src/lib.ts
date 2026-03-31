@@ -12,6 +12,7 @@ import { IDisposable } from './types/disposable.js';
 import { HistoryManager } from './core/HistoryManager.js';
 import { ThoughtProcessor } from './core/ThoughtProcessor.js';
 import { ThoughtFormatter } from './core/ThoughtFormatter.js';
+import { ThoughtEvaluator } from './core/ThoughtEvaluator.js';
 import { ServerConfig } from './ServerConfig.js';
 import { StructuredLogger } from './logger/StructuredLogger.js';
 import { ConfigLoader } from './config/ConfigLoader.js';
@@ -290,12 +291,16 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 		// Register ThoughtFormatter (can be transient)
 		container.registerFactory('ThoughtFormatter', () => new ThoughtFormatter());
 
+		// Register ThoughtEvaluator (stateless, transient)
+		container.registerFactory('ThoughtEvaluator', () => new ThoughtEvaluator());
+
 		// Register ThoughtProcessor
 		container.register('ThoughtProcessor', () => {
 			const history = container.resolve<HistoryManager>('HistoryManager');
 			const formatter = container.resolve<ThoughtFormatter>('ThoughtFormatter');
+			const evaluator = container.resolve<ThoughtEvaluator>('ThoughtEvaluator');
 			const log = container.resolve<StructuredLogger>('Logger');
-			return new ThoughtProcessor(history, formatter, log);
+			return new ThoughtProcessor(history, formatter, log, evaluator);
 		});
 
 		return container;

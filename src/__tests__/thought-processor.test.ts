@@ -12,7 +12,8 @@ import { StructuredLogger } from '../logger/StructuredLogger.js';
 import { MockHistoryManager } from './helpers/index.js';
 import type { ThoughtData } from '../core/thought.js';
 import type { IHistoryManager } from '../core/IHistoryManager.js';
-
+import { ThoughtEvaluator } from '../core/ThoughtEvaluator.js';
+import { createTestThought, createHypothesisThought } from './helpers/index.js';
 
 
 describe('ThoughtProcessor', () => {
@@ -541,6 +542,130 @@ describe('ThoughtProcessor', () => {
 			});
 			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.available_skills).toBeUndefined();
+		});
+	});
+
+	describe('ThoughtEvaluator Integration', () => {
+		let evaluator: ThoughtEvaluator;
+		let processorWithEvaluator: ThoughtProcessor;
+
+		beforeEach(() => {
+			evaluator = new ThoughtEvaluator();
+			processorWithEvaluator = new ThoughtProcessor(mockHistory, formatter, logger, evaluator);
+		});
+
+		it('should include reasoning fields when present in input', async () => {
+			const input: ThoughtData = {
+				thought: 'Hypothesis: performance bottleneck in rendering',
+				thought_number: 1,
+				total_thoughts: 3,
+				next_thought_needed: true,
+				thought_type: 'hypothesis',
+				quality_score: 0.85,
+				confidence: 0.7,
+				hypothesis_id: 'perf-bottleneck-1',
+			};
+
+			const result = await processorWithEvaluator.process(input);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			expect(parsed.thought_type).toBe('hypothesis');
+			expect(parsed.quality_score).toBe(0.85);
+			expect(parsed.confidence).toBe(0.7);
+			expect(parsed.hypothesis_id).toBe('perf-bottleneck-1');
+		});
+
+		it('should include confidence_signals when evaluator is present', async () => {
+			const input = createHypothesisThought({
+				thought_number: 1,
+				total_thoughts: 2,
+				next_thought_needed: true,
+			});
+
+			const result = await processorWithEvaluator.process(input);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			expect(parsed.confidence_signals).toBeDefined();
+			expect(parsed.confidence_signals.reasoning_depth).toBe(1);
+			expect(parsed.confidence_signals.revision_count).toBe(0);
+			expect(parsed.confidence_signals.branch_count).toBe(0);
+			expect(parsed.confidence_signals.has_hypothesis).toBe(true);
+			expect(parsed.confidence_signals.has_verification).toBe(false);
+			expect(parsed.confidence_signals.thought_type_distribution).toBeDefined();
+			expect(parsed.confidence_signals.thought_type_distribution.hypothesis).toBe(1);
+			expect(typeof parsed.confidence_signals.average_confidence).toBe('number');
+		});
+
+		it('should include reasoning_stats when evaluator is present', async () => {
+			const input = createHypothesisThought({
+				thought_number: 1,
+				total_thoughts: 2,
+				next_thought_needed: true,
+			});
+
+			const result = await processorWithEvaluator.process(input);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			expect(parsed.reasoning_stats).toBeDefined();
+			expect(parsed.reasoning_stats.total_thoughts).toBe(1);
+			expect(parsed.reasoning_stats.total_branches).toBe(0);
+			expect(parsed.reasoning_stats.total_revisions).toBe(0);
+			expect(parsed.reasoning_stats.total_merges).toBe(0);
+			expect(parsed.reasoning_stats.chain_depth).toBe(1);
+			expect(parsed.reasoning_stats.thought_type_counts).toBeDefined();
+			expect(parsed.reasoning_stats.hypothesis_count).toBe(1);
+			expect(parsed.reasoning_stats.verified_hypothesis_count).toBe(0);
+			expect(parsed.reasoning_stats.unresolved_hypothesis_count).toBe(1);
+			expect(typeof parsed.reasoning_stats.average_quality_score).toBe('number');
+			expect(typeof parsed.reasoning_stats.average_confidence).toBe('number');
+		});
+
+		it('should omit confidence_signals and reasoning_stats when evaluator is absent', async () => {
+			const processorNoEval = new ThoughtProcessor(mockHistory, formatter, logger);
+
+			const input: ThoughtData = {
+				thought: 'Test without evaluator',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				thought_type: 'hypothesis',
+				quality_score: 0.9,
+			};
+
+			const result = await processorNoEval.process(input);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			// Reasoning input fields should still appear
+			expect(parsed.thought_type).toBe('hypothesis');
+			expect(parsed.quality_score).toBe(0.9);
+
+			// Computed signals should be absent
+			expect(parsed.confidence_signals).toBeUndefined();
+			expect(parsed.reasoning_stats).toBeUndefined();
+		});
+
+		it('should maintain backward compatibility with standard input', async () => {
+			const input = createTestThought();
+
+			const result = await processorWithEvaluator.process(input);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			// Existing fields still present
+			expect(parsed.thought_number).toBe(1);
+			expect(parsed.total_thoughts).toBe(1);
+			expect(parsed.next_thought_needed).toBe(false);
+			expect(parsed.branches).toEqual([]);
+			expect(parsed.thought_history_length).toBe(1);
+
+			// Reasoning fields are undefined when not set in input
+			expect(parsed.thought_type).toBeUndefined();
+			expect(parsed.quality_score).toBeUndefined();
+			expect(parsed.confidence).toBeUndefined();
+			expect(parsed.hypothesis_id).toBeUndefined();
+
+			// Evaluator still produces signals (they compute from history)
+			expect(parsed.confidence_signals).toBeDefined();
+			expect(parsed.reasoning_stats).toBeDefined();
 		});
 	});
 });
