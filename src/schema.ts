@@ -12,6 +12,7 @@
  * - `SkillRecommendationSchema` - Validates skill recommendation objects
  * - `StepRecommendationSchema` - Validates step coordination structures
  * - `SequentialThinkingSchema` - Main schema for thought input validation
+ * - Reasoning enhancement fields: thought_type, quality_score, confidence, hypothesis_id, etc.
  *
  * @example
  * ```typescript
@@ -98,6 +99,21 @@ Parameters explained:
 - previous_steps: Steps already recommended (each step MUST use "recommended_tools" PLURAL)
 - remaining_steps: High-level descriptions of upcoming steps
 
+Reasoning Enhancement Parameters:
+- thought_type: Thought purpose: 'regular' (default), 'hypothesis', 'verification', 'critique', 'synthesis', 'meta'
+- quality_score: Self-assessed quality of this thought (0-1)
+- confidence: Confidence in this thought's correctness (0-1)
+- hypothesis_id: Links hypothesis to verification (alphanumeric, hyphens, underscores)
+- verification_target: For 'verification'/'critique' types, the thought_number being evaluated
+- synthesis_sources: For 'synthesis' type, the thought_numbers being combined
+- merge_from_thoughts: Thought numbers from other branches merged (graph reasoning)
+- merge_branch_ids: Branch IDs merged into current context
+- meta_observation: Observation about reasoning process (with thought_type 'meta')
+- reasoning_depth: How deep to reason: 'shallow' (quick), 'moderate' (default), 'deep' (thorough)
+
+Response Enrichment:
+- When reasoning fields are set, response includes confidence_signals (depth, revision/branch count, type distribution, avg confidence) and reasoning_stats (hypothesis tracking)
+
 You should:
 1. Start with an initial estimate of needed thoughts, but be ready to adjust
 2. Feel free to question or revise previous thoughts
@@ -115,7 +131,11 @@ You should:
 14. Consider available skills that provide workflows for complex tasks
 15. Coordinate skill invocation with tool recommendations (skills may call tools)
 16. Provide a single, ideally correct answer as the final output
-17. Only set next_thought_needed to false when truly done and a satisfactory answer is reached`;
+17. Only set next_thought_needed to false when truly done and a satisfactory answer is reached
+18. Classify your reasoning steps using thought_type for better analytics and self-awareness
+19. Use hypothesis → verification chains to test solutions before committing
+20. Self-assess quality and confidence to track reasoning reliability
+21. Use merge_from_thoughts to combine insights from multiple reasoning branches`;
 
 /**
  * Valibot schema for validating tool recommendation objects.
