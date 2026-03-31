@@ -54,6 +54,65 @@ export function createStepRecommendation(
 	};
 }
 
+export function createHypothesisThought(overrides?: Partial<ThoughtData>): ThoughtData {
+	return createTestThought({
+		thought: 'Hypothesis: This might be the solution',
+		thought_type: 'hypothesis',
+		quality_score: 0.7,
+		confidence: 0.6,
+		hypothesis_id: 'hyp-1',
+		reasoning_depth: 'moderate',
+		...overrides,
+	});
+}
+
+export function createVerificationThought(overrides?: Partial<ThoughtData>): ThoughtData {
+	return createTestThought({
+		thought: 'Verification: Testing the hypothesis',
+		thought_type: 'verification',
+		quality_score: 0.8,
+		confidence: 0.9,
+		hypothesis_id: 'hyp-1',
+		verification_target: 1,
+		...overrides,
+	});
+}
+
+export function createCritiqueThought(overrides?: Partial<ThoughtData>): ThoughtData {
+	return createTestThought({
+		thought: 'Critique: This reasoning has issues',
+		thought_type: 'critique',
+		quality_score: 0.5,
+		confidence: 0.7,
+		verification_target: 2,
+		meta_observation: 'Previous reasoning overlooked edge cases',
+		...overrides,
+	});
+}
+
+export function createSynthesisThought(overrides?: Partial<ThoughtData>): ThoughtData {
+	return createTestThought({
+		thought: 'Synthesis: Combining insights from multiple branches',
+		thought_type: 'synthesis',
+		quality_score: 0.85,
+		confidence: 0.8,
+		synthesis_sources: [1, 2, 3],
+		merge_from_thoughts: [1, 3],
+		merge_branch_ids: ['branch-a'],
+		...overrides,
+	});
+}
+
+export function createMetaThought(overrides?: Partial<ThoughtData>): ThoughtData {
+	return createTestThought({
+		thought: 'Meta: Observing the reasoning process itself',
+		thought_type: 'meta',
+		meta_observation: 'Current reasoning path is converging well',
+		reasoning_depth: 'shallow',
+		...overrides,
+	});
+}
+
 // === Mock Classes ===
 
 /**
