@@ -9,10 +9,11 @@ MCP transport implementations providing communication channels between the MCP s
 
 ```
 src/transport/
-├── BaseTransport.ts          # Abstract base (security, rate limiting, CORS)
-├── SseTransport.ts           # Server-Sent Events (multi-user, streaming)
-├── HttpTransport.ts          # HTTP JSON-RPC (stateless, request-response)
-└── StreamableHttpTransport.ts # MCP Streamable HTTP transport (826L)
+├── BaseTransport.ts          # Abstract base (security, rate limiting, CORS) (439L)
+├── SseTransport.ts           # Server-Sent Events (multi-user, streaming) (476L)
+├── HttpTransport.ts          # HTTP JSON-RPC (stateless, request-response) (344L)
+├── HttpHelpers.ts            # HTTP utility functions (120L)
+└── StreamableHttpTransport.ts # MCP Streamable HTTP transport (724L)
 ```
 
 
@@ -28,7 +29,7 @@ Multi-connection SSE with `Set<ServerResponse>`, message queue for late joiners,
 Stateless JSON-RPC 2.0 over HTTP. Pipeline: rate limit → CORS → body size → schema validation → delegate to MCP server. Body limit 10MB, timeout 30s.
 
 ### StreamableHttpTransport
-MCP Streamable HTTP transport (826L). Full MCP protocol support with session management, request streaming, and graceful shutdown.
+MCP Streamable HTTP transport (724L). Full MCP protocol support with session management, request streaming, and graceful shutdown.
 
 ## CONVENTIONS
 

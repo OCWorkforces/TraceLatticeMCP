@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
 	SequentialThinkingSchema,
+	ToolRecommendationSchema,
+	StepRecommendationSchema,
 	PartialToolRecommendationSchema,
 	PartialStepRecommendationSchema,
 	SkillRecommendationSchema,
@@ -469,5 +471,108 @@ describe('SkillRecommendationSchema - optional fields (Bug 1 fix)', () => {
 		};
 		const result = safeParse(SequentialThinkingSchema, input);
 		expect(result.success).toBe(true);
+	});
+});
+
+describe('Schema accepts raw strings (sanitization moved to InputNormalizer)', () => {
+	describe('SequentialThinkingSchema', () => {
+		it('should accept strings with script tags (no schema-level sanitization)', () => {
+			const result = safeParse(SequentialThinkingSchema, {
+				thought: '<script>alert(1)</script>hello',
+				thought_number: 1,
+				total_thoughts: 1,
+			});
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.output.thought).toBe('<script>alert(1)</script>hello');
+			}
+		});
+
+		it('should preserve TypeScript generics in thought field', () => {
+			const result = safeParse(SequentialThinkingSchema, {
+				thought: 'Array<string> and Map<string, number>',
+				thought_number: 1,
+				total_thoughts: 1,
+			});
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.output.thought).toBe('Array<string> and Map<string, number>');
+			}
+		});
+
+		it('should accept strings with null bytes (no schema-level sanitization)', () => {
+			const result = safeParse(SequentialThinkingSchema, {
+				thought: 'hello\x00world',
+				thought_number: 1,
+				total_thoughts: 1,
+			});
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.output.thought).toBe('hello\x00world');
+			}
+		});
+
+		it('should accept remaining_steps with HTML tags (no schema-level sanitization)', () => {
+			const result = safeParse(SequentialThinkingSchema, {
+				thought: 'test',
+				thought_number: 1,
+				total_thoughts: 1,
+				remaining_steps: ['<iframe>evil</iframe>step1', 'normal step'],
+			});
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.output.remaining_steps).toEqual([
+					'<iframe>evil</iframe>step1',
+					'normal step',
+				]);
+			}
+		});
+
+		it('should accept meta_observation with HTML tags (no schema-level sanitization)', () => {
+			const result = safeParse(SequentialThinkingSchema, {
+				thought: 'test',
+				thought_number: 1,
+				total_thoughts: 1,
+				meta_observation: '<img onerror=alert(1) src=x>observation',
+			});
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.output.meta_observation).toBe(
+					'<img onerror=alert(1) src=x>observation'
+				);
+			}
+		});
+	});
+
+	describe('StepRecommendationSchema', () => {
+		it('should accept step fields with HTML tags (no schema-level sanitization)', () => {
+			const result = safeParse(StepRecommendationSchema, {
+				step_description: '<script>evil</script>step',
+				recommended_tools: [],
+				expected_outcome: '<iframe>bad</iframe>result',
+				next_step_conditions: ['<style>.x{}</style>cond'],
+			});
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.output.step_description).toBe('<script>evil</script>step');
+				expect(result.output.expected_outcome).toBe('<iframe>bad</iframe>result');
+				expect(result.output.next_step_conditions).toEqual(['<style>.x{}</style>cond']);
+			}
+		});
+	});
+
+	describe('ToolRecommendationSchema', () => {
+		it('should accept rationale with HTML tags (no schema-level sanitization)', () => {
+			const result = safeParse(ToolRecommendationSchema, {
+				tool_name: '<script>evil</script>',
+				confidence: 0.8,
+				rationale: '<script>evil</script>reason',
+			});
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.output.tool_name).toBe('<script>evil</script>');
+				expect(result.output.rationale).toBe('<script>evil</script>reason');
+			}
+		});
 	});
 });

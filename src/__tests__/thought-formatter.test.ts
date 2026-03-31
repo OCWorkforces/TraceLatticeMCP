@@ -298,6 +298,152 @@ describe('ThoughtFormatter', () => {
 				expect(output).toContain('Revision');
 			});
 		});
+
+		describe('thought type icons', () => {
+			it('should show hypothesis icon and label for thought_type hypothesis', () => {
+				const data: ThoughtData = {
+					thought: 'The performance issue is likely in the DB layer',
+					thought_number: 2,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					thought_type: 'hypothesis',
+				};
+
+				const output = formatter.formatThought(data);
+				expect(output).toContain('🔬');
+				expect(output).toContain('Hypothesis');
+			});
+
+			it('should show verification icon and label for thought_type verification', () => {
+				const data: ThoughtData = {
+					thought: 'Testing the DB hypothesis against evidence',
+					thought_number: 3,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					thought_type: 'verification',
+				};
+
+				const output = formatter.formatThought(data);
+				expect(output).toContain('✅');
+				expect(output).toContain('Verification');
+			});
+
+			it('should show critique icon and label for thought_type critique', () => {
+				const data: ThoughtData = {
+					thought: 'My reasoning has a logical gap',
+					thought_number: 4,
+					total_thoughts: 6,
+					next_thought_needed: true,
+					thought_type: 'critique',
+				};
+
+				const output = formatter.formatThought(data);
+				expect(output).toContain('🔍');
+				expect(output).toContain('Critique');
+			});
+
+			it('should show synthesis icon and label for thought_type synthesis', () => {
+				const data: ThoughtData = {
+					thought: 'Combining findings from both branches',
+					thought_number: 5,
+					total_thoughts: 6,
+					next_thought_needed: true,
+					thought_type: 'synthesis',
+				};
+
+				const output = formatter.formatThought(data);
+				expect(output).toContain('🧬');
+				expect(output).toContain('Synthesis');
+			});
+
+			it('should show meta icon and label for thought_type meta', () => {
+				const data: ThoughtData = {
+					thought: 'I notice I am over-exploring branches',
+					thought_number: 6,
+					total_thoughts: 8,
+					next_thought_needed: true,
+					thought_type: 'meta',
+				};
+
+				const output = formatter.formatThought(data);
+				expect(output).toContain('🧠');
+				expect(output).toContain('Meta');
+			});
+
+			it('should show default thought icon for thought_type regular', () => {
+				const data: ThoughtData = {
+					thought: 'A regular analytical step',
+					thought_number: 1,
+					total_thoughts: 3,
+					next_thought_needed: true,
+					thought_type: 'regular',
+				};
+
+				const output = formatter.formatThought(data);
+				expect(output).toContain('💭');
+				expect(output).toContain('Thought');
+			});
+
+			it('should show default thought icon when thought_type is undefined', () => {
+				const data: ThoughtData = {
+					thought: 'No thought type specified',
+					thought_number: 1,
+					total_thoughts: 2,
+					next_thought_needed: true,
+				};
+
+				const output = formatter.formatThought(data);
+				expect(output).toContain('💭');
+			});
+
+			it('should prioritize is_revision over thought_type', () => {
+				const data: ThoughtData = {
+					thought: 'Revision wins over hypothesis',
+					thought_number: 3,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					is_revision: true,
+					revises_thought: 1,
+					thought_type: 'hypothesis',
+				};
+
+				const output = formatter.formatThought(data);
+				expect(output).toContain('🔄');
+				expect(output).toContain('Revision');
+				expect(output).not.toContain('🔬');
+				expect(output).not.toContain('Hypothesis');
+			});
+		});
+
+		describe('meta observation', () => {
+			it('should include meta_observation text when present', () => {
+				const data: ThoughtData = {
+					thought: 'Analyzing the code structure',
+					thought_number: 2,
+					total_thoughts: 4,
+					next_thought_needed: true,
+					meta_observation: 'I am spending too much time on edge cases',
+				};
+
+				const output = formatter.formatThought(data);
+				expect(output).toContain('I am spending too much time on edge cases');
+				expect(output).toContain('📝');
+			});
+
+			it('should not add meta_observation line when not present', () => {
+				const data: ThoughtData = {
+					thought: 'Simple thought',
+					thought_number: 1,
+					total_thoughts: 1,
+					next_thought_needed: false,
+				};
+
+				const output = formatter.formatThought(data);
+				const lines = output.split('\n');
+				expect(lines).toHaveLength(1);
+				expect(output).not.toContain('📝');
+			});
+		});
 	});
 
 	describe('formatRecommendation', () => {

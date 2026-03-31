@@ -1,5 +1,7 @@
 # LOGGER MODULE
 
+**Updated:** 2026-03-31
+**Parent:** ../AGENTS.md
 
 ## OVERVIEW
 
@@ -17,7 +19,3 @@ Structured logging primitives: JSON or pretty output, level filtering, null sink
 - Env config: `LOG_LEVEL`, `PRETTY_LOG`; config keys `logLevel`, `prettyLog`.
 - Default context: `SequentialThinking`; child loggers append with `:`.
 - `NullLogger` provided for testing/disabled paths (no-op implementation).
-- Output formats: pretty (default) or JSON via `pretty` option.
-- Levels: `debug` < `info` < `warn` < `error`; filter is minimum level.
-- Env config: `LOG_LEVEL`, `PRETTY_LOG`; config keys `logLevel`, `prettyLog`.
-- Default context: `SequentialThinking`; child loggers append with `:`.

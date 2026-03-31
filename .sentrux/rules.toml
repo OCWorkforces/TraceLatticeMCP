@@ -12,7 +12,7 @@ no_god_files = false    # Allow large files for now (composition root exception)
 
 [[layers]]
 name = "types"
-paths = ["src/types/*", "src/types.ts", "src/errors.ts", "src/schema.ts"]
+paths = ["src/types/*", "src/types.ts", "src/errors.ts", "src/schema.ts", "src/sanitize.ts"]
 order = 0
 
 [[layers]]

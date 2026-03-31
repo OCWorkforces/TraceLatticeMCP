@@ -17,23 +17,8 @@ Requires [Node.js](https://nodejs.org/) v18+.
 
 From the project root:
 
-```bash
-chmod +x install-mcp-sequentialthinking-tools.sh
-./install-mcp-sequentialthinking-tools.sh
 ```
-
-This script will:
-1. Check prerequisites (Node.js, npm)
-2. Install dependencies and build the project
-3. Install `sequentialthinking-tools` globally
-
-Verify the installation:
-
-```bash
-sequentialthinking-tools --help
-```
-
-> **Tip:** Use `./install-mcp-sequentialthinking-tools.sh --link` for development mode (symlinks instead of copying, rebuild with `npm run build` after changes).
+> **Tip:** Use `./install.sh --link` for development mode (symlinks instead of copying, rebuild with `npm run build` after changes).
 
 ## Configure MCP Client
 

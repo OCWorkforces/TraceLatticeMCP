@@ -1,5 +1,5 @@
 /**
- * Custom error types for the CCSequentialThinkingMCP server.
+ * Custom error types for the TraceLattice server.
  *
  * This module defines a hierarchy of error classes for handling various
  * error conditions that can occur in the sequential thinking server.

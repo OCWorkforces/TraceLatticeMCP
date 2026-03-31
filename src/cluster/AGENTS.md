@@ -1,7 +1,7 @@
 # CLUSTER MODULE
 
-**Updated:** 2026-03-27
-**Parent:** ../AGENTS.md
+**Updated:** 2026-03-31
+**Commit:** 509ece3
 
 ## OVERVIEW
 
@@ -11,7 +11,7 @@ Multi-process architecture for parallel thought processing using a worker pool.
 
 ```
 src/cluster/
-├── WorkerManager.ts  # Pool manager (health checks, restarts)
+├── WorkerManager.ts  # Pool manager (health checks, restarts) (439L)
 └── worker.ts         # Worker process entry point
 ```
 

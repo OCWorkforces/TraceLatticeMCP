@@ -1,11 +1,10 @@
 # CONTRACTS MODULE
 
-**Updated:** 2026-03-29
+**Updated:** 2026-03-31
 **Parent:** ../AGENTS.md
-
 ## OVERVIEW
 
-Shared interface contracts centralizing cross-module type dependencies. Modules depend on these interfaces (not concrete implementations) to reduce lateral coupling.
+Shared interface contracts centralizing cross-module type dependencies. Single coupling point — modules depend on these interfaces (not concrete implementations) to reduce lateral coupling. The only allowed barrel re-export outside `src/index.ts`.
 
 ## STRUCTURE
 

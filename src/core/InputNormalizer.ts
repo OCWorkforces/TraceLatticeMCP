@@ -13,6 +13,7 @@
 
 import type { ThoughtData } from './thought.js';
 import { ValidationError } from '../errors.js';
+import { sanitizeString } from '../sanitize.js';
 
 /**
  * Default values for missing partial tool recommendation fields.
@@ -28,6 +29,47 @@ const DEFAULT_STEP_OUTCOME = '';
 const DEFAULT_SKILL_CONFIDENCE = 0.5;
 const DEFAULT_SKILL_PRIORITY = 999;
 const DEFAULT_SKILL_RATIONALE = '';
+
+/**
+ * Recursively sanitizes all string values within an unknown structure.
+ * Walks into plain objects and arrays to reach deeply nested strings.
+ * Non-plain objects (Date, RegExp, etc.) are returned as-is.
+ *
+ * @param value - The value to sanitize recursively
+ * @returns The sanitized value with all nested strings cleaned
+ *
+ * @example
+ * ```typescript
+ * sanitizeRecursive('<script>x</script>'); // 'x'
+ * sanitizeRecursive({ a: { b: '<iframe>y' } }); // { a: { b: 'y' } }
+ * sanitizeRecursive(['a\x00b', 42]); // ['ab', 42]
+ * ```
+ */
+export function sanitizeRecursive(value: unknown): unknown {
+	if (value === null || value === undefined) {
+		return value;
+	}
+	if (typeof value === 'string') {
+		return sanitizeString(value);
+	}
+	if (Array.isArray(value)) {
+		return value.map((item) => sanitizeRecursive(item));
+	}
+	if (typeof value === 'object') {
+		// Only recurse into plain objects — skip Date, RegExp, Map, Set, etc.
+		const proto = Object.getPrototypeOf(value);
+		if (proto !== Object.prototype && proto !== null) {
+			return value;
+		}
+		const result: Record<string, unknown> = {};
+		for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+			result[key] = sanitizeRecursive(val);
+		}
+		return result;
+	}
+	return value;
+}
+
 /**
  * Valid branch ID pattern: alphanumeric, hyphens, underscores only.
  * Prevents path traversal attacks by rejecting special characters like / . \ etc.
@@ -212,6 +254,85 @@ function normalizeStepRecommendation(
 	return normalized;
 }
 
+
+/**
+ * Normalizes reasoning-specific fields on a thought input object.
+ * Always applies reasoning normalization — reasoning is the default pipeline.
+ * Applies the following normalization rules:
+ * - Defaults `thought_type` to `'regular'` if not provided
+ * - Clamps `quality_score` to [0, 1] range
+ * - Clamps `confidence` to [0, 1] range
+ * - Sanitizes `hypothesis_id` using `sanitizeBranchId` pattern
+ * - Filters `synthesis_sources` to positive integers only
+ * - Filters `merge_from_thoughts` to positive integers only
+ * - Sanitizes each entry in `merge_branch_ids`
+ * - Defaults `reasoning_depth` to `'moderate'` for hypothesis/verification types
+ *
+ * @param input - The mutable normalized input object to apply reasoning defaults to
+ *
+ * @example
+ * ```typescript
+ * const input: Record<string, unknown> = { thought_type: 'hypothesis', quality_score: 1.5 };
+ * normalizeReasoningFields(input);
+ * // input.quality_score === 1, input.reasoning_depth === 'moderate'
+ * ```
+ */
+export function normalizeReasoningFields(input: Record<string, unknown>): void {
+	// Always apply reasoning field normalization — reasoning is the default pipeline
+	// Default thought_type to 'regular'
+
+	if (!('thought_type' in input) || input.thought_type === undefined) {
+		input.thought_type = 'regular';
+	}
+
+	// Clamp quality_score to [0, 1]
+	if (typeof input.quality_score === 'number') {
+		input.quality_score = Math.max(0, Math.min(1, input.quality_score));
+	}
+
+	// Clamp confidence to [0, 1]
+	if (typeof input.confidence === 'number') {
+		input.confidence = Math.max(0, Math.min(1, input.confidence));
+	}
+
+	// Sanitize hypothesis_id (same rules as branch_id)
+	if (typeof input.hypothesis_id === 'string') {
+		input.hypothesis_id = sanitizeBranchId(input.hypothesis_id);
+	}
+
+	// Filter synthesis_sources to positive integers only
+	if (Array.isArray(input.synthesis_sources)) {
+		input.synthesis_sources = input.synthesis_sources.filter(
+			(v: unknown) => typeof v === 'number' && Number.isInteger(v) && v > 0
+		);
+	}
+
+	// Filter merge_from_thoughts to positive integers only
+	if (Array.isArray(input.merge_from_thoughts)) {
+		input.merge_from_thoughts = input.merge_from_thoughts.filter(
+			(v: unknown) => typeof v === 'number' && Number.isInteger(v) && v > 0
+		);
+	}
+
+	// Sanitize merge_branch_ids entries
+	if (Array.isArray(input.merge_branch_ids)) {
+		input.merge_branch_ids = input.merge_branch_ids.map((id: unknown) => {
+			if (typeof id === 'string') {
+				return sanitizeBranchId(id);
+			}
+			return id;
+		});
+	}
+
+	// Default reasoning_depth to 'moderate' for hypothesis/verification types
+	if (
+		(input.thought_type === 'hypothesis' || input.thought_type === 'verification') &&
+		!('reasoning_depth' in input)
+	) {
+		input.reasoning_depth = 'moderate';
+	}
+}
+
 /**
  * Normalizes thought input data by fixing common LLM field name mistakes.
  *
@@ -285,6 +406,7 @@ export function normalizeInput(input: unknown): ThoughtData {
 		);
 	}
 
+
 	// Normalize all items in previous_steps if present (lenient mode - with defaults)
 	if (Array.isArray(normalized.previous_steps) && normalized.previous_steps.length > 0) {
 		normalized.previous_steps = normalized.previous_steps.map((step) =>
@@ -299,5 +421,13 @@ export function normalizeInput(input: unknown): ThoughtData {
 		normalized.branch_id = sanitizeBranchId(normalized.branch_id);
 	}
 
-	return normalized as unknown as ThoughtData;
+	// Normalize reasoning fields
+	normalizeReasoningFields(normalized);
+
+
+	// Sanitize all free-text string fields recursively (dangerous HTML tags + null bytes)
+	// This was moved from schema transforms because v.transform() cannot be converted to JSON Schema
+	const sanitized = sanitizeRecursive(normalized);
+
+	return sanitized as unknown as ThoughtData;
 }

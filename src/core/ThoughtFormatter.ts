@@ -9,6 +9,7 @@
  */
 
 import type { ThoughtData } from './thought.js';
+import type { ThoughtType } from './reasoning.js';
 import type { StepRecommendation } from './step.js';
 import chalk from 'chalk';
 
@@ -22,9 +23,13 @@ import chalk from 'chalk';
  * @remarks
  * Output Format is clean and simple:
  * - 💭 Thought - Regular thought (blue)
+ * - 🔬 Hypothesis - Proposed explanation (magenta)
+ * - ✅ Verification - Testing a hypothesis (green)
+ * - 🔍 Critique - Self-critique of reasoning (red)
+ * - 🧬 Synthesis - Combining thoughts/branches (cyan)
+ * - 🧠 Meta - Metacognitive observation (gray)
  * - 🔄 Revision - Thought that revises a previous thought (yellow)
  * - 🌿 Branch - Thought that creates a new branch (green)
- *
  * @example
  * ```typescript
  * const formatter = new ThoughtFormatter();
@@ -107,8 +112,16 @@ export class ThoughtFormatter {
 	 * Formats a thought into a clean, simple display.
 	 *
 	 * Creates a clean output containing the thought content with an appropriate
-	 * header indicating whether this is a regular thought, revision, or branch.
-	 * Any current step recommendation is appended below.
+	 * header indicating the thought type. Priority order for icon selection:
+	 * `is_revision` > `branch_from_thought` > `thought_type`.
+	 *
+	 * Supported `thought_type` icons:
+	 * - `'regular'` (or undefined): 💭 blue "Thought" (default)
+	 * - `'hypothesis'`: 🔬 magenta "Hypothesis"
+	 * - `'verification'`: ✅ green "Verification"
+	 * - `'critique'`: 🔍 red "Critique"
+	 * - `'synthesis'`: 🧬 cyan "Synthesis"
+	 * - `'meta'`: 🧠 gray "Meta"
 	 *
 	 * @param thoughtData - The thought data to format
 	 * @returns A formatted string with thought and recommendations
@@ -165,7 +178,32 @@ export class ThoughtFormatter {
 			label = 'Branch';
 			suffix = chalk.gray(` (from #${branch_from_thought})`);
 		} else {
-			icon = chalk.blue('💭');
+			const thoughtType: ThoughtType = thoughtData.thought_type ?? 'regular';
+			switch (thoughtType) {
+				case 'hypothesis':
+					icon = chalk.magenta('🔬');
+					label = 'Hypothesis';
+					break;
+				case 'verification':
+					icon = chalk.green('✅');
+					label = 'Verification';
+					break;
+				case 'critique':
+					icon = chalk.red('🔍');
+					label = 'Critique';
+					break;
+				case 'synthesis':
+					icon = chalk.cyan('🧬');
+					label = 'Synthesis';
+					break;
+				case 'meta':
+					icon = chalk.gray('🧠');
+					label = 'Meta';
+					break;
+				default:
+					icon = chalk.blue('💭');
+					break;
+			}
 		}
 
 		// Build header: "💭 Thought 1/3: "
@@ -181,6 +219,11 @@ export class ThoughtFormatter {
 		if (current_step) {
 			const recommendation = this.formatRecommendation(current_step);
 			lines.push(`  ${recommendation}`);
+		}
+
+		// Add meta observation if present
+		if (thoughtData.meta_observation) {
+			lines.push(`  ${chalk.gray(`📝 ${thoughtData.meta_observation}`)}`);
 		}
 
 		return lines.join('\n');

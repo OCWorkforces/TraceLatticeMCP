@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { normalizeInput } from '../core/InputNormalizer.js';
+import { normalizeInput, normalizeReasoningFields, sanitizeRecursive } from '../core/InputNormalizer.js';
 import type { ThoughtData } from '../core/thought.js';
 
 /**
@@ -557,5 +557,339 @@ describe('skill normalization (Bug 1 fix)', () => {
 		expect(normalized.previous_steps?.[0]?.recommended_skills?.[0]?.confidence).toBe(0.5);
 		expect(normalized.previous_steps?.[0]?.recommended_skills?.[0]?.rationale).toBe('');
 		expect(normalized.previous_steps?.[0]?.recommended_skills?.[0]?.priority).toBe(999);
+	});
+});
+
+describe('reasoning fields normalization', () => {
+	function createMinimalInput(overrides: Record<string, unknown> = {}): unknown {
+		return {
+			thought: 'Test thought',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			...overrides,
+		};
+	}
+
+	describe('thought_type', () => {
+		it('should default thought_type to regular when missing', () => {
+			const normalized = normalizeInput(
+				createMinimalInput()
+			) as ThoughtData;
+			expect(normalized.thought_type).toBe('regular');
+		});
+
+		it('should preserve thought_type when provided', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ thought_type: 'hypothesis' })
+			) as ThoughtData;
+			expect(normalized.thought_type).toBe('hypothesis');
+		});
+	});
+
+	describe('quality_score', () => {
+		it('should clamp quality_score above 1 to 1', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ quality_score: 1.5 })
+			) as ThoughtData;
+			expect(normalized.quality_score).toBe(1);
+		});
+
+		it('should clamp quality_score below 0 to 0', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ quality_score: -0.3 })
+			) as ThoughtData;
+			expect(normalized.quality_score).toBe(0);
+		});
+
+		it('should leave quality_score within range unchanged', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ quality_score: 0.75 })
+			) as ThoughtData;
+			expect(normalized.quality_score).toBe(0.75);
+		});
+	});
+
+	describe('confidence', () => {
+		it('should clamp confidence above 1 to 1', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ confidence: 2.0 })
+			) as ThoughtData;
+			expect(normalized.confidence).toBe(1);
+		});
+
+		it('should clamp confidence below 0 to 0', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ confidence: -1 })
+			) as ThoughtData;
+			expect(normalized.confidence).toBe(0);
+		});
+
+		it('should leave confidence within range unchanged', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ confidence: 0.9 })
+			) as ThoughtData;
+			expect(normalized.confidence).toBe(0.9);
+		});
+	});
+
+	describe('hypothesis_id', () => {
+		it('should pass through valid hypothesis_id', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ hypothesis_id: 'perf-bottleneck-1' })
+			) as ThoughtData;
+			expect(normalized.hypothesis_id).toBe('perf-bottleneck-1');
+		});
+
+		it('should throw ValidationError for invalid hypothesis_id', () => {
+			expect(() =>
+				normalizeInput(createMinimalInput({ hypothesis_id: '../etc/passwd' }))
+			).toThrow();
+		});
+	});
+
+	describe('synthesis_sources', () => {
+		it('should filter out non-positive values from synthesis_sources', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ synthesis_sources: [1, -2, 0, 3, 4.5, 'bad'] })
+			) as ThoughtData;
+			expect(normalized.synthesis_sources).toEqual([1, 3]);
+		});
+
+		it('should keep valid positive integers in synthesis_sources', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ synthesis_sources: [2, 5, 7] })
+			) as ThoughtData;
+			expect(normalized.synthesis_sources).toEqual([2, 5, 7]);
+		});
+	});
+
+	describe('merge_from_thoughts', () => {
+		it('should filter out non-positive values from merge_from_thoughts', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ merge_from_thoughts: [4, -1, 0, 8, 3.14] })
+			) as ThoughtData;
+			expect(normalized.merge_from_thoughts).toEqual([4, 8]);
+		});
+
+		it('should keep valid positive integers in merge_from_thoughts', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ merge_from_thoughts: [1, 2, 3] })
+			) as ThoughtData;
+			expect(normalized.merge_from_thoughts).toEqual([1, 2, 3]);
+		});
+	});
+
+	describe('merge_branch_ids', () => {
+		it('should sanitize valid merge_branch_ids entries', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ merge_branch_ids: ['explore-a', 'explore_b'] })
+			) as ThoughtData;
+			expect(normalized.merge_branch_ids).toEqual(['explore-a', 'explore_b']);
+		});
+
+		it('should throw for invalid merge_branch_ids entries', () => {
+			expect(() =>
+				normalizeInput(createMinimalInput({ merge_branch_ids: ['valid', '../bad'] }))
+			).toThrow();
+		});
+	});
+
+	describe('reasoning_depth', () => {
+		it('should default reasoning_depth to moderate for hypothesis type', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ thought_type: 'hypothesis' })
+			) as ThoughtData;
+			expect(normalized.reasoning_depth).toBe('moderate');
+		});
+
+		it('should default reasoning_depth to moderate for verification type', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ thought_type: 'verification' })
+			) as ThoughtData;
+			expect(normalized.reasoning_depth).toBe('moderate');
+		});
+
+		it('should NOT default reasoning_depth for regular type', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ thought_type: 'regular' })
+			) as ThoughtData;
+			expect(normalized.reasoning_depth).toBeUndefined();
+		});
+
+		it('should preserve reasoning_depth when already provided', () => {
+			const normalized = normalizeInput(
+				createMinimalInput({ thought_type: 'hypothesis', reasoning_depth: 'deep' })
+			) as ThoughtData;
+			expect(normalized.reasoning_depth).toBe('deep');
+		});
+	});
+
+	describe('backward compatibility', () => {
+		it('should not break existing normalization with reasoning fields present', () => {
+			const input = {
+				thought: 'Test thought',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				branch_id: 'my-branch',
+				thought_type: 'synthesis',
+				quality_score: 0.85,
+				confidence: 0.9,
+				synthesis_sources: [1, 2],
+				current_step: {
+					step_description: 'Test step',
+					recommended_tool: [createToolRecommendation()],
+					expected_outcome: 'Test outcome',
+				},
+			} as unknown;
+
+			const normalized = normalizeInput(input) as ThoughtData;
+
+			// Existing normalization still works
+			expect(normalized.current_step?.recommended_tools).toBeDefined();
+			expect(normalized.branch_id).toBe('my-branch');
+			// Reasoning fields are normalized
+			expect(normalized.thought_type).toBe('synthesis');
+			expect(normalized.quality_score).toBe(0.85);
+			expect(normalized.confidence).toBe(0.9);
+			expect(normalized.synthesis_sources).toEqual([1, 2]);
+		});
+	});
+
+	describe('normalizeReasoningFields direct usage', () => {
+		it('should mutate the input object in place', () => {
+			const input: Record<string, unknown> = {};
+			normalizeReasoningFields(input);
+			expect(input.thought_type).toBe('regular');
+		});
+	});
+});
+
+describe('sanitizeRecursive', () => {
+	it('should sanitize a string with dangerous HTML tags', () => {
+		expect(sanitizeRecursive('<script>x</script>')).toBe('x');
+	});
+
+	it('should pass through numbers unchanged', () => {
+		expect(sanitizeRecursive(42)).toBe(42);
+	});
+
+	it('should pass through null unchanged', () => {
+		expect(sanitizeRecursive(null)).toBeNull();
+	});
+
+	it('should sanitize strings inside arrays', () => {
+		expect(sanitizeRecursive(['a\x00b', 'c'])).toEqual(['ab', 'c']);
+	});
+
+	it('should sanitize deeply nested object strings', () => {
+		expect(sanitizeRecursive({ a: { b: '<iframe>x' } })).toEqual({ a: { b: 'x' } });
+	});
+
+	it('should pass through booleans unchanged', () => {
+		expect(sanitizeRecursive(true)).toBe(true);
+	});
+
+	it('should pass through undefined unchanged', () => {
+		expect(sanitizeRecursive(undefined)).toBeUndefined();
+	});
+
+	it('should return Date objects as-is (non-plain object)', () => {
+		const date = new Date('2024-01-01');
+		expect(sanitizeRecursive(date)).toBe(date);
+	});
+
+	it('should return RegExp objects as-is (non-plain object)', () => {
+		const regex = /test/gi;
+		expect(sanitizeRecursive(regex)).toBe(regex);
+	});
+
+	it('should handle objects with null prototype', () => {
+		const obj = Object.create(null) as Record<string, unknown>;
+		obj.key = '<script>x</script>';
+		const result = sanitizeRecursive(obj) as Record<string, unknown>;
+		expect(result.key).toBe('x');
+	});
+
+	it('should handle mixed nested structures with non-plain objects', () => {
+		const date = new Date();
+		const input = { a: '<script>x</script>', b: date, c: { d: 42 } };
+		const result = sanitizeRecursive(input) as Record<string, unknown>;
+		expect(result.a).toBe('x');
+		expect(result.b).toBe(date);
+		expect(result.c).toEqual({ d: 42 });
+	});
+
+	it('should handle arrays containing null and undefined', () => {
+		expect(sanitizeRecursive([null, undefined, 'a'])).toEqual([null, undefined, 'a']);
+	});
+});
+
+describe('suggested_inputs sanitization', () => {
+	function createInputWithSuggestedInputs(
+		suggestedInputs: Record<string, unknown>
+	): unknown {
+		return {
+			thought: 'Test thought',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			current_step: {
+				step_description: 'Test step',
+				recommended_tools: [
+					createToolRecommendation({ suggested_inputs: suggestedInputs }),
+				],
+				expected_outcome: 'Test outcome',
+			},
+		};
+	}
+
+	it('should pass through non-HTML strings unchanged', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ command: 'cat /etc/passwd' })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ command: 'cat /etc/passwd' });
+	});
+
+	it('should strip dangerous HTML tags from string values', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ cmd: '<script>alert(1)</script>' })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ cmd: 'alert(1)' });
+	});
+
+	it('should strip null bytes from deeply nested strings', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ nested: { deep: 'a\x00b' } })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ nested: { deep: 'ab' } });
+	});
+
+	it('should sanitize strings inside arrays', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ arr: ['<iframe>x'] })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ arr: ['x'] });
+	});
+
+	it('should leave safe strings unchanged', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ safe: 'normal text' })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ safe: 'normal text' });
+	});
+
+	it('should leave non-string values unchanged', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ num: 42, bool: true })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ num: 42, bool: true });
 	});
 });

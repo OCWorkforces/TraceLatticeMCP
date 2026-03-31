@@ -5,6 +5,7 @@
  */
 
 import type { StepRecommendation } from './step.js';
+import type { ThoughtType } from './reasoning.js';
 
 /**
  * Core data structure for a thought in the sequential thinking process.
@@ -83,4 +84,110 @@ export interface ThoughtData {
 
 	/** High-level descriptions of upcoming steps yet to be recommended. */
 	remaining_steps?: string[];
+
+	/**
+	 * Classified purpose of this thought step.
+	 * Enables type-specific formatting, evaluation, and analytics.
+	 * Default: 'regular'.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, thought_type: 'hypothesis' };
+	 * ```
+	 */
+	thought_type?: ThoughtType;
+
+	/**
+	 * LLM's self-assessed quality score for this thought (0-1).
+	 * Higher values indicate better quality.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, quality_score: 0.85 };
+	 * ```
+	 */
+	quality_score?: number;
+
+	/**
+	 * LLM's explicit confidence in this thought's correctness (0-1).
+	 * Higher values indicate more certainty.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, confidence: 0.9 };
+	 * ```
+	 */
+	confidence?: number;
+
+	/**
+	 * Links this thought to a hypothesis for tracking verification chains.
+	 * Format: alphanumeric, hyphens, underscores, 1-50 chars.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, hypothesis_id: 'perf-bottleneck-1' };
+	 * ```
+	 */
+	hypothesis_id?: string;
+
+	/**
+	 * If verification or critique, which thought_number is being evaluated.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, thought_type: 'verification', verification_target: 3 };
+	 * ```
+	 */
+	verification_target?: number;
+
+	/**
+	 * If synthesis, which thought_numbers are being combined.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, thought_type: 'synthesis', synthesis_sources: [2, 5, 7] };
+	 * ```
+	 */
+	synthesis_sources?: number[];
+
+	/**
+	 * For DAG merge: thought_numbers from other branches being merged into current context.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, merge_from_thoughts: [4, 8] };
+	 * ```
+	 */
+	merge_from_thoughts?: number[];
+
+	/**
+	 * For DAG merge: branch_ids being merged into current context.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, merge_branch_ids: ['explore-a', 'explore-b'] };
+	 * ```
+	 */
+	merge_branch_ids?: string[];
+
+	/**
+	 * Free-form metacognitive observation about the reasoning process itself.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, meta_observation: 'I am over-exploring branches' };
+	 * ```
+	 */
+	meta_observation?: string;
+
+	/**
+	 * Effort signal: how deep should reasoning go for this thought.
+	 * Default: 'moderate'.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, reasoning_depth: 'deep' };
+	 * ```
+	 */
+	reasoning_depth?: 'shallow' | 'moderate' | 'deep';
 }

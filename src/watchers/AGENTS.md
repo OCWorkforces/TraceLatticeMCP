@@ -1,13 +1,15 @@
+**Updated:** 2026-03-31
 # WATCHERS MODULE
 
 ## OVERVIEW
+**Commit:** 509ece3
 
 Chokidar-backed watchers keep tool/skill registries in sync with filesystem changes.
 
 ## WHERE TO LOOK
 
-- `src/watchers/SkillWatcher.ts` - Watches `.claude/skills/` (project) + `~/.claude/skills/` (user); events: `add`, `change`, `unlink`.
-- `src/watchers/ToolWatcher.ts` - Watches `.claude/tools/` (project) + `~/.claude/tools/` (user); events: `add`, `unlink` for `.tool.md` only.
+- `src/watchers/SkillWatcher.ts` - Watches `.claude/skills/` (project) + `~/.claude/skills/` (user); events: `add`, `change`, `unlink` (214L).
+- `src/watchers/ToolWatcher.ts` - Watches `.claude/tools/` (project) + `~/.claude/tools/` (user); events: `add`, `unlink` for `.tool.md` only (184L).
 ## CONVENTIONS
 
 - **File filters:** skills accept `.md`, `.yml`, `.yaml`; tools accept `.tool.md` only.

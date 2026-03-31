@@ -1,6 +1,6 @@
 {
 	"name": "sequentialthinking-tools",
-	"version": "1.0.6",
+	"version": "1.1.0",
 	"description": "MCP Server For Sequential Thinking Tools",
 	"type": "module",
 	"main": "dist/lib.js",
@@ -47,16 +47,16 @@
 		"reflective-analysis",
 		"tool-confidence"
 	],
-	"author": "CCWorkforce Engineers",
+	"author": "CCWorkforces Engineers",
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com:CCWorkforce/CCSequentialThinkingMCP.git"
+		"url": "https://github.com:CCWorkforces/TraceLattice.git"
 	},
 	"bugs": {
-		"url": "https://github.com:CCWorkforce/CCSequentialThinkingMCP/issues"
+		"url": "https://github.com:CCWorkforces/TraceLattice/issues"
 	},
-	"homepage": "https://github.com:CCWorkforce/CCSequentialThinkingMCP#readme",
+	"homepage": "https://github.com:CCWorkforces/TraceLattice#readme",
 	"dependencies": {
 		"@tmcp/adapter-valibot": "^0.1.5",
 		"@tmcp/transport-stdio": "^0.4.2",
@@ -70,14 +70,14 @@
 		"@changesets/cli": "^2.30.0",
 		"@tsconfig/node24": "^24.0.4",
 		"@types/node": "^25.5.0",
-		"@typescript-eslint/eslint-plugin": "^8.57.2",
-		"@typescript-eslint/parser": "^8.57.2",
+		"@typescript-eslint/eslint-plugin": "^8.58.0",
+		"@typescript-eslint/parser": "^8.58.0",
 		"@vitest/coverage-v8": "^4.1.2",
 		"eslint": "^10.1.0",
 		"globals": "^17.4.0",
 		"prettier": "^3.8.1",
 		"typescript": "^5.9.3",
-		"typescript-eslint": "^8.57.2",
+		"typescript-eslint": "^8.58.0",
 		"vitest": "^4.1.2"
 	}
 }

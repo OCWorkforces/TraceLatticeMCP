@@ -12,7 +12,8 @@ import { StructuredLogger } from '../logger/StructuredLogger.js';
 import { MockHistoryManager } from './helpers/index.js';
 import type { ThoughtData } from '../core/thought.js';
 import type { IHistoryManager } from '../core/IHistoryManager.js';
-
+import { ThoughtEvaluator } from '../core/ThoughtEvaluator.js';
+import { createTestThought, createHypothesisThought } from './helpers/index.js';
 
 
 describe('ThoughtProcessor', () => {
@@ -25,7 +26,7 @@ describe('ThoughtProcessor', () => {
 		mockHistory = new MockHistoryManager();
 		formatter = new ThoughtFormatter();
 		logger = new StructuredLogger({ context: 'Test', pretty: false });
-		processor = new ThoughtProcessor(mockHistory, formatter, logger);
+		processor = new ThoughtProcessor(mockHistory, formatter, new ThoughtEvaluator(), logger);
 	});
 
 	describe('Input Validation', () => {
@@ -88,7 +89,7 @@ describe('ThoughtProcessor', () => {
 			await processor.process(input);
 
 			expect(mockHistory.getHistoryLength()).toBe(1);
-			expect(mockHistory.getHistory()[0]).toEqual(input);
+			expect(mockHistory.getHistory()[0]).toMatchObject(input);
 		});
 
 		it('should respect max history size through HistoryManager', async () => {
@@ -278,7 +279,7 @@ describe('ThoughtProcessor', () => {
 		}
 
 			const throwingHistory = new ThrowingHistoryManager();
-			const throwingProcessor = new ThoughtProcessor(throwingHistory, formatter, logger);
+			const throwingProcessor = new ThoughtProcessor(throwingHistory, formatter, new ThoughtEvaluator(), logger);
 
 			const input: ThoughtData = {
 				thought: 'Test thought',
@@ -439,7 +440,7 @@ describe('ThoughtProcessor', () => {
 		});
 
 		it('should use NullLogger as default when no logger provided', async () => {
-			const processorWithoutLogger = new ThoughtProcessor(mockHistory, formatter);
+			const processorWithoutLogger = new ThoughtProcessor(mockHistory, formatter, new ThoughtEvaluator());
 
 			const input: ThoughtData = {
 				thought: 'Test thought',
@@ -541,6 +542,344 @@ describe('ThoughtProcessor', () => {
 			});
 			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.available_skills).toBeUndefined();
+		});
+	});
+
+	describe('ThoughtEvaluator Integration', () => {
+		let evaluator: ThoughtEvaluator;
+		let processorWithEvaluator: ThoughtProcessor;
+
+		beforeEach(() => {
+			evaluator = new ThoughtEvaluator();
+			processorWithEvaluator = new ThoughtProcessor(mockHistory, formatter, evaluator, logger);
+		});
+
+		it('should include reasoning fields when present in input', async () => {
+			const input: ThoughtData = {
+				thought: 'Hypothesis: performance bottleneck in rendering',
+				thought_number: 1,
+				total_thoughts: 3,
+				next_thought_needed: true,
+				thought_type: 'hypothesis',
+				quality_score: 0.85,
+				confidence: 0.7,
+				hypothesis_id: 'perf-bottleneck-1',
+			};
+
+			const result = await processorWithEvaluator.process(input);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			expect(parsed.thought_type).toBe('hypothesis');
+			expect(parsed.quality_score).toBe(0.85);
+			expect(parsed.confidence).toBe(0.7);
+			expect(parsed.hypothesis_id).toBe('perf-bottleneck-1');
+		});
+
+		it('should include confidence_signals when evaluator is present', async () => {
+			const input = createHypothesisThought({
+				thought_number: 1,
+				total_thoughts: 2,
+				next_thought_needed: true,
+			});
+
+			const result = await processorWithEvaluator.process(input);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			expect(parsed.confidence_signals).toBeDefined();
+			expect(parsed.confidence_signals.reasoning_depth).toBe(1);
+			expect(parsed.confidence_signals.revision_count).toBe(0);
+			expect(parsed.confidence_signals.branch_count).toBe(0);
+			expect(parsed.confidence_signals.has_hypothesis).toBe(true);
+			expect(parsed.confidence_signals.has_verification).toBe(false);
+			expect(parsed.confidence_signals.thought_type_distribution).toBeDefined();
+			expect(parsed.confidence_signals.thought_type_distribution.hypothesis).toBe(1);
+			expect(typeof parsed.confidence_signals.average_confidence).toBe('number');
+		});
+
+		it('should include reasoning_stats when evaluator is present', async () => {
+			const input = createHypothesisThought({
+				thought_number: 1,
+				total_thoughts: 2,
+				next_thought_needed: true,
+			});
+
+			const result = await processorWithEvaluator.process(input);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			expect(parsed.reasoning_stats).toBeDefined();
+			expect(parsed.reasoning_stats.total_thoughts).toBe(1);
+			expect(parsed.reasoning_stats.total_branches).toBe(0);
+			expect(parsed.reasoning_stats.total_revisions).toBe(0);
+			expect(parsed.reasoning_stats.total_merges).toBe(0);
+			expect(parsed.reasoning_stats.chain_depth).toBe(1);
+			expect(parsed.reasoning_stats.thought_type_counts).toBeDefined();
+			expect(parsed.reasoning_stats.hypothesis_count).toBe(1);
+			expect(parsed.reasoning_stats.verified_hypothesis_count).toBe(0);
+			expect(parsed.reasoning_stats.unresolved_hypothesis_count).toBe(1);
+			expect(typeof parsed.reasoning_stats.average_quality_score).toBe('number');
+			expect(typeof parsed.reasoning_stats.average_confidence).toBe('number');
+		});
+
+
+		it('should produce reasoning fields with standard input', async () => {
+			const input = createTestThought();
+
+			const result = await processorWithEvaluator.process(input);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			// Existing fields still present
+			expect(parsed.thought_number).toBe(1);
+			expect(parsed.total_thoughts).toBe(1);
+			expect(parsed.next_thought_needed).toBe(false);
+			expect(parsed.branches).toEqual([]);
+			expect(parsed.thought_history_length).toBe(1);
+
+			// thought_type is always defaulted to 'regular' by normalizer
+			expect(parsed.thought_type).toBe('regular');
+
+			// Evaluator always produces signals
+			expect(parsed.confidence_signals).toBeDefined();
+			expect(parsed.reasoning_stats).toBeDefined();
+		});
+	});
+
+	describe('cross-field reference validation', () => {
+		it('should drop verification_target referencing non-existent thought', async () => {
+			// Seed 3 thoughts into history
+			for (let i = 1; i <= 3; i++) {
+				await processor.process({
+					thought: `Thought ${i}`,
+					thought_number: i,
+					total_thoughts: 5,
+					next_thought_needed: true,
+				});
+			}
+
+			const result = await processor.process({
+				thought: 'Verify something',
+				thought_number: 4,
+				total_thoughts: 5,
+				next_thought_needed: true,
+				thought_type: 'verification',
+				verification_target: 999,
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.warnings).toBeDefined();
+			expect(parsed.warnings).toHaveLength(1);
+			expect(parsed.warnings[0]).toContain('verification_target');
+			expect(parsed.warnings[0]).toContain('999');
+		});
+
+		it('should filter synthesis_sources keeping only valid references', async () => {
+			// Seed 5 thoughts
+			for (let i = 1; i <= 5; i++) {
+				await processor.process({
+					thought: `Thought ${i}`,
+					thought_number: i,
+					total_thoughts: 7,
+					next_thought_needed: true,
+				});
+			}
+
+			const result = await processor.process({
+				thought: 'Synthesize',
+				thought_number: 6,
+				total_thoughts: 7,
+				next_thought_needed: true,
+				thought_type: 'synthesis',
+				synthesis_sources: [1, 999],
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.warnings).toBeDefined();
+			expect(parsed.warnings[0]).toContain('synthesis_sources');
+			expect(parsed.warnings[0]).toContain('999');
+			// The thought should still be added (no rejection)
+			expect(result.isError).toBeUndefined();
+		});
+
+		it('should drop non-existent merge_branch_ids', async () => {
+			const result = await processor.process({
+				thought: 'Merge',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				merge_branch_ids: ['nonexistent'],
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.warnings).toBeDefined();
+			expect(parsed.warnings[0]).toContain('merge_branch_ids');
+			expect(parsed.warnings[0]).toContain('nonexistent');
+		});
+
+		it('should drop revises_thought referencing non-existent thought', async () => {
+			// Seed 5 thoughts
+			for (let i = 1; i <= 5; i++) {
+				await processor.process({
+					thought: `Thought ${i}`,
+					thought_number: i,
+					total_thoughts: 7,
+					next_thought_needed: true,
+				});
+			}
+
+			const result = await processor.process({
+				thought: 'Revise',
+				thought_number: 6,
+				total_thoughts: 7,
+				next_thought_needed: true,
+				is_revision: true,
+				revises_thought: 50,
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.warnings).toBeDefined();
+			expect(parsed.warnings[0]).toContain('revises_thought');
+			expect(parsed.warnings[0]).toContain('50');
+		});
+
+		it('should pass through all valid references without warnings', async () => {
+			// Seed 3 thoughts
+			for (let i = 1; i <= 3; i++) {
+				await processor.process({
+					thought: `Thought ${i}`,
+					thought_number: i,
+					total_thoughts: 5,
+					next_thought_needed: true,
+				});
+			}
+
+			const result = await processor.process({
+				thought: 'Verify thought 2',
+				thought_number: 4,
+				total_thoughts: 5,
+				next_thought_needed: true,
+				thought_type: 'verification',
+				verification_target: 2,
+				synthesis_sources: [1, 3],
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.warnings).toBeUndefined();
+		});
+
+		it('should drop all references when history is empty', async () => {
+			const result = await processor.process({
+				thought: 'First thought with references',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				verification_target: 5,
+				revises_thought: 3,
+				branch_from_thought: 2,
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.warnings).toBeDefined();
+			expect(parsed.warnings).toHaveLength(3);
+			expect(result.isError).toBeUndefined();
+		});
+
+		it('should filter mixed valid/invalid merge_from_thoughts', async () => {
+			// Seed 3 thoughts
+			for (let i = 1; i <= 3; i++) {
+				await processor.process({
+					thought: `Thought ${i}`,
+					thought_number: i,
+					total_thoughts: 5,
+					next_thought_needed: true,
+				});
+			}
+
+			const result = await processor.process({
+				thought: 'Merge thoughts',
+				thought_number: 4,
+				total_thoughts: 5,
+				next_thought_needed: true,
+				merge_from_thoughts: [1, 2, 100, 200],
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.warnings).toBeDefined();
+			expect(parsed.warnings[0]).toContain('merge_from_thoughts');
+			expect(parsed.warnings[0]).toContain('100');
+			expect(parsed.warnings[0]).toContain('200');
+			expect(result.isError).toBeUndefined();
+		});
+	});
+
+	describe('thought_number > total_thoughts auto-adjust warning', () => {
+		it('should log warning and include in response when auto-adjusting total_thoughts', async () => {
+			const mockHistoryManager = new MockHistoryManager();
+			const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() };
+
+			const proc = new ThoughtProcessor(
+				mockHistoryManager,
+				new ThoughtFormatter(),
+				new ThoughtEvaluator(),
+				mockLogger as any,
+			);
+
+			const result = await proc.process({
+				thought: 'test',
+				thought_number: 99,
+				total_thoughts: 3,
+				next_thought_needed: true,
+			});
+
+			// Verify auto-adjust occurred
+			const response = JSON.parse(result.content[0]!.text);
+			expect(response.total_thoughts).toBe(99);
+
+			// Verify warning logged
+			expect(mockLogger.warn).toHaveBeenCalledWith(
+				'Auto-adjusted total_thoughts to match thought_number',
+				expect.objectContaining({
+					thought_number: 99,
+					original_total_thoughts: 3,
+					adjusted_total_thoughts: 99,
+				}),
+			);
+
+			// Verify warning in response
+			expect(response.warnings).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining('Auto-adjusted total_thoughts from 3 to 99'),
+				]),
+			);
+		});
+
+		it('should not warn when thought_number <= total_thoughts', async () => {
+			const mockHistoryManager = new MockHistoryManager();
+			const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() };
+
+			const proc = new ThoughtProcessor(
+				mockHistoryManager,
+				new ThoughtFormatter(),
+				new ThoughtEvaluator(),
+				mockLogger as any,
+			);
+
+			const result = await proc.process({
+				thought: 'test',
+				thought_number: 3,
+				total_thoughts: 5,
+				next_thought_needed: true,
+			});
+
+			const response = JSON.parse(result.content[0]!.text);
+			expect(response.total_thoughts).toBe(5);
+
+			// No auto-adjust warning
+			expect(mockLogger.warn).not.toHaveBeenCalledWith(
+				'Auto-adjusted total_thoughts to match thought_number',
+				expect.anything(),
+			);
+
+			// No warnings in response (unless cross-field validation adds some)
+			expect(response.warnings).toBeUndefined();
 		});
 	});
 });
