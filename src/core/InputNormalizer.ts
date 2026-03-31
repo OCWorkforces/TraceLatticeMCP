@@ -213,6 +213,102 @@ function normalizeStepRecommendation(
 }
 
 /**
+ * Reasoning field keys used to detect whether reasoning normalization should apply defaults.
+ */
+const REASONING_FIELD_KEYS = [
+	'thought_type',
+	'quality_score',
+	'confidence',
+	'hypothesis_id',
+	'verification_target',
+	'synthesis_sources',
+	'merge_from_thoughts',
+	'merge_branch_ids',
+	'meta_observation',
+	'reasoning_depth',
+] as const;
+
+/**
+ * Normalizes reasoning-specific fields on a thought input object.
+ * Applies the following normalization rules:
+ * - Defaults `thought_type` to `'regular'` if not provided
+ * - Clamps `quality_score` to [0, 1] range
+ * - Clamps `confidence` to [0, 1] range
+ * - Sanitizes `hypothesis_id` using `sanitizeBranchId` pattern
+ * - Filters `synthesis_sources` to positive integers only
+ * - Filters `merge_from_thoughts` to positive integers only
+ * - Sanitizes each entry in `merge_branch_ids`
+ * - Defaults `reasoning_depth` to `'moderate'` for hypothesis/verification types
+ *
+ * @param input - The mutable normalized input object to apply reasoning defaults to
+ *
+ * @example
+ * ```typescript
+ * const input: Record<string, unknown> = { thought_type: 'hypothesis', quality_score: 1.5 };
+ * normalizeReasoningFields(input);
+ * // input.quality_score === 1, input.reasoning_depth === 'moderate'
+ * ```
+ */
+export function normalizeReasoningFields(input: Record<string, unknown>): void {
+	const hasReasoningFields = REASONING_FIELD_KEYS.some((key) => key in input);
+	if (!hasReasoningFields) {
+		return;
+	}
+
+	// Default thought_type to 'regular'
+	if (!('thought_type' in input) || input.thought_type === undefined) {
+		input.thought_type = 'regular';
+	}
+
+	// Clamp quality_score to [0, 1]
+	if (typeof input.quality_score === 'number') {
+		input.quality_score = Math.max(0, Math.min(1, input.quality_score));
+	}
+
+	// Clamp confidence to [0, 1]
+	if (typeof input.confidence === 'number') {
+		input.confidence = Math.max(0, Math.min(1, input.confidence));
+	}
+
+	// Sanitize hypothesis_id (same rules as branch_id)
+	if (typeof input.hypothesis_id === 'string') {
+		input.hypothesis_id = sanitizeBranchId(input.hypothesis_id);
+	}
+
+	// Filter synthesis_sources to positive integers only
+	if (Array.isArray(input.synthesis_sources)) {
+		input.synthesis_sources = input.synthesis_sources.filter(
+			(v: unknown) => typeof v === 'number' && Number.isInteger(v) && v > 0
+		);
+	}
+
+	// Filter merge_from_thoughts to positive integers only
+	if (Array.isArray(input.merge_from_thoughts)) {
+		input.merge_from_thoughts = input.merge_from_thoughts.filter(
+			(v: unknown) => typeof v === 'number' && Number.isInteger(v) && v > 0
+		);
+	}
+
+	// Sanitize merge_branch_ids entries
+	if (Array.isArray(input.merge_branch_ids)) {
+		input.merge_branch_ids = input.merge_branch_ids.map((id: unknown) => {
+			if (typeof id === 'string') {
+				return sanitizeBranchId(id);
+			}
+			return id;
+		});
+	}
+
+	// Default reasoning_depth to 'moderate' for hypothesis/verification types
+	if (
+		(input.thought_type === 'hypothesis' || input.thought_type === 'verification') &&
+		!('reasoning_depth' in input)
+	) {
+		input.reasoning_depth = 'moderate';
+	}
+}
+
+/**
  * Normalizes thought input data by fixing common LLM field name mistakes.
  *
  * This function handles cases where LLMs incorrectly use singular forms
@@ -298,6 +394,9 @@ export function normalizeInput(input: unknown): ThoughtData {
 	if (typeof normalized.branch_id === 'string') {
 		normalized.branch_id = sanitizeBranchId(normalized.branch_id);
 	}
+
+	// Normalize reasoning fields
+	normalizeReasoningFields(normalized);
 
 	return normalized as unknown as ThoughtData;
 }
