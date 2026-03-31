@@ -191,11 +191,15 @@ export class ThoughtProcessor {
 				normalizedInput.available_skills = this.historyManager.getAvailableSkills();
 			}
 
-			const validatedInput = this.validateInput(normalizedInput);
+			const { result: validatedInput, warnings: validateWarnings } =
+				this.validateInput(normalizedInput);
+			const { result: checkedInput, warnings: refWarnings } =
+				this._validateCrossReferences(validatedInput);
+			const allWarnings = [...validateWarnings, ...refWarnings];
 
-			this.historyManager.addThought(validatedInput);
+			this.historyManager.addThought(checkedInput);
 
-			const formattedThought = this.thoughtFormatter.formatThought(validatedInput);
+			const formattedThought = this.thoughtFormatter.formatThought(checkedInput);
 			this.log(formattedThought);
 
 			// Compute quality signals
@@ -214,27 +218,28 @@ export class ThoughtProcessor {
 						type: 'text' as const,
 						text: JSON.stringify(
 							{
-								thought_number: validatedInput.thought_number,
-								total_thoughts: validatedInput.total_thoughts,
-								next_thought_needed: validatedInput.next_thought_needed ?? true,
-								branches: this.historyManager.getBranchIds(),
-								thought_history_length: this.historyManager.getHistoryLength(),
-								available_mcp_tools: validatedInput.available_mcp_tools,
-								available_skills: validatedInput.available_skills,
-								current_step: validatedInput.current_step,
-								previous_steps: validatedInput.previous_steps,
-								remaining_steps: validatedInput.remaining_steps,
-								// Reasoning enrichment fields
-								thought_type: validatedInput.thought_type,
-								quality_score: validatedInput.quality_score,
-								confidence: validatedInput.confidence,
-								hypothesis_id: validatedInput.hypothesis_id,
-								confidence_signals: confidenceSignals,
-								reasoning_stats: reasoningStats,
-							},
-							null,
-							2
-						),
+							thought_number: checkedInput.thought_number,
+							total_thoughts: checkedInput.total_thoughts,
+							next_thought_needed: checkedInput.next_thought_needed ?? true,
+							branches: this.historyManager.getBranchIds(),
+							thought_history_length: this.historyManager.getHistoryLength(),
+							available_mcp_tools: checkedInput.available_mcp_tools,
+							available_skills: checkedInput.available_skills,
+							current_step: checkedInput.current_step,
+							previous_steps: checkedInput.previous_steps,
+							remaining_steps: checkedInput.remaining_steps,
+							// Reasoning enrichment fields
+							thought_type: checkedInput.thought_type,
+							quality_score: checkedInput.quality_score,
+							confidence: checkedInput.confidence,
+							hypothesis_id: checkedInput.hypothesis_id,
+							confidence_signals: confidenceSignals,
+							reasoning_stats: reasoningStats,
+							...(allWarnings.length > 0 && { warnings: allWarnings }),
+						},
+						null,
+						2
+					),
 					},
 				],
 			};
@@ -263,24 +268,154 @@ export class ThoughtProcessor {
 	 *
 	 * Ensures that thought numbers are consistent and within valid ranges.
 	 * If `thought_number` exceeds `total_thoughts`, `total_thoughts` is
-	 * automatically adjusted to match.
+	 * automatically adjusted to match and a warning is emitted.
 	 *
 	 * @param input - The input to validate
-	 * @returns The validated and normalized thought data
+	 * @returns Object with validated input and any warnings generated
 	 * @private
 	 *
 	 * @example
 	 * ```typescript
 	 * // Auto-adjusts total_thoughts when thought_number exceeds it
-	 * const input = { thought_number: 10, total_thoughts: 5, ... };
-	 * const validated = processor.validateInput(input);
-	 * // validated.total_thoughts === 10
+	 * const { result, warnings } = this.validateInput(input);
+	 * // result.total_thoughts === 10 (auto-adjusted from 5)
+	 * // warnings === ['Auto-adjusted total_thoughts from 5 to 10 to match thought_number']
 	 * ```
 	 */
-	private validateInput(input: ThoughtData): ThoughtData {
+	private validateInput(input: ThoughtData): {
+		result: ThoughtData;
+		warnings: string[];
+	} {
+		const warnings: string[] = [];
 		if (input.thought_number > input.total_thoughts) {
+			const originalTotal = input.total_thoughts;
+			warnings.push(
+				`Auto-adjusted total_thoughts from ${originalTotal} to ${input.thought_number} to match thought_number`
+			);
+			this._logger.warn('Auto-adjusted total_thoughts to match thought_number', {
+				thought_number: input.thought_number,
+				original_total_thoughts: originalTotal,
+				adjusted_total_thoughts: input.thought_number,
+			});
 			input.total_thoughts = input.thought_number;
 		}
-		return input;
+		return { result: input, warnings };
+	}
+
+	/**
+	 * Validates cross-field references against actual thought history.
+	 * Drops invalid references with a warning log — never rejects.
+	 * LLMs frequently send optimistic references to thoughts that don't exist yet.
+	 *
+	 * @param input - The thought data to validate
+	 * @returns Object with cleaned input and any warnings generated
+	 * @private
+	 *
+	 * @example
+	 * ```typescript
+	 * // verification_target=999 with only 3 thoughts in history
+	 * const { result, warnings } = this._validateCrossReferences(input);
+	 * // result.verification_target === undefined
+	 * // warnings === ['Dropped dangling verification_target: 999 (history has 3 thoughts)']
+	 * ```
+	 */
+	private _validateCrossReferences(input: ThoughtData): {
+		result: ThoughtData;
+		warnings: string[];
+	} {
+		const warnings: string[] = [];
+		const historyLength = this.historyManager.getHistoryLength();
+		const branchIds = new Set(this.historyManager.getBranchIds());
+
+		// verification_target: must reference existing thought
+		if (input.verification_target !== undefined && input.verification_target > historyLength) {
+			warnings.push(
+				`Dropped dangling verification_target: ${input.verification_target} (history has ${historyLength} thoughts)`
+			);
+			this._logger.warn('Dropped dangling verification_target', {
+				verification_target: input.verification_target,
+				historyLength,
+			});
+			input.verification_target = undefined;
+		}
+
+		// revises_thought: must reference existing thought
+		if (input.revises_thought !== undefined && input.revises_thought > historyLength) {
+			warnings.push(
+				`Dropped dangling revises_thought: ${input.revises_thought} (history has ${historyLength} thoughts)`
+			);
+			this._logger.warn('Dropped dangling revises_thought', {
+				revises_thought: input.revises_thought,
+				historyLength,
+			});
+			input.revises_thought = undefined;
+		}
+
+		// branch_from_thought: must reference existing thought
+		if (input.branch_from_thought !== undefined && input.branch_from_thought > historyLength) {
+			warnings.push(
+				`Dropped dangling branch_from_thought: ${input.branch_from_thought} (history has ${historyLength} thoughts)`
+			);
+			this._logger.warn('Dropped dangling branch_from_thought', {
+				branch_from_thought: input.branch_from_thought,
+				historyLength,
+			});
+			input.branch_from_thought = undefined;
+		}
+
+		// synthesis_sources: filter to existing thoughts only
+		if (input.synthesis_sources?.length) {
+			const valid = input.synthesis_sources.filter((n: number) => n <= historyLength);
+			if (valid.length < input.synthesis_sources.length) {
+				const dropped = input.synthesis_sources.filter((n: number) => n > historyLength);
+				warnings.push(
+					`Filtered dangling synthesis_sources: [${dropped.join(', ')}] (history has ${historyLength} thoughts)`
+				);
+				this._logger.warn('Filtered dangling synthesis_sources', {
+					original: input.synthesis_sources,
+					filtered: valid,
+					historyLength,
+				});
+			}
+			input.synthesis_sources = valid.length > 0 ? valid : undefined;
+		}
+
+		// merge_from_thoughts: filter to existing thoughts only
+		if (input.merge_from_thoughts?.length) {
+			const valid = input.merge_from_thoughts.filter((n: number) => n <= historyLength);
+			if (valid.length < input.merge_from_thoughts.length) {
+				const dropped = input.merge_from_thoughts.filter(
+					(n: number) => n > historyLength
+				);
+				warnings.push(
+					`Filtered dangling merge_from_thoughts: [${dropped.join(', ')}] (history has ${historyLength} thoughts)`
+				);
+				this._logger.warn('Filtered dangling merge_from_thoughts', {
+					original: input.merge_from_thoughts,
+					filtered: valid,
+					historyLength,
+				});
+			}
+			input.merge_from_thoughts = valid.length > 0 ? valid : undefined;
+		}
+
+		// merge_branch_ids: filter to existing branches only
+		if (input.merge_branch_ids?.length) {
+			const valid = input.merge_branch_ids.filter((id: string) => branchIds.has(id));
+			if (valid.length < input.merge_branch_ids.length) {
+				const dropped = input.merge_branch_ids.filter(
+					(id: string) => !branchIds.has(id)
+				);
+				warnings.push(`Filtered dangling merge_branch_ids: [${dropped.join(', ')}]`);
+				this._logger.warn('Filtered dangling merge_branch_ids', {
+					original: input.merge_branch_ids,
+					filtered: valid,
+					existingBranches: Array.from(branchIds),
+				});
+			}
+			input.merge_branch_ids = valid.length > 0 ? valid : undefined;
+		}
+
+		return { result: input, warnings };
 	}
 }

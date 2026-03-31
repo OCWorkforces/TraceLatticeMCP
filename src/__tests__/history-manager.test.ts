@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { HistoryManager } from '../core/HistoryManager.js';
+import { ABSOLUTE_MAX_HISTORY_SIZE, HistoryManager } from '../core/HistoryManager.js';
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
 import { createTestThought } from './helpers/index.js';
 import { useFakeTimers, useRealTimers } from './helpers/index.js';
@@ -549,5 +549,35 @@ describe('HistoryManager', () => {
 			expect(history[history.length - 1]?.merge_from_thoughts).toBeUndefined();
 			expect(history[history.length - 1]?.merge_branch_ids).toBeUndefined();
 		});
+	});
+});
+
+describe('ABSOLUTE_MAX_HISTORY_SIZE cap', () => {
+	it('should export ABSOLUTE_MAX_HISTORY_SIZE as 10000', () => {
+		expect(ABSOLUTE_MAX_HISTORY_SIZE).toBe(10_000);
+	});
+
+	it('should cap maxHistorySize to ABSOLUTE_MAX_HISTORY_SIZE when config exceeds it', () => {
+		const manager = new HistoryManager({ maxHistorySize: 50_000 });
+		expect((manager as any)._maxHistorySize).toBe(10_000);
+	});
+
+	it('should not alter maxHistorySize when within cap', () => {
+		const manager = new HistoryManager({ maxHistorySize: 500 });
+		expect((manager as any)._maxHistorySize).toBe(500);
+	});
+
+	it('should use default 1000 when no config provided', () => {
+		const manager = new HistoryManager({});
+		expect((manager as any)._maxHistorySize).toBe(1_000);
+	});
+
+	it('should log warning when capping occurs', () => {
+		const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
+		new HistoryManager({ maxHistorySize: 50_000, logger: mockLogger as any });
+		expect(mockLogger.warn).toHaveBeenCalledWith(
+			'maxHistorySize exceeds absolute maximum, capped',
+			expect.objectContaining({ requested: 50_000, applied: 10_000 })
+		);
 	});
 });

@@ -32,7 +32,6 @@
 
 import * as v from 'valibot';
 import type { Tool } from './types/tool.js';
-
 /**
  * Detailed description for the sequential thinking tool.
  *

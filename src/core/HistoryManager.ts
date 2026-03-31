@@ -15,6 +15,14 @@ import type { IHistoryManager } from './IHistoryManager.js';
 import type { IMetrics } from '../contracts/index.js';
 
 /**
+ * Absolute maximum history size. Cannot be overridden by configuration.
+ * Prevents unbounded memory growth from misconfiguration.
+ * At ~2KB per thought, 10K thoughts ≈ ~20MB — reasonable for server-side.
+ * @constant
+ */
+export const ABSOLUTE_MAX_HISTORY_SIZE = 10_000;
+
+/**
  * Interface for emitting persistence error events.
  * Compatible with EventEmitter's emit method signature.
  */
@@ -211,10 +219,17 @@ export class HistoryManager implements IHistoryManager {
 	 * ```
 	 */
 	constructor(config: HistoryManagerConfig = {}) {
-		this._maxHistorySize = config.maxHistorySize || 1000;
+		this._logger = config.logger ?? new NullLogger();
+		const requestedMaxSize = config.maxHistorySize ?? 1000;
+		this._maxHistorySize = Math.min(requestedMaxSize, ABSOLUTE_MAX_HISTORY_SIZE);
+		if (requestedMaxSize > ABSOLUTE_MAX_HISTORY_SIZE) {
+			this._logger.warn('maxHistorySize exceeds absolute maximum, capped', {
+				requested: requestedMaxSize,
+				applied: ABSOLUTE_MAX_HISTORY_SIZE,
+			});
+		}
 		this._maxBranches = config.maxBranches || 50;
 		this._maxBranchSize = config.maxBranchSize || 100;
-		this._logger = config.logger ?? new NullLogger();
 		this._persistence = config.persistence ?? null;
 		this._persistenceEnabled = this._persistence !== null;
 		this._metrics = config.metrics;

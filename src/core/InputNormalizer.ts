@@ -13,6 +13,7 @@
 
 import type { ThoughtData } from './thought.js';
 import { ValidationError } from '../errors.js';
+import { sanitizeString } from '../sanitize.js';
 
 /**
  * Default values for missing partial tool recommendation fields.
@@ -28,6 +29,47 @@ const DEFAULT_STEP_OUTCOME = '';
 const DEFAULT_SKILL_CONFIDENCE = 0.5;
 const DEFAULT_SKILL_PRIORITY = 999;
 const DEFAULT_SKILL_RATIONALE = '';
+
+/**
+ * Recursively sanitizes all string values within an unknown structure.
+ * Walks into plain objects and arrays to reach deeply nested strings.
+ * Non-plain objects (Date, RegExp, etc.) are returned as-is.
+ *
+ * @param value - The value to sanitize recursively
+ * @returns The sanitized value with all nested strings cleaned
+ *
+ * @example
+ * ```typescript
+ * sanitizeRecursive('<script>x</script>'); // 'x'
+ * sanitizeRecursive({ a: { b: '<iframe>y' } }); // { a: { b: 'y' } }
+ * sanitizeRecursive(['a\x00b', 42]); // ['ab', 42]
+ * ```
+ */
+export function sanitizeRecursive(value: unknown): unknown {
+	if (value === null || value === undefined) {
+		return value;
+	}
+	if (typeof value === 'string') {
+		return sanitizeString(value);
+	}
+	if (Array.isArray(value)) {
+		return value.map((item) => sanitizeRecursive(item));
+	}
+	if (typeof value === 'object') {
+		// Only recurse into plain objects — skip Date, RegExp, Map, Set, etc.
+		const proto = Object.getPrototypeOf(value);
+		if (proto !== Object.prototype && proto !== null) {
+			return value;
+		}
+		const result: Record<string, unknown> = {};
+		for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+			result[key] = sanitizeRecursive(val);
+		}
+		return result;
+	}
+	return value;
+}
+
 /**
  * Valid branch ID pattern: alphanumeric, hyphens, underscores only.
  * Prevents path traversal attacks by rejecting special characters like / . \ etc.
@@ -364,6 +406,7 @@ export function normalizeInput(input: unknown): ThoughtData {
 		);
 	}
 
+
 	// Normalize all items in previous_steps if present (lenient mode - with defaults)
 	if (Array.isArray(normalized.previous_steps) && normalized.previous_steps.length > 0) {
 		normalized.previous_steps = normalized.previous_steps.map((step) =>
@@ -381,5 +424,10 @@ export function normalizeInput(input: unknown): ThoughtData {
 	// Normalize reasoning fields
 	normalizeReasoningFields(normalized);
 
-	return normalized as unknown as ThoughtData;
+
+	// Sanitize all free-text string fields recursively (dangerous HTML tags + null bytes)
+	// This was moved from schema transforms because v.transform() cannot be converted to JSON Schema
+	const sanitized = sanitizeRecursive(normalized);
+
+	return sanitized as unknown as ThoughtData;
 }

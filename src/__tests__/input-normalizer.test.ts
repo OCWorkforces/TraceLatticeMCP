@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { normalizeInput, normalizeReasoningFields } from '../core/InputNormalizer.js';
+import { normalizeInput, normalizeReasoningFields, sanitizeRecursive } from '../core/InputNormalizer.js';
 import type { ThoughtData } from '../core/thought.js';
 
 /**
@@ -763,5 +763,133 @@ describe('reasoning fields normalization', () => {
 			normalizeReasoningFields(input);
 			expect(input.thought_type).toBe('regular');
 		});
+	});
+});
+
+describe('sanitizeRecursive', () => {
+	it('should sanitize a string with dangerous HTML tags', () => {
+		expect(sanitizeRecursive('<script>x</script>')).toBe('x');
+	});
+
+	it('should pass through numbers unchanged', () => {
+		expect(sanitizeRecursive(42)).toBe(42);
+	});
+
+	it('should pass through null unchanged', () => {
+		expect(sanitizeRecursive(null)).toBeNull();
+	});
+
+	it('should sanitize strings inside arrays', () => {
+		expect(sanitizeRecursive(['a\x00b', 'c'])).toEqual(['ab', 'c']);
+	});
+
+	it('should sanitize deeply nested object strings', () => {
+		expect(sanitizeRecursive({ a: { b: '<iframe>x' } })).toEqual({ a: { b: 'x' } });
+	});
+
+	it('should pass through booleans unchanged', () => {
+		expect(sanitizeRecursive(true)).toBe(true);
+	});
+
+	it('should pass through undefined unchanged', () => {
+		expect(sanitizeRecursive(undefined)).toBeUndefined();
+	});
+
+	it('should return Date objects as-is (non-plain object)', () => {
+		const date = new Date('2024-01-01');
+		expect(sanitizeRecursive(date)).toBe(date);
+	});
+
+	it('should return RegExp objects as-is (non-plain object)', () => {
+		const regex = /test/gi;
+		expect(sanitizeRecursive(regex)).toBe(regex);
+	});
+
+	it('should handle objects with null prototype', () => {
+		const obj = Object.create(null) as Record<string, unknown>;
+		obj.key = '<script>x</script>';
+		const result = sanitizeRecursive(obj) as Record<string, unknown>;
+		expect(result.key).toBe('x');
+	});
+
+	it('should handle mixed nested structures with non-plain objects', () => {
+		const date = new Date();
+		const input = { a: '<script>x</script>', b: date, c: { d: 42 } };
+		const result = sanitizeRecursive(input) as Record<string, unknown>;
+		expect(result.a).toBe('x');
+		expect(result.b).toBe(date);
+		expect(result.c).toEqual({ d: 42 });
+	});
+
+	it('should handle arrays containing null and undefined', () => {
+		expect(sanitizeRecursive([null, undefined, 'a'])).toEqual([null, undefined, 'a']);
+	});
+});
+
+describe('suggested_inputs sanitization', () => {
+	function createInputWithSuggestedInputs(
+		suggestedInputs: Record<string, unknown>
+	): unknown {
+		return {
+			thought: 'Test thought',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			current_step: {
+				step_description: 'Test step',
+				recommended_tools: [
+					createToolRecommendation({ suggested_inputs: suggestedInputs }),
+				],
+				expected_outcome: 'Test outcome',
+			},
+		};
+	}
+
+	it('should pass through non-HTML strings unchanged', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ command: 'cat /etc/passwd' })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ command: 'cat /etc/passwd' });
+	});
+
+	it('should strip dangerous HTML tags from string values', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ cmd: '<script>alert(1)</script>' })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ cmd: 'alert(1)' });
+	});
+
+	it('should strip null bytes from deeply nested strings', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ nested: { deep: 'a\x00b' } })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ nested: { deep: 'ab' } });
+	});
+
+	it('should sanitize strings inside arrays', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ arr: ['<iframe>x'] })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ arr: ['x'] });
+	});
+
+	it('should leave safe strings unchanged', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ safe: 'normal text' })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ safe: 'normal text' });
+	});
+
+	it('should leave non-string values unchanged', () => {
+		const normalized = normalizeInput(
+			createInputWithSuggestedInputs({ num: 42, bool: true })
+		) as ThoughtData;
+		const tool = normalized.current_step?.recommended_tools?.[0];
+		expect(tool?.suggested_inputs).toEqual({ num: 42, bool: true });
 	});
 });
