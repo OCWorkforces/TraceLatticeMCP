@@ -576,3 +576,77 @@ describe('Schema accepts raw strings (sanitization moved to InputNormalizer)', (
 		});
 	});
 });
+
+describe('session_id and reset_state schema validation', () => {
+	const baseInput = {
+		thought: 'Test thought',
+		thought_number: 1,
+		total_thoughts: 1,
+	};
+
+	it('should accept valid session_id', () => {
+		const result = safeParse(SequentialThinkingSchema, {
+			...baseInput,
+			session_id: 'analysis-task-42',
+		});
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.output.session_id).toBe('analysis-task-42');
+		}
+	});
+
+	it('should reject session_id with special characters', () => {
+		const result = safeParse(SequentialThinkingSchema, {
+			...baseInput,
+			session_id: 'bad session!',
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it('should reject empty session_id', () => {
+		const result = safeParse(SequentialThinkingSchema, {
+			...baseInput,
+			session_id: '',
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it('should reject session_id exceeding 100 characters', () => {
+		const result = safeParse(SequentialThinkingSchema, {
+			...baseInput,
+			session_id: 'a'.repeat(101),
+		});
+		expect(result.success).toBe(false);
+	});
+
+	it('should accept reset_state true', () => {
+		const result = safeParse(SequentialThinkingSchema, {
+			...baseInput,
+			reset_state: true,
+		});
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.output.reset_state).toBe(true);
+		}
+	});
+
+	it('should accept reset_state false', () => {
+		const result = safeParse(SequentialThinkingSchema, {
+			...baseInput,
+			reset_state: false,
+		});
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.output.reset_state).toBe(false);
+		}
+	});
+
+	it('should pass without session_id or reset_state (backward compatible)', () => {
+		const result = safeParse(SequentialThinkingSchema, baseInput);
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.output.session_id).toBeUndefined();
+			expect(result.output.reset_state).toBeUndefined();
+		}
+	});
+});

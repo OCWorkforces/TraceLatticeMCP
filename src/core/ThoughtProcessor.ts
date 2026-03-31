@@ -181,35 +181,42 @@ export class ThoughtProcessor {
 		try {
 			// Normalize input to handle common LLM field name mistakes
 			const normalizedInput = normalizeInput(input);
+			const sessionId = normalizedInput.session_id;
+
+			// Handle reset_state: clear session before processing
+			if (normalizedInput.reset_state) {
+				this.historyManager.clear(sessionId);
+				this.log('State reset for session', { sessionId: sessionId ?? '__global__' });
+			}
 
 			// Persist available_mcp_tools/available_skills across calls within a session.
 			// If the caller omits these, reuse the last-seen values from the session.
 			if (!normalizedInput.available_mcp_tools) {
-				normalizedInput.available_mcp_tools = this.historyManager.getAvailableMcpTools();
+				normalizedInput.available_mcp_tools = this.historyManager.getAvailableMcpTools(sessionId);
 			}
 			if (!normalizedInput.available_skills) {
-				normalizedInput.available_skills = this.historyManager.getAvailableSkills();
+				normalizedInput.available_skills = this.historyManager.getAvailableSkills(sessionId);
 			}
 
 			const { result: validatedInput, warnings: validateWarnings } =
 				this.validateInput(normalizedInput);
 			const { result: checkedInput, warnings: refWarnings } =
-				this._validateCrossReferences(validatedInput);
+				this._validateCrossReferences(validatedInput, sessionId);
 			const allWarnings = [...validateWarnings, ...refWarnings];
 
 			this.historyManager.addThought(checkedInput);
 
 			const formattedThought = this.thoughtFormatter.formatThought(checkedInput);
-			this.log(formattedThought);
+			this.log(formattedThought, { sessionId: sessionId ?? '__global__' });
 
 			// Compute quality signals
 			const confidenceSignals = this._thoughtEvaluator.computeConfidenceSignals(
-				this.historyManager.getHistory(),
-				this.historyManager.getBranches()
+				this.historyManager.getHistory(sessionId),
+				this.historyManager.getBranches(sessionId)
 			);
 			const reasoningStats = this._thoughtEvaluator.computeReasoningStats(
-				this.historyManager.getHistory(),
-				this.historyManager.getBranches()
+				this.historyManager.getHistory(sessionId),
+				this.historyManager.getBranches(sessionId)
 			);
 
 			return {
@@ -221,8 +228,8 @@ export class ThoughtProcessor {
 							thought_number: checkedInput.thought_number,
 							total_thoughts: checkedInput.total_thoughts,
 							next_thought_needed: checkedInput.next_thought_needed ?? true,
-							branches: this.historyManager.getBranchIds(),
-							thought_history_length: this.historyManager.getHistoryLength(),
+							branches: this.historyManager.getBranchIds(sessionId),
+							thought_history_length: this.historyManager.getHistoryLength(sessionId),
 							available_mcp_tools: checkedInput.available_mcp_tools,
 							available_skills: checkedInput.available_skills,
 							current_step: checkedInput.current_step,
@@ -236,6 +243,7 @@ export class ThoughtProcessor {
 							confidence_signals: confidenceSignals,
 							reasoning_stats: reasoningStats,
 							...(allWarnings.length > 0 && { warnings: allWarnings }),
+							...(sessionId ? { session_id: sessionId } : {}),
 						},
 						null,
 						2
@@ -319,13 +327,13 @@ export class ThoughtProcessor {
 	 * // warnings === ['Dropped dangling verification_target: 999 (history has 3 thoughts)']
 	 * ```
 	 */
-	private _validateCrossReferences(input: ThoughtData): {
+	private _validateCrossReferences(input: ThoughtData, sessionId?: string): {
 		result: ThoughtData;
 		warnings: string[];
 	} {
 		const warnings: string[] = [];
-		const historyLength = this.historyManager.getHistoryLength();
-		const branchIds = new Set(this.historyManager.getBranchIds());
+		const historyLength = this.historyManager.getHistoryLength(sessionId);
+		const branchIds = new Set(this.historyManager.getBranchIds(sessionId));
 
 		// verification_target: must reference existing thought
 		if (input.verification_target !== undefined && input.verification_target > historyLength) {

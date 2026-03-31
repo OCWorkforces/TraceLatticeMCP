@@ -250,6 +250,7 @@ describe('HistoryManager', () => {
 
 			manager.addThought(createTestThought({ thought_number: 2 }));
 			await vi.waitFor(() => expect(manager.getWriteBufferLength()).toBe(0));
+			await vi.advanceTimersByTimeAsync(0);
 			expect(await persistence.loadHistory()).toHaveLength(2);
 		});
 
@@ -548,6 +549,312 @@ describe('HistoryManager', () => {
 			const history = manager.getHistory();
 			expect(history[history.length - 1]?.merge_from_thoughts).toBeUndefined();
 			expect(history[history.length - 1]?.merge_branch_ids).toBeUndefined();
+		});
+	});
+
+	describe('session partitioning', () => {
+		it('creates isolated sessions with different session_ids', () => {
+			const manager = new HistoryManager();
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'session-a' }));
+			manager.addThought(createTestThought({ thought_number: 2, session_id: 'session-b' }));
+
+			expect(manager.getHistoryLength('session-a')).toBe(1);
+			expect(manager.getHistoryLength('session-b')).toBe(1);
+		});
+
+		it('uses __global__ session when session_id is omitted', () => {
+			const manager = new HistoryManager();
+			manager.addThought(createTestThought({ thought_number: 1 }));
+
+			expect(manager.getHistoryLength()).toBe(1);
+			expect(manager.getHistoryLength('__global__')).toBe(1);
+		});
+
+		it('returns empty history for new session', () => {
+			const manager = new HistoryManager();
+			manager.addThought(createTestThought({ thought_number: 1 }));
+
+			expect(manager.getHistoryLength('new-session')).toBe(0);
+		});
+
+		it('does not leak thoughts between sessions', () => {
+			const manager = new HistoryManager();
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a', thought: 'A1' }));
+			manager.addThought(createTestThought({ thought_number: 2, session_id: 'a', thought: 'A2' }));
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b', thought: 'B1' }));
+
+			const historyA = manager.getHistory('a');
+			const historyB = manager.getHistory('b');
+
+			expect(historyA).toHaveLength(2);
+			expect(historyB).toHaveLength(1);
+			expect(historyA[0]!.thought).toBe('A1');
+			expect(historyB[0]!.thought).toBe('B1');
+		});
+
+		it('does not leak branches between sessions', () => {
+			const manager = new HistoryManager();
+			manager.addThought(
+				createTestThought({
+					thought_number: 1,
+					session_id: 'a',
+					branch_from_thought: 1,
+					branch_id: 'branch-a',
+				})
+			);
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b' }));
+
+			expect(manager.getBranchIds('a')).toContain('branch-a');
+			expect(manager.getBranchIds('b')).toHaveLength(0);
+		});
+
+		it('tracks available_mcp_tools per session', () => {
+			const manager = new HistoryManager();
+			manager.addThought(
+				createTestThought({
+					thought_number: 1,
+					session_id: 'a',
+					available_mcp_tools: ['tool-a'],
+				})
+			);
+			manager.addThought(
+				createTestThought({
+					thought_number: 1,
+					session_id: 'b',
+					available_mcp_tools: ['tool-b'],
+				})
+			);
+
+			expect(manager.getAvailableMcpTools('a')).toEqual(['tool-a']);
+			expect(manager.getAvailableMcpTools('b')).toEqual(['tool-b']);
+		});
+
+		it('tracks available_skills per session', () => {
+			const manager = new HistoryManager();
+			manager.addThought(
+				createTestThought({
+					thought_number: 1,
+					session_id: 'a',
+					available_skills: ['skill-a'],
+				})
+			);
+			manager.addThought(
+				createTestThought({
+					thought_number: 1,
+					session_id: 'b',
+					available_skills: ['skill-b'],
+				})
+			);
+
+			expect(manager.getAvailableSkills('a')).toEqual(['skill-a']);
+			expect(manager.getAvailableSkills('b')).toEqual(['skill-b']);
+		});
+
+		it('clears only the target session on clear(sessionId)', () => {
+			const manager = new HistoryManager();
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a' }));
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b' }));
+
+			manager.clear('a');
+
+			expect(manager.getHistoryLength('a')).toBe(0);
+			expect(manager.getHistoryLength('b')).toBe(1);
+		});
+
+		it('clears all sessions on clear() without sessionId', () => {
+			const manager = new HistoryManager();
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a' }));
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b' }));
+			manager.addThought(createTestThought({ thought_number: 1 }));
+
+			manager.clear();
+
+			expect(manager.getHistoryLength('a')).toBe(0);
+			expect(manager.getHistoryLength('b')).toBe(0);
+			expect(manager.getHistoryLength()).toBe(0);
+		});
+
+		it('getSessionIds() returns all active session IDs', () => {
+			const manager = new HistoryManager();
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a' }));
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b' }));
+
+			const ids = manager.getSessionIds();
+			expect(ids).toContain('a');
+			expect(ids).toContain('b');
+		});
+
+		it('getSessionCount() returns correct count', () => {
+			const manager = new HistoryManager();
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a' }));
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b' }));
+
+			expect(manager.getSessionCount()).toBe(2);
+		});
+	});
+
+	describe('session TTL eviction', () => {
+		it('evicts sessions inactive longer than TTL', () => {
+			useFakeTimers();
+			const manager = new HistoryManager();
+
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'old' }));
+			expect(manager.getHistoryLength('old')).toBe(1);
+
+			// Advance past TTL (30 minutes) + cleanup interval (5 minutes)
+			vi.advanceTimersByTime(31 * 60 * 1000);
+
+			// Trigger the 5-minute cleanup timer
+			vi.advanceTimersByTime(5 * 60 * 1000);
+
+			// The 'old' session should have been cleaned up
+			expect(manager.getSessionIds()).not.toContain('old');
+		});
+
+		it('does not evict the __global__ session', () => {
+			useFakeTimers();
+			const manager = new HistoryManager();
+
+			manager.addThought(createTestThought({ thought_number: 1 }));
+
+			// Advance well past TTL + cleanup interval
+			vi.advanceTimersByTime(36 * 60 * 1000);
+
+			expect(manager.getHistoryLength()).toBe(1);
+			expect(manager.getSessionIds()).toContain('__global__');
+		});
+
+		it('does not evict recently accessed sessions', () => {
+			useFakeTimers();
+			const manager = new HistoryManager();
+
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'active' }));
+
+			// Advance 20 minutes, then access the session
+			vi.advanceTimersByTime(20 * 60 * 1000);
+			manager.addThought(createTestThought({ thought_number: 2, session_id: 'active' }));
+
+			// Advance another 20 minutes (40 total, but only 20 since last access)
+			vi.advanceTimersByTime(20 * 60 * 1000);
+
+			// Trigger cleanup
+			vi.advanceTimersByTime(5 * 60 * 1000);
+
+			expect(manager.getHistoryLength('active')).toBe(2);
+		});
+	});
+
+	describe('session LRU eviction', () => {
+		it('does not break when creating many sessions', () => {
+			const manager = new HistoryManager();
+
+			for (let i = 0; i < 10; i++) {
+				manager.addThought(
+					createTestThought({ thought_number: 1, session_id: `session-${i}` })
+				);
+			}
+
+			expect(manager.getSessionCount()).toBe(10);
+		});
+
+		it('evicts oldest session when MAX_SESSIONS exceeded', () => {
+			useFakeTimers();
+			const manager = new HistoryManager();
+
+			// MAX_SESSIONS is 100. Create 100 sessions.
+			for (let i = 0; i < 100; i++) {
+				manager.addThought(
+					createTestThought({ thought_number: 1, session_id: `s-${i}` })
+				);
+				// Small time advance to ensure distinct lastAccessedAt
+				vi.advanceTimersByTime(1);
+			}
+
+			expect(manager.getSessionCount()).toBe(100);
+
+			// Creating the 101st session should evict the oldest (s-0)
+			manager.addThought(
+				createTestThought({ thought_number: 1, session_id: 'overflow' })
+			);
+
+			expect(manager.getSessionCount()).toBe(100);
+			expect(manager.getSessionIds()).not.toContain('s-0');
+			expect(manager.getSessionIds()).toContain('overflow');
+		});
+	});
+
+	describe('session persistence', () => {
+		it('buffers writes per session', () => {
+			const persistence = new MockPersistence();
+			const manager = new HistoryManager({
+				persistence,
+				persistenceBufferSize: 100,
+				persistenceFlushInterval: 60000,
+			});
+
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a' }));
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b' }));
+
+			expect(manager.getWriteBufferLength()).toBe(2);
+		});
+
+		it('flushes all session buffers on shutdown', async () => {
+			const persistence = new MockPersistence();
+			const manager = new HistoryManager({
+				persistence,
+				persistenceBufferSize: 100,
+				persistenceFlushInterval: 60000,
+			});
+
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a' }));
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b' }));
+
+			await manager.shutdown();
+
+			expect(manager.getWriteBufferLength()).toBe(0);
+			expect(await persistence.loadHistory()).toHaveLength(2);
+		});
+
+		it('clearSession removes specific session data', () => {
+			const manager = new HistoryManager();
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'x' }));
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'y' }));
+
+			manager.clearSession('x');
+
+			expect(manager.getHistoryLength('x')).toBe(0);
+			expect(manager.getHistoryLength('y')).toBe(1);
+		});
+	});
+
+	describe('backward compatibility', () => {
+		it('all existing operations work without session_id', () => {
+			const manager = new HistoryManager();
+
+			manager.addThought(createTestThought({ thought_number: 1 }));
+			manager.addThought(createTestThought({ thought_number: 2 }));
+
+			expect(manager.getHistoryLength()).toBe(2);
+			expect(manager.getHistory()).toHaveLength(2);
+			expect(manager.getBranchIds()).toEqual([]);
+
+			manager.clear();
+			expect(manager.getHistoryLength()).toBe(0);
+		});
+
+		it('getBranch returns undefined for non-existent branch across sessions', () => {
+			const manager = new HistoryManager();
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a' }));
+
+			expect(manager.getBranch('non-existent', 'a')).toBeUndefined();
+			expect(manager.getBranch('non-existent', 'b')).toBeUndefined();
+		});
+
+		it('getAvailableMcpTools returns undefined for fresh session', () => {
+			const manager = new HistoryManager();
+
+			expect(manager.getAvailableMcpTools('nonexistent')).toBeUndefined();
+			expect(manager.getAvailableSkills('nonexistent')).toBeUndefined();
 		});
 	});
 });

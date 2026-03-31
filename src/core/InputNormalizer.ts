@@ -77,6 +77,12 @@ export function sanitizeRecursive(value: unknown): unknown {
 const BRANCH_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 
 /**
+ * Valid session ID pattern: alphanumeric, hyphens, underscores, 1-100 chars.
+ * Same as branch_id but with longer max length to allow compound identifiers.
+ */
+const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
+
+/**
  * Sanitizes and validates a branch ID to prevent path traversal attacks.
  *
  * @param branchId - The branch ID to sanitize
@@ -98,6 +104,28 @@ export function sanitizeBranchId(branchId: string): string {
 		);
 	}
 	return branchId;
+}
+
+/**
+ * Sanitizes and validates a session ID.
+ *
+ * @param sessionId - The session ID to sanitize
+ * @returns The sanitized session ID, or undefined if invalid after sanitization
+ *
+ * @example
+ * ```typescript
+ * sanitizeSessionId('analysis-task-42'); // 'analysis-task-42'
+ * sanitizeSessionId('bad session!'); // undefined (stripped)
+ * ```
+ */
+export function sanitizeSessionId(sessionId: string): string | undefined {
+	// First sanitize control characters
+	const cleaned = sanitizeString(sessionId);
+	// Validate format after sanitization
+	if (!SESSION_ID_PATTERN.test(cleaned)) {
+		return undefined;
+	}
+	return cleaned;
 }
 
 /**
@@ -419,6 +447,16 @@ export function normalizeInput(input: unknown): ThoughtData {
 	// Sanitize branch_id to prevent path traversal attacks
 	if (typeof normalized.branch_id === 'string') {
 		normalized.branch_id = sanitizeBranchId(normalized.branch_id);
+	}
+
+	// Sanitize session_id (same pattern as branch_id but allows 1-100 chars)
+	if (typeof normalized.session_id === 'string') {
+		const sanitized = sanitizeSessionId(normalized.session_id);
+		if (sanitized === undefined) {
+			delete normalized.session_id;
+		} else {
+			normalized.session_id = sanitized;
+		}
 	}
 
 	// Normalize reasoning fields

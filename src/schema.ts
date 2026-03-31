@@ -109,6 +109,8 @@ Reasoning Enhancement Parameters:
 - merge_branch_ids: Branch IDs merged into current context
 - meta_observation: Observation about reasoning process (with thought_type 'meta')
 - reasoning_depth: How deep to reason: 'shallow' (quick), 'moderate' (default), 'deep' (thorough)
+- session_id: (Optional) Unique identifier to scope thought history, branches, and statistics to an isolated session. When provided, all state is scoped to this session ID. When omitted, uses shared global state (backward compatible). Format: alphanumeric, hyphens, underscores, 1-100 chars.
+- reset_state: (Optional) When true, clears all state for the target session (or global state if no session_id) before processing the current thought. Use this to start a fresh reasoning chain without accumulated state from previous chains.
 
 Response Enrichment:
 - When reasoning fields are set, response includes confidence_signals (depth, revision/branch count, type distribution, avg confidence) and reasoning_stats (hypothesis tracking)
@@ -134,7 +136,9 @@ You should:
 18. Classify your reasoning steps using thought_type for better analytics and self-awareness
 19. Use hypothesis → verification chains to test solutions before committing
 20. Self-assess quality and confidence to track reasoning reliability
-21. Use merge_from_thoughts to combine insights from multiple reasoning branches`;
+21. Use merge_from_thoughts to combine insights from multiple reasoning branches
+22. Use session_id to isolate independent reasoning chains from each other
+23. Use reset_state: true when starting a completely new analysis to avoid statistical contamination from previous chains`;
 
 /**
  * Valibot schema for validating tool recommendation objects.
@@ -560,6 +564,28 @@ export const SequentialThinkingSchema = v.object({
 		v.pipe(
 			v.picklist(['shallow', 'moderate', 'deep']),
 			v.description('Effort signal: how deep reasoning should go')
+		)
+	),
+	session_id: v.optional(
+		v.pipe(
+			v.string(),
+			v.regex(
+				/^[a-zA-Z0-9_-]+$/,
+				'Session ID must contain only letters, numbers, hyphens, and underscores'
+			),
+			v.minLength(1),
+			v.maxLength(100),
+			v.description(
+				'Optional session identifier for state isolation. When provided, thought history, branches, and statistics are scoped to this session. Omitting preserves global behavior.'
+			)
+		)
+	),
+	reset_state: v.optional(
+		v.pipe(
+			v.boolean(),
+			v.description(
+				'When true, clears all state for the target session before processing this thought. The thought is then processed as the first in a fresh session.'
+			)
 		)
 	),
 });
