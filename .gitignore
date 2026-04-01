@@ -210,3 +210,5 @@ node_modules/
 coverage/
 .sisyphus/
 .agents/
+*.DS_Store
+skills-lock.json

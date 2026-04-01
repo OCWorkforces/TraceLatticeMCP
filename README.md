@@ -31,8 +31,8 @@ The server uses **stdio transport** by default — no extra configuration needed
 ```json
 {
   "mcpServers": {
-    "sequentialthinking-tools": {
-      "command": "sequentialthinking-tools"
+    "tracelattice": {
+      "command": "tracelattice"
     }
   }
 }
@@ -41,7 +41,7 @@ The server uses **stdio transport** by default — no extra configuration needed
 Or via CLI:
 
 ```bash
-claude mcp add sequentialthinking-tools -- sequentialthinking-tools
+claude mcp add tracelattice -- tracelattice
 ```
 
 ### Codex CLI
@@ -49,14 +49,14 @@ claude mcp add sequentialthinking-tools -- sequentialthinking-tools
 **User-scoped** (`~/.codex/config.toml`) or **project-scoped** (`.codex/config.toml`):
 
 ```toml
-[mcp_servers.sequentialthinking-tools]
-command = "sequentialthinking-tools"
+[mcp_servers.tracelattice]
+command = "tracelattice"
 ```
 
 Or via CLI:
 
 ```bash
-codex mcp add sequentialthinking-tools -- sequentialthinking-tools
+codex mcp add tracelattice -- tracelattice
 ```
 
 ### OpenCode
@@ -66,12 +66,12 @@ codex mcp add sequentialthinking-tools -- sequentialthinking-tools
 ```json
 {
   "mcpServers": {
-    "sequentialthinking-tools": {
+    "tracelattice": {
       "type": "local",
       "command": [
         "npx",
         "-y",
-        "sequentialthinking-tools"
+        "tracelattice"
       ],
       "enabled": true,
       "environment": {
@@ -94,9 +94,9 @@ The server supports three transports via the `TRANSPORT_TYPE` environment variab
 
 | Transport | Use Case | Command |
 |-----------|----------|---------|
-| `stdio` (default) | Local MCP clients | `sequentialthinking-tools` |
-| `sse` (legacy) | Multi-user, backwards compat | `TRANSPORT_TYPE=sse sequentialthinking-tools` |
-| `streamable-http` | Production deployments | `TRANSPORT_TYPE=streamable-http sequentialthinking-tools` |
+| `stdio` (default) | Local MCP clients | `tracelattice` |
+| `sse` (legacy) | Multi-user, backwards compat | `TRANSPORT_TYPE=sse tracelattice` |
+| `streamable-http` | Production deployments | `TRANSPORT_TYPE=streamable-http tracelattice` |
 ## Development
 
 ```bash

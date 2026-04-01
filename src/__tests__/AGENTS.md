@@ -12,7 +12,7 @@ Test suite using Vitest with V8 coverage. 1006 tests across 35 test files. Cover
 ```
 src/__tests__/
 ├── helpers/              # Shared test utilities (helpers/index.ts)
-├── sequentialthinking-tools.test.ts  # Main integration test (1076L)
+├── tracelattice.test.ts  # Main integration test (1076L)
 ├── streamable-http-transport.test.ts # Streamable HTTP tests (869L)
 ├── sse-transport.test.ts             # SSE transport tests (758L)
 ├── container.test.ts                 # DI container tests (712L)

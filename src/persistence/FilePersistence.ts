@@ -1,10 +1,10 @@
-import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
-import type { ThoughtData } from '../core/thought.js';
-import type { IMetrics } from '../contracts/index.js';
-import { mkdir, writeFile, readFile, readdir, unlink } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, resolve, sep } from 'node:path';
+import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
+import { join, resolve, sep } from 'node:path';
+import type { IMetrics } from '../contracts/index.js';
+import type { ThoughtData } from '../core/thought.js';
+import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
 
 /**
  * File-based persistence backend using JSON files.

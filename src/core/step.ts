@@ -4,8 +4,8 @@
  * @module types/step
  */
 
-import type { ToolRecommendation } from '../types/tool.js';
 import type { SkillRecommendation } from '../types/skill.js';
+import type { ToolRecommendation } from '../types/tool.js';
 
 /**
  * Represents a coordinated step in a multi-step thought process.

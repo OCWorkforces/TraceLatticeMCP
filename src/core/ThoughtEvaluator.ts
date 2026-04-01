@@ -8,8 +8,8 @@
  * @module core/evaluator
  */
 
+import type { ConfidenceSignals, ReasoningStats, ThoughtType } from './reasoning.js';
 import type { ThoughtData } from './thought.js';
-import type { ThoughtType, ConfidenceSignals, ReasoningStats } from './reasoning.js';
 
 /** All valid thought types for distribution counting. */
 const ALL_THOUGHT_TYPES: ThoughtType[] = [

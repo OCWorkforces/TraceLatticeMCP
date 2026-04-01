@@ -8,12 +8,11 @@
  * @module watcher
  */
 
-import type { ToolRegistry } from '../registry/ToolRegistry.js';
 import { watch, type FSWatcher } from 'chokidar';
-import { join } from 'node:path';
 import { homedir } from 'node:os';
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
 import type { Logger } from '../logger/StructuredLogger.js';
+import type { ToolRegistry } from '../registry/ToolRegistry.js';
 
 /**
  * File system watcher for tool directories.

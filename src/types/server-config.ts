@@ -4,8 +4,8 @@
  * @module types/server-config
  */
 
-import type { Tool } from './tool.js';
 import type { Skill } from './skill.js';
+import type { Tool } from './tool.js';
 
 /**
  * Runtime server configuration containing available tools and skills.

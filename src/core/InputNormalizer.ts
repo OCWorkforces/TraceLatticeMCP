@@ -11,9 +11,9 @@
  * @module processor
  */
 
-import type { ThoughtData } from './thought.js';
 import { ValidationError } from '../errors.js';
 import { sanitizeString } from '../sanitize.js';
+import type { ThoughtData } from './thought.js';
 
 /**
  * Default values for missing partial tool recommendation fields.

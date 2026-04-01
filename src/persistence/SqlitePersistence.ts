@@ -1,8 +1,8 @@
-import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
-import type { ThoughtData } from '../core/thought.js';
-import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
+import type { ThoughtData } from '../core/thought.js';
+import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
 
 /**
  * Type definition for the better-sqlite3 Database interface.

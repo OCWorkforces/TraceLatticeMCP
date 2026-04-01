@@ -8,12 +8,12 @@
  * @module registry
  */
 
-import type { Skill } from '../types/skill.js';
-import type { Logger } from '../logger/StructuredLogger.js';
-import { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { InvalidSkillError, DuplicateSkillError, SkillNotFoundError } from '../errors.js';
+import { DiscoveryCache } from '../cache/DiscoveryCache.js';
+import { DuplicateSkillError, InvalidSkillError, SkillNotFoundError } from '../errors.js';
+import type { Logger } from '../logger/StructuredLogger.js';
+import type { Skill } from '../types/skill.js';
 import { BaseRegistry } from './BaseRegistry.js';
 
 /**

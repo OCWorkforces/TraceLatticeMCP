@@ -1,32 +1,32 @@
-// Library exports for sequentialthinking-tools
+// Library exports for tracelattice
 // This module contains all public API exports with NO CLI side effects.
 // For the CLI entry point, see cli.ts.
 
 import { EventEmitter } from 'node:events';
 import * as v from 'valibot';
-import { SequentialThinkingSchema, SEQUENTIAL_THINKING_TOOL } from './schema.js';
 import { ThoughtData } from './core/thought.js';
+import { SEQUENTIAL_THINKING_TOOL, SequentialThinkingSchema } from './schema.js';
 import { IDisposable } from './types/disposable.js';
 
 // New component imports
-import { HistoryManager } from './core/HistoryManager.js';
-import { ThoughtProcessor } from './core/ThoughtProcessor.js';
-import { ThoughtFormatter } from './core/ThoughtFormatter.js';
-import { ThoughtEvaluator } from './core/ThoughtEvaluator.js';
-import { ServerConfig } from './ServerConfig.js';
-import { StructuredLogger } from './logger/StructuredLogger.js';
-import { ConfigLoader } from './config/ConfigLoader.js';
-import { SkillWatcher } from './watchers/SkillWatcher.js';
-import { ToolWatcher } from './watchers/ToolWatcher.js';
-import { Container } from './di/Container.js';
-import { ToolRegistry } from './registry/ToolRegistry.js';
-import { SkillRegistry } from './registry/SkillRegistry.js';
 import { DiscoveryCache } from './cache/DiscoveryCache.js';
+import type { ConfigFileOptions } from './config/ConfigLoader.js';
+import { ConfigLoader } from './config/ConfigLoader.js';
+import { HistoryManager } from './core/HistoryManager.js';
+import { ThoughtEvaluator } from './core/ThoughtEvaluator.js';
+import { ThoughtFormatter } from './core/ThoughtFormatter.js';
+import { ThoughtProcessor } from './core/ThoughtProcessor.js';
+import { Container } from './di/Container.js';
+import { StructuredLogger } from './logger/StructuredLogger.js';
 import { Metrics } from './metrics/metrics.impl.js';
 import type { PersistenceBackend } from './persistence/PersistenceBackend.js';
 import { createPersistenceBackend } from './persistence/PersistenceFactory.js';
+import { SkillRegistry } from './registry/SkillRegistry.js';
+import { ToolRegistry } from './registry/ToolRegistry.js';
+import { ServerConfig } from './ServerConfig.js';
 import type { SseTransportOptions } from './transport/SseTransport.js';
-import type { ConfigFileOptions } from './config/ConfigLoader.js';
+import { SkillWatcher } from './watchers/SkillWatcher.js';
+import { ToolWatcher } from './watchers/ToolWatcher.js';
 
 export interface ServerOptions {
 	maxHistorySize?: number;

@@ -17,14 +17,14 @@
  * ```
  */
 
-import type { McpServer } from 'tmcp';
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
+import type { McpServer } from 'tmcp';
 import { safeParse } from 'valibot';
-import { JsonRpcRequestSchema } from '../schema.js';
 import type { IMetrics } from '../contracts/index.js';
-import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 import type { ConnectionPool } from '../pool/ConnectionPool.js';
+import { JsonRpcRequestSchema } from '../schema.js';
+import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 /**
  * SSE-specific transport options extending base TransportOptions.
  */

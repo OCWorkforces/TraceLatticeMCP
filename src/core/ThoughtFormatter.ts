@@ -8,10 +8,10 @@
  * @module formatter
  */
 
-import type { ThoughtData } from './thought.js';
+import chalk from 'chalk';
 import type { ThoughtType } from './reasoning.js';
 import type { StepRecommendation } from './step.js';
-import chalk from 'chalk';
+import type { ThoughtData } from './thought.js';
 
 /**
  * Formatter for thought data and step recommendations.

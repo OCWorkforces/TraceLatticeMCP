@@ -8,9 +8,9 @@
  * @module config
  */
 
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { PersistenceConfig } from '../persistence/PersistenceBackend.js';
 

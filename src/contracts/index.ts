@@ -8,11 +8,12 @@
  */
 
 export {
-	type IMetrics,
-	type IDiscoveryCache,
 	type DiscoveryCacheOptions,
-	type IThoughtProcessor,
+	type IDiscoveryCache,
+	type IMetrics,
 	type IServerConfig,
-	type IToolRegistry,
 	type ISkillRegistry,
+	type IThoughtProcessor,
+	type IToolRegistry,
 } from './interfaces.js';
+

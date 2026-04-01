@@ -1,5 +1,5 @@
-import type { ServiceRegistry, ServiceKey } from './ServiceRegistry.js';
 import type { IDisposable } from '../types/disposable.js';
+import type { ServiceKey, ServiceRegistry } from './ServiceRegistry.js';
 
 /**
  * Lightweight dependency injection container for managing service dependencies.

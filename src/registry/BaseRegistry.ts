@@ -9,13 +9,13 @@
  * @module registry
  */
 
-import type { Logger } from '../logger/StructuredLogger.js';
-import { NullLogger } from '../logger/NullLogger.js';
-import { DiscoveryCache } from '../cache/DiscoveryCache.js';
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { existsSync } from 'node:fs';
 import { parse as parseYaml } from 'yaml';
+import { DiscoveryCache } from '../cache/DiscoveryCache.js';
+import { NullLogger } from '../logger/NullLogger.js';
+import type { Logger } from '../logger/StructuredLogger.js';
 
 /**
  * Configuration options for creating a `BaseRegistry` instance.

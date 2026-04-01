@@ -17,6 +17,7 @@
  * ```
  */
 
+import type { ThoughtData } from '../core/thought.js';
 import {
 	MaxSessionsReachedError,
 	PoolTerminatedError,
@@ -24,7 +25,6 @@ import {
 	SessionNotFoundError,
 } from '../errors.js';
 import type { Logger } from '../logger/StructuredLogger.js';
-import type { ThoughtData } from '../core/thought.js';
 import type { IDisposable } from '../types/disposable.js';
 
 export interface SessionOptions {

@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { ToolAwareSequentialThinkingServer } from '../index.js';
-import type { ThoughtData } from '../core/thought.js';
-import type { ToolRecommendation } from '../types/tool.js';
-import type { SkillRecommendation } from '../types/skill.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import type { StepRecommendation } from '../core/step.js';
+import type { ThoughtData } from '../core/thought.js';
+import { ToolAwareSequentialThinkingServer } from '../index.js';
+import type { SkillRecommendation } from '../types/skill.js';
+import type { ToolRecommendation } from '../types/tool.js';
 
 /**
  * Helper function for creating test thoughts with minimal required fields
@@ -77,7 +77,7 @@ function parseProcessThoughtResult(result: unknown): {
 	return JSON.parse(content[0]!.text);
 }
 
-describe('sequentialthinking-tools MCP Tool', () => {
+describe('tracelattice MCP Tool', () => {
 	let server: ToolAwareSequentialThinkingServer;
 
 	beforeEach(() => {

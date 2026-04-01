@@ -8,8 +8,8 @@
  * @module ServerConfig
  */
 
-import { join } from 'node:path';
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { ConfigurationError } from './errors.js';
 import type { PersistenceConfig } from './persistence/PersistenceBackend.js';
 
