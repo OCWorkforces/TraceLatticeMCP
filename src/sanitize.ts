@@ -21,6 +21,7 @@ const DANGEROUS_TAG_REGEX =
  * Null bytes and C0 control characters (except tab \t, newline \n, carriage return \r).
  * These can cause truncation in C bindings, file I/O, and some databases.
  */
+// eslint-disable-next-line no-control-regex -- intentional: matches C0 control chars to strip them
 const CONTROL_CHAR_REGEX = /[\x00-\x08\x0B\x0C\x0E-\x1F]/g;
 
 /**

@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ThoughtProcessor } from '../core/ThoughtProcessor.js';
 import { ThoughtFormatter } from '../core/ThoughtFormatter.js';
 import { StructuredLogger } from '../logger/StructuredLogger.js';
+import type { Logger } from '../logger/StructuredLogger.js';
 import { MockHistoryManager } from './helpers/index.js';
 import type { ThoughtData } from '../core/thought.js';
 import type { IHistoryManager } from '../core/IHistoryManager.js';
@@ -813,13 +814,13 @@ describe('ThoughtProcessor', () => {
 	describe('thought_number > total_thoughts auto-adjust warning', () => {
 		it('should log warning and include in response when auto-adjusting total_thoughts', async () => {
 			const mockHistoryManager = new MockHistoryManager();
-			const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() };
+			const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn(), setLevel: vi.fn(), getLevel: vi.fn() } as Logger;
 
 			const proc = new ThoughtProcessor(
 				mockHistoryManager,
 				new ThoughtFormatter(),
 				new ThoughtEvaluator(),
-				mockLogger as any,
+				mockLogger,
 			);
 
 			const result = await proc.process({
@@ -853,13 +854,13 @@ describe('ThoughtProcessor', () => {
 
 		it('should not warn when thought_number <= total_thoughts', async () => {
 			const mockHistoryManager = new MockHistoryManager();
-			const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() };
+			const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn(), setLevel: vi.fn(), getLevel: vi.fn() } as Logger;
 
 			const proc = new ThoughtProcessor(
 				mockHistoryManager,
 				new ThoughtFormatter(),
 				new ThoughtEvaluator(),
-				mockLogger as any,
+				mockLogger,
 			);
 
 			const result = await proc.process({

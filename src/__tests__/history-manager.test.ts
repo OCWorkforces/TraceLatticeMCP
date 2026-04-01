@@ -3,7 +3,13 @@ import { ABSOLUTE_MAX_HISTORY_SIZE, HistoryManager } from '../core/HistoryManage
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
 import { createTestThought } from './helpers/index.js';
 import { useFakeTimers, useRealTimers } from './helpers/index.js';
+import type { Logger } from '../logger/StructuredLogger.js';
 import type { ThoughtData } from '../core/thought.js';
+
+/** Test-only interface to access private fields of HistoryManager. */
+interface HistoryManagerTestAccess {
+	_maxHistorySize: number;
+}
 
 class MockPersistence implements PersistenceBackend {
 	private _history: ThoughtData[] = [];
@@ -866,22 +872,22 @@ describe('ABSOLUTE_MAX_HISTORY_SIZE cap', () => {
 
 	it('should cap maxHistorySize to ABSOLUTE_MAX_HISTORY_SIZE when config exceeds it', () => {
 		const manager = new HistoryManager({ maxHistorySize: 50_000 });
-		expect((manager as any)._maxHistorySize).toBe(10_000);
+		expect((manager as unknown as HistoryManagerTestAccess)._maxHistorySize).toBe(10_000);
 	});
 
 	it('should not alter maxHistorySize when within cap', () => {
 		const manager = new HistoryManager({ maxHistorySize: 500 });
-		expect((manager as any)._maxHistorySize).toBe(500);
+		expect((manager as unknown as HistoryManagerTestAccess)._maxHistorySize).toBe(500);
 	});
 
 	it('should use default 1000 when no config provided', () => {
 		const manager = new HistoryManager({});
-		expect((manager as any)._maxHistorySize).toBe(1_000);
+		expect((manager as unknown as HistoryManagerTestAccess)._maxHistorySize).toBe(1_000);
 	});
 
 	it('should log warning when capping occurs', () => {
-		const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() };
-		new HistoryManager({ maxHistorySize: 50_000, logger: mockLogger as any });
+		const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), setLevel: vi.fn(), getLevel: vi.fn() } as Logger;
+		new HistoryManager({ maxHistorySize: 50_000, logger: mockLogger });
 		expect(mockLogger.warn).toHaveBeenCalledWith(
 			'maxHistorySize exceeds absolute maximum, capped',
 			expect.objectContaining({ requested: 50_000, applied: 10_000 })

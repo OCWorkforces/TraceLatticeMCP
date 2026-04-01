@@ -165,7 +165,7 @@ export class ThoughtFormatter {
 			current_step,
 		} = thoughtData;
 
-		let icon = '';
+		let icon: string;
 		let label = 'Thought';
 		let suffix = '';
 

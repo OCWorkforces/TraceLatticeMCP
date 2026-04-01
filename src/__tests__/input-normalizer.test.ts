@@ -42,8 +42,8 @@ describe('InputNormalizer', () => {
 			expect(normalized.current_step).toBeDefined();
 			expect(normalized.current_step?.recommended_tools).toBeDefined();
 			expect(normalized.current_step?.recommended_tools).toHaveLength(1);
-			// @ts-expect-error - Testing that the old singular key is removed
-			expect(normalized.current_step?.recommended_tool).toBeUndefined();
+			const step = normalized.current_step as Record<string, unknown> | undefined;
+			expect(step?.recommended_tool).toBeUndefined();
 		});
 
 		it('should preserve recommended_tools when already plural', () => {
@@ -92,8 +92,8 @@ describe('InputNormalizer', () => {
 			expect(normalized.current_step).toBeDefined();
 			expect(normalized.current_step?.recommended_skills).toBeDefined();
 			expect(normalized.current_step?.recommended_skills).toHaveLength(1);
-			// @ts-expect-error - Testing that the old singular key is removed
-			expect(normalized.current_step?.recommended_skill).toBeUndefined();
+			const step = normalized.current_step as Record<string, unknown> | undefined;
+			expect(step?.recommended_skill).toBeUndefined();
 		});
 
 		it('should preserve recommended_skills when already plural', () => {
