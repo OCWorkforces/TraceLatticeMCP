@@ -29,6 +29,33 @@ export type ThoughtType =
 	| 'meta'; // Metacognitive observation about the reasoning process itself
 
 /**
+ * A detected reasoning pattern — surfaced as metadata or a warning.
+ *
+ * @example
+ * ```typescript
+ * const signal: PatternSignal = {
+ *   pattern: 'hypothesis-without-verification',
+ *   severity: 'warning',
+ *   message: 'Hypothesis H1 has no matching verification thought.',
+ *   thought_range: [3, 7],
+ * };
+ * ```
+ */
+export interface PatternSignal {
+	/** Machine-readable pattern identifier. */
+	pattern: string;
+
+	/** Severity: 'warning' surfaces as a hint, 'info' is metadata only. */
+	severity: 'info' | 'warning';
+
+	/** Human-readable description of the detected pattern. */
+	message: string;
+
+	/** Thought number range [start, end] where the pattern was detected. */
+	thought_range: [number, number];
+}
+
+/**
  * Signals about reasoning quality computed from history.
  *
  * These metrics are derived from the thought chain and provide insight into
@@ -51,6 +78,13 @@ export type ThoughtType =
  *   has_hypothesis: true,
  *   has_verification: true,
  *   average_confidence: 0.85,
+ *   structural_quality: 0.72,
+ *   quality_components: {
+ *     type_diversity: 0.65,
+ *     verification_coverage: 1.0,
+ *     depth_efficiency: 0.6,
+ *     confidence_stability: 0.85,
+ *   },
  * };
  * ```
  */
@@ -75,6 +109,28 @@ export interface ConfidenceSignals {
 
 	/** Mean of explicit confidence values, null if none. */
 	average_confidence: number | null;
+
+	/**
+	 * Composite structural quality score (0-1).
+	 * Geometric mean of quality_components with floor of 0.01 per component.
+	 * Only present when history has ≥1 thought.
+	 */
+	structural_quality?: number;
+
+	/**
+	 * Individual quality components that feed into structural_quality.
+	 * Only present when structural_quality is present.
+	 */
+	quality_components?: {
+		/** Shannon entropy of thought_type distribution / log2(6), normalized 0-1. */
+		type_diversity: number;
+		/** verified_hypotheses / total_hypotheses. 1.0 if no hypotheses exist. */
+		verification_coverage: number;
+		/** max(chain_depth, branch_count + 1) / total_thoughts, clamped to [0, 1]. Branching is desirable. */
+		depth_efficiency: number;
+		/** 1 - stddev(confidence values). Defaults to 0.5 if no confidence values. */
+		confidence_stability: number;
+	};
 }
 
 /**

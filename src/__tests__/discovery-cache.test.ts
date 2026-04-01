@@ -378,4 +378,36 @@ describe('DiscoveryCache', () => {
 		});
 
 	});
+
+	describe('uncovered branch coverage', () => {
+		it('should handle LRU eviction when maxSize is 0 (lruKey undefined branch)', () => {
+			const cache = new DiscoveryCache<string>({ maxSize: 0, ttl: 60000 });
+			// maxSize 0 means size(0) >= maxSize(0) is true, but map is empty
+			// so lruKey is undefined → hits the falsy branch
+			cache.set('key', ['value']);
+			// The entry should still be added despite failing to evict
+			expect(cache.get('key')).toEqual(['value']);
+			cache.dispose();
+		});
+
+		it('should handle cleanup timer without unref method', () => {
+			// Mock setInterval to return an object without unref
+			const originalSetInterval = globalThis.setInterval;
+			const mockTimer = { ref: vi.fn() } as unknown as NodeJS.Timeout;
+			globalThis.setInterval = vi.fn(() => mockTimer) as unknown as typeof globalThis.setInterval;
+
+			const cache = new DiscoveryCache<string>({
+				maxSize: 100,
+				ttl: 60000,
+				cleanupInterval: 5000,
+			});
+
+			// The constructor should not throw even without unref
+			expect(cache).toBeDefined();
+			expect(globalThis.setInterval).toHaveBeenCalledOnce();
+
+			globalThis.setInterval = originalSetInterval;
+			// Don't call dispose since timer is mocked
+		});
+	});
 });

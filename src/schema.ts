@@ -113,8 +113,11 @@ Reasoning Enhancement Parameters:
 - reset_state: (Optional) When true, clears all state for the target session (or global state if no session_id) before processing the current thought. Use this to start a fresh reasoning chain without accumulated state from previous chains.
 
 Response Enrichment:
-- When reasoning fields are set, response includes confidence_signals (depth, revision/branch count, type distribution, avg confidence) and reasoning_stats (hypothesis tracking)
-
+- When reasoning fields are set, response includes confidence_signals (depth, revision/branch count, type distribution, avg confidence, structural_quality, quality_components) and reasoning_stats (hypothesis tracking)
+- confidence_signals.structural_quality: Composite 0-1 score — weighted geometric mean of type_diversity (0.3), verification_coverage (0.3), depth_efficiency (0.2), confidence_stability (0.2). All components floored at 0.01 to prevent collapse.
+- confidence_signals.quality_components: Individual metrics — type_diversity (Shannon entropy/log₂(6)), verification_coverage (verified/total hypotheses, 1.0 if none), depth_efficiency (max(chain_depth, branch_count+1)/total, branching rewarded), confidence_stability (1 - stddev(confidence), default 0.5)
+- reasoning_hints: (Conditional) Array of actionable hint strings from cross-thought pattern analysis. Only warning-severity patterns produce hints. Max 3 hints per response, with 3-thought cooldown per pattern per session. Present only when warnings are detected.
+- Detected patterns (internal, not in response): consecutive_without_verification (3+ regular thoughts without verification), unverified_hypothesis (hypothesis without verification within 3 thoughts), no_alternatives_explored (5+ thoughts with no critique/branches), monotonic_type (4+ consecutive same type), confidence_drift (3+ consecutive decreasing confidence), healthy_verification (hypothesis verified within 3 thoughts — info only)
 You should:
 1. Start with an initial estimate of needed thoughts, but be ready to adjust
 2. Feel free to question or revise previous thoughts

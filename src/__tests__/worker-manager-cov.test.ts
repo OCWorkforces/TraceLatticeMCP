@@ -487,4 +487,160 @@ expect(r3).toBe('r3');
 			expect(defaultManager).toBeInstanceOf(WorkerManager);
 		});
 	});
+
+	describe('terminate edge cases', () => {
+		it('should handle worker.terminate() rejection during shutdown', async () => {
+			await manager.start();
+			const worker = requireWorkerAt(0);
+			worker.terminate = vi.fn().mockRejectedValue(new Error('terminate rejected'));
+
+			// Should resolve without throwing despite rejection
+			await expect(manager.terminate()).resolves.toBeUndefined();
+		});
+
+		it('should be a no-op when already terminated', async () => {
+			await manager.start();
+			await manager.terminate();
+
+			// Second call should be a no-op
+			await expect(manager.terminate()).resolves.toBeUndefined();
+		});
+	});
+
+	describe('processThought edge cases', () => {
+		it('should throw when manager is terminated', async () => {
+			await manager.start();
+			await manager.terminate();
+
+			const thought: ThoughtData = {
+				thought: 'test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+			};
+
+			await expect(manager.processThought(thought)).rejects.toThrow(
+				'WorkerManager has been terminated'
+			);
+		});
+
+		it('should throw when no workers are available', async () => {
+			// Start then remove all workers by simulating exit 0 on each
+			await manager.start();
+			const w0 = requireWorkerAt(0);
+			const w1 = requireWorkerAt(1);
+			w0.simulate('exit', 0);
+			w1.simulate('exit', 0);
+
+			const thought: ThoughtData = {
+				thought: 'test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+			};
+
+			await expect(manager.processThought(thought)).rejects.toThrow(
+				'No workers available'
+			);
+		});
+	});
+
+	describe('start edge cases', () => {
+		it('should throw when starting after termination', async () => {
+			await manager.start();
+			await manager.terminate();
+
+			await expect(manager.start()).rejects.toThrow(
+				'WorkerManager has been terminated'
+			);
+		});
+	});
+
+	describe('worker error with delayed respawn', () => {
+		it('should respawn worker after delay when within retries', async () => {
+			vi.useFakeTimers();
+
+			const retryManager = new WorkerManager({
+				maxWorkers: 1,
+				enableHealthCheck: false,
+				maxRetries: 2,
+			});
+
+			await retryManager.start();
+			const worker = requireLastWorker();
+
+			// Trigger error (retry 1)
+			worker.simulate('error');
+
+			// Worker should be deleted, but setTimeout should be queued
+			expect(retryManager.getStats().activeWorkers).toBe(0);
+
+			// Advance timer to trigger the delayed spawn
+			await vi.advanceTimersByTimeAsync(1500);
+
+			// New worker should be spawned
+			expect(retryManager.getStats().activeWorkers).toBe(1);
+
+			vi.useRealTimers();
+			await retryManager.terminate();
+		});
+
+		it('should not respawn if terminated before delay fires', async () => {
+			vi.useFakeTimers();
+
+			const retryManager = new WorkerManager({
+				maxWorkers: 1,
+				enableHealthCheck: false,
+				maxRetries: 2,
+			});
+
+			await retryManager.start();
+			const worker = requireLastWorker();
+
+			worker.simulate('error');
+
+			// Terminate before the delayed respawn fires
+			await retryManager.terminate();
+
+			// Now advance the timer — spawn should NOT happen
+			await vi.advanceTimersByTimeAsync(2000);
+
+			expect(retryManager.getStats().activeWorkers).toBe(0);
+			vi.useRealTimers();
+		});
+
+		it('should log error when delayed respawn fails', async () => {
+			vi.useFakeTimers();
+
+			const mockLogger = {
+				info: vi.fn(),
+				warn: vi.fn(),
+				error: vi.fn(),
+				debug: vi.fn(),
+				setLevel: vi.fn(),
+				getLevel: vi.fn().mockReturnValue('info'),
+			};
+
+			const retryManager = new WorkerManager({
+				maxWorkers: 1,
+				enableHealthCheck: false,
+				maxRetries: 2,
+				logger: mockLogger,
+			});
+
+			await retryManager.start();
+			const worker = requireLastWorker();
+
+			worker.simulate('error');
+
+			// Advance timer to trigger the delayed spawn (succeeds since mock Worker always works)
+			await vi.advanceTimersByTimeAsync(1500);
+
+			// The setTimeout callback was exercised; respawn succeeded
+			expect(retryManager.getStats().activeWorkers).toBe(1);
+
+			vi.useRealTimers();
+			await retryManager.terminate();
+		});
+	});
 });

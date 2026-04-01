@@ -118,6 +118,74 @@ describe('SkillWatcher', () => {
 			expect(watcher).toBeInstanceOf(SkillWatcher);
 			watcher.stop();
 		});
+
+		it('should use noop logger that handles add events without errors', async () => {
+			const watcher = new SkillWatcher(mockRegistry);
+			const addHandler = eventHandlers.get('add');
+			expect(addHandler).toBeDefined();
+
+			// Trigger event on watcher with noop logger — should not throw
+			await addHandler!('/path/to/.claude/skills/test-skill.md');
+			expect(mockRegistry.discoverAsync).toHaveBeenCalledTimes(1);
+			watcher.stop();
+		});
+
+		it('should use noop logger that handles change events without errors', async () => {
+			const watcher = new SkillWatcher(mockRegistry);
+			const changeHandler = eventHandlers.get('change');
+			expect(changeHandler).toBeDefined();
+
+			await changeHandler!('/path/to/.claude/skills/test-skill.md');
+			expect(mockRegistry.discoverAsync).toHaveBeenCalledTimes(1);
+			watcher.stop();
+		});
+
+		it('should use noop logger that handles unlink events without errors', async () => {
+			const watcher = new SkillWatcher(mockRegistry);
+			const unlinkHandler = eventHandlers.get('unlink');
+			expect(unlinkHandler).toBeDefined();
+
+			await unlinkHandler!('/path/to/.claude/skills/remove-skill.md');
+			expect(mockRegistry.removeSkillByName).toHaveBeenCalledWith('remove-skill.md');
+			watcher.stop();
+		});
+
+		it('should use noop logger verbose add path without errors', async () => {
+			process.env.WATCHER_VERBOSE = 'true';
+			const watcher = new SkillWatcher(mockRegistry);
+			const addHandler = eventHandlers.get('add');
+
+			// With verbose + noop logger, log() calls _logger.error() which is a no-op
+			await addHandler!('/path/to/.claude/skills/verbose-skill.md');
+			expect(mockRegistry.discoverAsync).toHaveBeenCalledTimes(1);
+
+			delete process.env.WATCHER_VERBOSE;
+			watcher.stop();
+		});
+
+		it('should use noop logger verbose change path without errors', async () => {
+			process.env.WATCHER_VERBOSE = 'true';
+			const watcher = new SkillWatcher(mockRegistry);
+			const changeHandler = eventHandlers.get('change');
+
+			await changeHandler!('/path/to/.claude/skills/verbose-change.md');
+			expect(mockRegistry.discoverAsync).toHaveBeenCalledTimes(1);
+
+			delete process.env.WATCHER_VERBOSE;
+			watcher.stop();
+		});
+
+		it('should use noop logger verbose unlink path without errors', async () => {
+			process.env.WATCHER_VERBOSE = 'true';
+			const watcher = new SkillWatcher(mockRegistry);
+			const unlinkHandler = eventHandlers.get('unlink');
+
+			await unlinkHandler!('/path/to/.claude/skills/verbose-unlink.md');
+			expect(mockRegistry.removeSkillByName).toHaveBeenCalledWith('verbose-unlink.md');
+
+			delete process.env.WATCHER_VERBOSE;
+			watcher.stop();
+		});
 	});
 
 	describe('start (auto-setup)', () => {
@@ -314,6 +382,58 @@ describe('SkillWatcher', () => {
 
 			await addHandler!('/path/to/.DS_Store');
 			// Logging is suppressed for .DS_Store
+			expect(mockLogger.error).not.toHaveBeenCalled();
+
+			delete process.env.WATCHER_VERBOSE;
+			watcher.stop();
+		});
+
+		it('should log change events when WATCHER_VERBOSE is true', async () => {
+			process.env.WATCHER_VERBOSE = 'true';
+			const watcher = new SkillWatcher(mockRegistry, mockLogger);
+			const changeHandler = eventHandlers.get('change');
+
+			await changeHandler!('/path/to/skills/modified.md');
+			expect(mockLogger.error).toHaveBeenCalledWith(
+				expect.stringContaining('[Watcher] Skill modified: modified.md')
+			);
+
+			delete process.env.WATCHER_VERBOSE;
+			watcher.stop();
+		});
+
+		it('should log unlink events when WATCHER_VERBOSE is true', async () => {
+			process.env.WATCHER_VERBOSE = 'true';
+			const watcher = new SkillWatcher(mockRegistry, mockLogger);
+			const unlinkHandler = eventHandlers.get('unlink');
+
+			await unlinkHandler!('/path/to/skills/removed.md');
+			expect(mockLogger.error).toHaveBeenCalledWith(
+				expect.stringContaining('[Watcher] Skill removed: removed.md')
+			);
+
+			delete process.env.WATCHER_VERBOSE;
+			watcher.stop();
+		});
+
+		it('should not log .DS_Store change events even when verbose', async () => {
+			process.env.WATCHER_VERBOSE = 'true';
+			const watcher = new SkillWatcher(mockRegistry, mockLogger);
+			const changeHandler = eventHandlers.get('change');
+
+			await changeHandler!('/path/to/.DS_Store');
+			expect(mockLogger.error).not.toHaveBeenCalled();
+
+			delete process.env.WATCHER_VERBOSE;
+			watcher.stop();
+		});
+
+		it('should not log .DS_Store unlink events even when verbose', async () => {
+			process.env.WATCHER_VERBOSE = 'true';
+			const watcher = new SkillWatcher(mockRegistry, mockLogger);
+			const unlinkHandler = eventHandlers.get('unlink');
+
+			await unlinkHandler!('/path/to/.DS_Store');
 			expect(mockLogger.error).not.toHaveBeenCalled();
 
 			delete process.env.WATCHER_VERBOSE;

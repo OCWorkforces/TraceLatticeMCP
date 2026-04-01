@@ -119,6 +119,50 @@ describe('ToolWatcher', () => {
 			expect(watcher).toBeInstanceOf(ToolWatcher);
 			watcher.stop();
 		});
+
+		it('should use noop logger that handles add events without errors', async () => {
+			const watcher = new ToolWatcher(mockRegistry);
+			const addHandler = eventHandlers.get('add');
+			expect(addHandler).toBeDefined();
+
+			await addHandler!('/path/to/.claude/tools/noop-tool.tool.md');
+			expect(mockRegistry.discoverAsync).toHaveBeenCalledTimes(1);
+			watcher.stop();
+		});
+
+		it('should use noop logger that handles unlink events without errors', async () => {
+			const watcher = new ToolWatcher(mockRegistry);
+			const unlinkHandler = eventHandlers.get('unlink');
+			expect(unlinkHandler).toBeDefined();
+
+			await unlinkHandler!('/path/to/.claude/tools/noop-tool.tool.md');
+			expect(mockRegistry.removeTool).toHaveBeenCalledWith('noop-tool');
+			watcher.stop();
+		});
+
+		it('should use noop logger error path when discoverAsync fails', async () => {
+			(mockRegistry.discoverAsync as ReturnType<typeof vi.fn>).mockRejectedValue(
+				new Error('Noop discovery failed')
+			);
+			const watcher = new ToolWatcher(mockRegistry);
+			const addHandler = eventHandlers.get('add');
+
+			// Should not throw — error is caught and logged to noop logger
+			await addHandler!('/path/to/.claude/tools/fail.tool.md');
+			watcher.stop();
+		});
+
+		it('should use noop logger error path when removeTool fails', async () => {
+			(mockRegistry.removeTool as ReturnType<typeof vi.fn>).mockImplementation(() => {
+				throw new Error('Noop remove failed');
+			});
+			const watcher = new ToolWatcher(mockRegistry);
+			const unlinkHandler = eventHandlers.get('unlink');
+
+			// Should not throw — error is caught and logged to noop logger
+			await unlinkHandler!('/path/to/.claude/tools/fail.tool.md');
+			watcher.stop();
+		});
 	});
 
 	describe('start (auto-setup)', () => {
@@ -343,4 +387,15 @@ describe('ToolWatcher', () => {
 			watcher.stop();
 		});
 	});
+
+		it('should handle .tool.md file where toolName becomes empty string', async () => {
+			const watcher = new ToolWatcher(mockRegistry, mockLogger);
+			const unlinkHandler = eventHandlers.get('unlink');
+
+			// File named exactly '.tool.md' results in empty string toolName
+			await unlinkHandler!('/path/to/.claude/tools/.tool.md');
+			// Empty string is falsy, so removeTool should not be called
+			expect(mockRegistry.removeTool).not.toHaveBeenCalled();
+			watcher.stop();
+		});
 });

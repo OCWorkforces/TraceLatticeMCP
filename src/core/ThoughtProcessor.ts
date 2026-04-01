@@ -15,6 +15,7 @@ import { normalizeInput } from './InputNormalizer.js';
 import type { ThoughtData } from './thought.js';
 import type { ThoughtEvaluator } from './ThoughtEvaluator.js';
 import { ThoughtFormatter } from './ThoughtFormatter.js';
+import type { PatternSignal } from './reasoning.js';
 
 /**
  * The return type expected by MCP tool invocations.
@@ -100,6 +101,12 @@ export class ThoughtProcessor {
 	private readonly _thoughtEvaluator: ThoughtEvaluator;
 
 	/**
+	 * Per-session cooldown tracker: session_id → pattern → last_fired_thought_number.
+	 * Prevents re-firing the same pattern hint within 3 thoughts.
+	 */
+	private _hintCooldowns = new Map<string, Map<string, number>>();
+
+	/**
 	 * Creates a new ThoughtProcessor instance.
 	 *
 	 * @param historyManager - The history manager for storing thoughts
@@ -138,6 +145,45 @@ export class ThoughtProcessor {
 	}
 
 	/**
+	 * Generate actionable hints from pattern signals.
+	 * Rules: max 3 hints, warning-severity only, cooldown of 3 thoughts per pattern per session.
+	 *
+	 * @param patterns - Detected pattern signals
+	 * @param currentThoughtNumber - The current thought number being processed
+	 * @param sessionId - Session identifier for cooldown scoping
+	 * @returns Array of hint strings (max 3), empty if no warnings
+	 */
+	private _generateHints(
+		patterns: PatternSignal[],
+		currentThoughtNumber: number,
+		sessionId?: string
+	): string[] {
+		const warnings = patterns.filter((p) => p.severity === 'warning');
+		if (warnings.length === 0) return [];
+
+		const sessionKey = sessionId ?? '__global__';
+		if (!this._hintCooldowns.has(sessionKey)) {
+			this._hintCooldowns.set(sessionKey, new Map());
+		}
+		const cooldowns = this._hintCooldowns.get(sessionKey)!;
+
+		const hints: string[] = [];
+		for (const warning of warnings) {
+			if (hints.length >= 3) break;
+
+			const lastFired = cooldowns.get(warning.pattern);
+			if (lastFired !== undefined && currentThoughtNumber - lastFired < 3) {
+				continue; // Still in cooldown
+			}
+
+			hints.push(warning.message);
+			cooldowns.set(warning.pattern, currentThoughtNumber);
+		}
+
+		return hints;
+	}
+
+	/**
 	 * Processes a thought through the sequential thinking pipeline.
 	 *
 	 * This method validates the input, adds it to history, formats the output,
@@ -160,8 +206,9 @@ export class ThoughtProcessor {
 	 *   - `quality_score` — Self-assessed quality score 0-1 (optional)
 	 *   - `confidence` — Self-assessed confidence 0-1 (optional)
 	 *   - `hypothesis_id` — Hypothesis link for verification chains (optional)
-	 *   - `confidence_signals` — Computed reasoning quality signals
-	 *   - `reasoning_stats` — Aggregated reasoning analytics
+ *   - `confidence_signals` — Computed reasoning quality signals (includes structural_quality and quality_components)
+ *   - `reasoning_stats` — Aggregated reasoning analytics
+ *   - `reasoning_hints` — (Conditional) Actionable hints from pattern analysis, max 3, warning-severity only (optional)
 	 *
 	 * @example
 	 * ```typescript
@@ -209,14 +256,28 @@ export class ThoughtProcessor {
 			const formattedThought = this.thoughtFormatter.formatThought(checkedInput);
 			this.log(formattedThought, { sessionId: sessionId ?? '__global__' });
 
-			// Compute quality signals
+			// Compute quality signals — fetch history/branches once
+			const history = this.historyManager.getHistory(sessionId);
+			const branches = this.historyManager.getBranches(sessionId);
+
 			const confidenceSignals = this._thoughtEvaluator.computeConfidenceSignals(
-				this.historyManager.getHistory(sessionId),
-				this.historyManager.getBranches(sessionId)
+				history,
+				branches
 			);
 			const reasoningStats = this._thoughtEvaluator.computeReasoningStats(
-				this.historyManager.getHistory(sessionId),
-				this.historyManager.getBranches(sessionId)
+				history,
+				branches
+			);
+
+			// Detect reasoning patterns and generate hints
+			const patternSignals = this._thoughtEvaluator.computePatternSignals(
+				history,
+				branches
+			);
+			const reasoningHints = this._generateHints(
+				patternSignals,
+				checkedInput.thought_number,
+				sessionId
 			);
 
 			return {
@@ -242,6 +303,7 @@ export class ThoughtProcessor {
 							hypothesis_id: checkedInput.hypothesis_id,
 							confidence_signals: confidenceSignals,
 							reasoning_stats: reasoningStats,
+							...(reasoningHints.length > 0 && { reasoning_hints: reasoningHints }),
 							...(allWarnings.length > 0 && { warnings: allWarnings }),
 							...(sessionId ? { session_id: sessionId } : {}),
 						},

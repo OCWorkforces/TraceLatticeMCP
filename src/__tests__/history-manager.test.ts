@@ -894,3 +894,143 @@ describe('ABSOLUTE_MAX_HISTORY_SIZE cap', () => {
 		);
 	});
 });
+
+describe('HistoryManager — uncovered branches', () => {
+	afterEach(() => {
+		useRealTimers();
+	});
+
+	describe('backpressure logging (line 382)', () => {
+		it('should log backpressure warning when buffer is full and flush is in progress', async () => {
+			useFakeTimers();
+			const persistence = new MockPersistence();
+			// Make saveThought hang so _isFlushing stays true
+			let resolveSave!: () => void;
+			const savePromise = new Promise<void>((resolve) => { resolveSave = resolve; });
+			persistence.saveThought = async () => { await savePromise; };
+			const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), setLevel: vi.fn(), getLevel: vi.fn() } as Logger;
+			const manager = new HistoryManager({
+				persistence,
+				persistenceBufferSize: 1,
+				persistenceFlushInterval: 60000,
+				logger: mockLogger,
+			});
+
+			// Thought 1: pushes to buffer (len=1), triggers _flushBuffer.
+			// _flushBuffer splices buffer (len→0), sets _isFlushing=true, hangs on saveThought.
+			manager.addThought(createTestThought({ thought_number: 1 }));
+			await vi.advanceTimersByTimeAsync(0);
+
+			// Thought 2: pushes to buffer (len=1 again), triggers _flushBuffer.
+			// _flushBuffer sees _isFlushing=true → returns immediately.
+			// Buffer stays at len=1.
+			manager.addThought(createTestThought({ thought_number: 2 }));
+
+			// Thought 3: _bufferForPersistence checks buffer.length(1) >= 1 && _isFlushing(true)
+			// → backpressure log fires!
+			manager.addThought(createTestThought({ thought_number: 3 }));
+
+			expect(mockLogger.info).toHaveBeenCalledWith(
+				'Write buffer full and flush in progress, applying backpressure',
+				expect.objectContaining({
+					bufferSize: expect.any(Number),
+					maxSize: 1,
+				})
+			);
+
+			// Unblock the flush
+			resolveSave();
+			await vi.advanceTimersByTimeAsync(0);
+			await manager.shutdown();
+		});
+	});
+
+	describe('loadFromPersistence error catch (line 677)', () => {
+		it('should catch and log when persistence throws during load', async () => {
+			const persistence = new MockPersistence();
+			// healthy returns true, but loadHistory throws
+			persistence.loadHistory = async () => { throw new Error('Disk I/O error'); };
+			const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), setLevel: vi.fn(), getLevel: vi.fn() } as Logger;
+			const manager = new HistoryManager({ persistence, logger: mockLogger });
+
+			await manager.loadFromPersistence();
+
+			expect(mockLogger.info).toHaveBeenCalledWith(
+				'Failed to load from persistence',
+				expect.objectContaining({ error: 'Disk I/O error' })
+			);
+			expect(manager.getHistoryLength()).toBe(0);
+		});
+
+		it('should catch non-Error throws during load', async () => {
+			const persistence = new MockPersistence();
+			persistence.loadHistory = async () => { throw 'string error'; };
+			const mockLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn(), setLevel: vi.fn(), getLevel: vi.fn() } as Logger;
+			const manager = new HistoryManager({ persistence, logger: mockLogger });
+
+			await manager.loadFromPersistence();
+
+			expect(mockLogger.info).toHaveBeenCalledWith(
+				'Failed to load from persistence',
+				expect.objectContaining({ error: 'string error' })
+			);
+		});
+	});
+
+	describe('_startFlushTimer early return (line 745)', () => {
+		it('should not create a second flush timer if one already exists', () => {
+			useFakeTimers();
+			const persistence = new MockPersistence();
+			// Constructor starts flush timer when persistence is enabled
+			const manager = new HistoryManager({ persistence });
+
+			// Access private _flushTimer to verify it's set
+			const timer1 = (manager as unknown as { _flushTimer: ReturnType<typeof setInterval> | null })._flushTimer;
+			expect(timer1).not.toBeNull();
+
+			// Calling _startFlushTimer again should be a no-op
+			(manager as unknown as { _startFlushTimer: () => void })._startFlushTimer();
+
+			const timer2 = (manager as unknown as { _flushTimer: ReturnType<typeof setInterval> | null })._flushTimer;
+			expect(timer2).toBe(timer1);
+
+			manager.shutdown();
+		});
+	});
+
+	describe('_evictExcessSessions break branch (line 837)', () => {
+		it('should break when only __global__ session remains during LRU eviction', () => {
+			const manager = new HistoryManager({});
+
+			// Access private _sessions map directly
+			const sessions = (manager as unknown as { _sessions: Map<string, unknown> })._sessions;
+
+			// Seed __global__ session
+			manager.addThought(createTestThought({ thought_number: 1 }));
+
+			// Now manually set _sessions size > MAX_SESSIONS by lowering the static field temporarily
+			// Instead, we force the condition by adding dummy entries
+			// Actually, we just need > MAX_SESSIONS sessions with only __global__ as non-deletable.
+			// The break fires when the loop iterates through sessions but only __global__ is left
+			// and oldestKey stays null. This means all sessions except __global__ are skipped.
+
+			// Simplest approach: override MAX_SESSIONS to 0 via Object.defineProperty
+			// which forces the while loop to trigger, but since only __global__ exists, oldestKey=null → break
+			const originalMaxSessions = (HistoryManager as unknown as { MAX_SESSIONS: number }).MAX_SESSIONS;
+			Object.defineProperty(HistoryManager, 'MAX_SESSIONS', { value: 0, writable: true, configurable: true });
+
+			try {
+				// Trigger _evictExcessSessions by creating a new session
+				// _getSession() calls _evictExcessSessions() when creating new sessions
+				// Since MAX_SESSIONS=0 and we have __global__ (size=1 > 0), it enters the while loop.
+				// The for loop only sees __global__, skips it, so oldestKey stays null → break
+				manager.addThought(createTestThought({ thought_number: 2, session_id: 'trigger' }));
+
+				// If we got here without infinite loop, the break branch was hit
+				expect(sessions.size).toBeGreaterThan(0);
+			} finally {
+				Object.defineProperty(HistoryManager, 'MAX_SESSIONS', { value: originalMaxSessions, writable: true, configurable: true });
+			}
+		});
+	});
+});

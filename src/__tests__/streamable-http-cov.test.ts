@@ -605,3 +605,431 @@ describe('StreamableHttpTransport — coverage gaps', () => {
 		});
 	});
 });
+
+describe('StreamableHttpTransport — error handling coverage', () => {
+	let transport: StreamableHttpTransport;
+	let port: number;
+
+	beforeEach(async () => {
+		port = 8000 + Math.floor(Math.random() * 1000);
+	});
+
+	afterEach(async () => {
+		if (transport) {
+			await transport.stop(1000);
+		}
+	});
+
+	describe('_handleMcpPost catch block (internal error)', () => {
+		it('should return JSON-RPC internal error when mcpServer.receive throws', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: false,
+			});
+			// Connect with a broken mcpServer that throws on receive
+			await transport.connect({} as McpServer);
+
+			const res = await httpRequest({
+				port,
+				headers: { 'content-type': 'application/json' },
+				body: jsonRpcBody(1, 'tools/list'),
+			});
+
+			expect(res.statusCode).toBe(200);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error).toBeDefined();
+			expect(parsed.error.code).toBe(-32603);
+			expect(parsed.error.message).toBe('Internal error');
+			expect(parsed.error.data).toBeDefined();
+		});
+
+		it('should handle non-Error thrown objects in catch', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: false,
+			});
+			// Use a mcpServer with receive that throws a string
+			const brokenServer = {
+				receive: () => {
+					throw 'string error';
+				},
+			} as unknown as McpServer;
+			await transport.connect(brokenServer);
+
+			const res = await httpRequest({
+				port,
+				headers: { 'content-type': 'application/json' },
+				body: jsonRpcBody(1, 'tools/list'),
+			});
+
+			expect(res.statusCode).toBe(200);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.data).toBe('string error');
+		});
+	});
+
+	describe('stop() force-close timeout path', () => {
+		it('should force-close and log warning when server.close is slow', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: true,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			// Create a session
+			const postRes = await httpRequest({
+				port,
+				headers: { 'content-type': 'application/json' },
+				body: jsonRpcBody(1, 'tools/list'),
+			});
+			const sessionId = postRes.headers['mcp-session-id'] as string;
+
+			// Open a long-lived SSE connection to keep server.close() from completing
+			const sseReq = request(
+				{
+					hostname: '127.0.0.1',
+					port,
+					path: '/mcp',
+					method: 'GET',
+					headers: { 'mcp-session-id': sessionId },
+				},
+				() => {}
+			);
+			sseReq.on('error', () => {});
+			sseReq.end();
+
+			await new Promise((r) => setTimeout(r, 100));
+
+			// Stop with a very short timeout to trigger the force-close path
+			// The forceClose setTimeout fires before server.close() callback
+			const stopPromise = transport.stop(50);
+			await expect(stopPromise).resolves.toBeUndefined();
+
+			sseReq.destroy();
+		});
+	});
+
+	describe('stop() with no server (early stop)', () => {
+		it('should resolve immediately when no server exists', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+			});
+			// Don't call connect() — _server is null
+			const stopPromise = transport.stop();
+			await expect(stopPromise).resolves.toBeUndefined();
+		});
+	});
+
+	describe('mcpServer not ready', () => {
+		it('should return 503 when mcpServer is null', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: false,
+			});
+			await transport.connect({} as McpServer);
+
+			// Force _mcpServer to null
+			(transport as unknown as { _mcpServer: null })._mcpServer = null;
+
+			const res = await httpRequest({
+				port,
+				headers: { 'content-type': 'application/json' },
+				body: jsonRpcBody(1, 'tools/list'),
+			});
+			expect(res.statusCode).toBe(503);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.message).toBe('Server not ready');
+		});
+	});
+
+	describe('broadcastToSession with unknown session', () => {
+		it('should be a no-op for unknown session ID', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: true,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			// Should not throw for non-existent session
+			expect(() => {
+				transport.broadcastToSession('nonexistent-session', 'test', { hello: 'world' });
+			}).not.toThrow();
+		});
+	});
+
+	describe('stateless mode — GET /mcp returns 405', () => {
+		it('should reject GET /mcp in stateless mode', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: false,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			const res = await httpRequest({
+				port,
+				method: 'GET',
+				path: '/mcp',
+			});
+			expect(res.statusCode).toBe(405);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.message).toContain('stateless');
+		});
+	});
+
+	describe('session validation', () => {
+		it('should return 400 for invalid Mcp-Session-Id format', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: true,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			const res = await httpRequest({
+				port,
+				headers: {
+					'content-type': 'application/json',
+					'mcp-session-id': 'invalid!@#$%',
+				},
+				body: jsonRpcBody(1, 'tools/list'),
+			});
+			expect(res.statusCode).toBe(400);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.message).toContain('Invalid Mcp-Session-Id');
+		});
+
+		it('should return 404 for unknown Mcp-Session-Id', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: true,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			const res = await httpRequest({
+				port,
+				headers: {
+					'content-type': 'application/json',
+					'mcp-session-id': 'valid-but-nonexistent-session-id',
+				},
+				body: jsonRpcBody(1, 'tools/list'),
+			});
+			expect(res.statusCode).toBe(404);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.message).toContain('Session not found');
+		});
+	});
+
+	describe('_sendJsonRpcError with extra data', () => {
+		it('should include extra properties in error response', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: false,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			// Invalid JSON triggers the parse error path which uses _sendJsonRpcError
+			const res = await httpRequest({
+				port,
+				headers: { 'content-type': 'application/json' },
+				body: '{invalid json',
+			});
+			expect(res.statusCode).toBe(200);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.code).toBe(-32700);
+			expect(parsed.error.message).toBe('Parse error');
+		});
+	});
+
+	describe('body size limit enforcement', () => {
+		it('should return 413 when body exceeds max size', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: false,
+				maxBodySize: 50,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			const res = await httpRequest({
+				port,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					jsonrpc: '2.0',
+					id: 1,
+					method: 'tools/list',
+					params: { data: 'x'.repeat(200) },
+				}),
+			});
+			expect(res.statusCode).toBe(413);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.message).toContain('too large');
+		});
+	});
+
+	describe('JSON-RPC validation error', () => {
+		it('should return validation error for invalid JSON-RPC schema', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: false,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			// Valid JSON but not valid JSON-RPC
+			const res = await httpRequest({
+				port,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ notJsonRpc: true }),
+			});
+			expect(res.statusCode).toBe(200);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.code).toBe(-32600);
+			expect(parsed.error.message).toBe('Invalid Request');
+		});
+	});
+
+	describe('notification response (no body, 202)', () => {
+		it('should return 202 for notification without response', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: true,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			// Notification (no id) — server returns null response
+			const res = await httpRequest({
+				port,
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({
+					jsonrpc: '2.0',
+					method: 'notifications/initialized',
+				}),
+			});
+			// 200 or 202 are both acceptable
+			expect([200, 202]).toContain(res.statusCode);
+		});
+	});
+
+	describe('readiness check fallback', () => {
+		it('should return default ok readiness when no healthChecker', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			const res = await httpRequest({ port, method: 'GET', path: '/ready' });
+			expect(res.statusCode).toBe(200);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.status).toBe('ok');
+			expect(parsed.components).toBeDefined();
+		});
+	});
+
+	describe('metrics endpoint', () => {
+		it('should return 404 when no metricsProvider', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			const res = await httpRequest({ port, method: 'GET', path: '/metrics' });
+			expect(res.statusCode).toBe(404);
+		});
+	});
+
+	describe('unsupported method on MCP endpoint', () => {
+		it('should return 405 for PUT /mcp', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			const res = await httpRequest({ port, method: 'PUT', path: '/mcp' });
+			expect(res.statusCode).toBe(405);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.message).toContain('Method not allowed');
+		});
+	});
+
+	describe('GET /mcp SSE with missing session header', () => {
+		it('should return 400 when GET /mcp has no Mcp-Session-Id', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: true,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			const res = await httpRequest({ port, method: 'GET', path: '/mcp' });
+			expect(res.statusCode).toBe(400);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.message).toContain('Missing Mcp-Session-Id');
+		});
+	});
+
+	describe('GET /mcp SSE with unknown session', () => {
+		it('should return 404 when GET /mcp has unknown Mcp-Session-Id', async () => {
+			transport = new StreamableHttpTransport({
+				port,
+				host: '127.0.0.1',
+				enableRateLimit: false,
+				stateful: true,
+			});
+			const mcpServer = createMockMcpServer();
+			await transport.connect(mcpServer);
+
+			const res = await httpRequest({
+				port,
+				method: 'GET',
+				path: '/mcp',
+				headers: { 'mcp-session-id': 'unknown-session-id' },
+			});
+			expect(res.statusCode).toBe(404);
+			const parsed = JSON.parse(res.body);
+			expect(parsed.error.message).toContain('Session not found');
+		});
+	});
+});

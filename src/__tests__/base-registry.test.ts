@@ -606,4 +606,75 @@ describe('BaseRegistry', () => {
 			expect(all2).toHaveLength(2);
 		});
 	});
+
+	// ==================== Uncovered Branch Coverage ====================
+	describe('Uncovered Branch Coverage', () => {
+		beforeEach(() => {
+			mockReaddir.mockReset();
+			mockReadFile.mockReset();
+			mockExistsSync.mockReset();
+		});
+
+		it('discoverAsync returns 0 when discovered but cache returns null', async () => {
+			const cache = new DiscoveryCache<TestItem>({ maxSize: 50, ttl: 300000 });
+			registry = createRegistry({ searchDirs: ['/test/dir'], cache });
+			registry.setParseFrontmatter(() => ({ name: 'item', value: 1 }));
+
+			mockExistsSync.mockReturnValue(true);
+			mockReaddir.mockResolvedValue([{ name: 'x.test.md', isFile: () => true }] as never);
+			mockReadFile.mockResolvedValue('content' as never);
+
+			await registry.discoverAsync();
+
+			// Invalidate cache so 'all' returns null, triggering ?? 0 branch
+			cache.invalidate('all');
+
+			const count = await registry.discoverAsync();
+			// cached?.length ?? 0 → null?.length ?? 0 → 0
+			expect(count).toBe(0);
+			cache.dispose();
+		});
+
+		it('handles non-Error thrown during file read', async () => {
+			registry = createRegistry({ searchDirs: ['/test/dir'] });
+
+			mockExistsSync.mockReturnValue(true);
+			mockReaddir.mockResolvedValue([{ name: 'bad.test.md', isFile: () => true }] as never);
+			// Throw a string (not an Error) to hit String(readError) branch
+			mockReadFile.mockRejectedValue('string error');
+
+			const count = await registry.discoverAsync();
+			expect(count).toBe(0);
+		});
+
+		it('handles non-Error thrown during readdir', async () => {
+			registry = createRegistry({ searchDirs: ['/fail/dir'] });
+
+			mockExistsSync.mockReturnValue(true);
+			// Throw a string (not an Error) to hit String(error) branch in directory scan
+			mockReaddir.mockRejectedValue('directory error string');
+
+			const count = await registry.discoverAsync();
+			expect(count).toBe(0);
+		});
+
+		it('setAll handles non-Error thrown during add', async () => {
+			// Create a registry where add throws a non-Error value
+			const origAdd = registry.add.bind(registry);
+			let callCount = 0;
+			registry.add = (item: TestItem) => {
+				callCount++;
+				if (callCount === 2) {
+					// eslint-disable-next-line no-throw-literal
+					throw 'non-error string';
+				}
+				origAdd(item);
+			};
+
+			registry.setAll([makeItem('good', 1), makeItem('bad', 2), makeItem('also-good', 3)]);
+			// First item added, second throws non-Error (logged via String()), third added
+			expect(registry.has('good')).toBe(true);
+			expect(registry.has('bad')).toBe(false);
+		});
+	});
 });

@@ -230,4 +230,196 @@ describe('ConnectionPool additional coverage', () => {
 			pool.terminate();
 		})
 	})
+
+	describe('Session timeout timer with existing timer', () => {
+		it('should clear existing timer when _startTimeout is called again (via process)', async () => {
+			vi.useFakeTimers();
+
+			const pool = new ConnectionPool({
+				maxSessions: 5,
+				sessionTimeout: 5000,
+				autoCleanup: false,
+				serverFactory: createMockServerFactory(),
+			});
+
+			const sessionId = await pool.createSession();
+
+			const thought: ThoughtData = {
+				thought: 'test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+			};
+
+			// First process call sets timeout timer
+			await pool.process(sessionId, thought);
+
+			// Second process call should clear existing timer and reset
+			await pool.process(sessionId, thought);
+
+			// Session should still be active
+			expect(pool.getSessionInfo(sessionId)?.isActive).toBe(true);
+
+			await pool.terminate();
+			vi.useRealTimers();
+		});
+	});
+
+	describe('cleanup error handling', () => {
+		it('should handle session.close() error during auto cleanup', async () => {
+			vi.useFakeTimers();
+
+			const failingFactory = vi.fn().mockImplementation(async () => ({
+				processThought: vi.fn().mockResolvedValue({
+					content: [{ type: 'text', text: 'test' }],
+				}),
+				stop: vi.fn().mockImplementation(() => {
+					throw new Error('stop failed');
+				}),
+			}));
+
+			const pool = new ConnectionPool({
+				maxSessions: 5,
+				sessionTimeout: 100,
+				autoCleanup: true,
+				cleanupInterval: 50,
+				serverFactory: failingFactory,
+			});
+
+			await pool.createSession();
+
+			// Advance past timeout + cleanup to trigger the error path
+			await vi.advanceTimersByTimeAsync(200);
+
+			// Pool should still be running despite the error
+			expect(pool.isRunning()).toBe(true);
+
+			await pool.terminate();
+			vi.useRealTimers();
+		});
+	});
+
+	describe('getActiveSessions', () => {
+		it('should return active sessions', async () => {
+			const pool = new ConnectionPool({
+				maxSessions: 5,
+				autoCleanup: false,
+				serverFactory: createMockServerFactory(),
+			});
+
+			const id1 = await pool.createSession();
+			const id2 = await pool.createSession();
+
+			const sessions = pool.getActiveSessions();
+			expect(sessions).toHaveLength(2);
+			expect(sessions.map((s) => s.id)).toContain(id1);
+			expect(sessions.map((s) => s.id)).toContain(id2);
+
+			// Close one session
+			await pool.closeSession(id1);
+
+			const after = pool.getActiveSessions();
+			expect(after).toHaveLength(1);
+
+			await pool.terminate();
+		});
+	});
+
+	describe('closeSession errors', () => {
+		it('should throw for unknown session', async () => {
+			const pool = new ConnectionPool({
+				maxSessions: 5,
+				autoCleanup: false,
+				serverFactory: createMockServerFactory(),
+			});
+
+			await expect(pool.closeSession('nonexistent')).rejects.toThrow();
+
+			await pool.terminate();
+		});
+	});
+
+	describe('createSession errors', () => {
+		it('should throw when max sessions reached', async () => {
+			const pool = new ConnectionPool({
+				maxSessions: 1,
+				autoCleanup: false,
+				serverFactory: createMockServerFactory(),
+			});
+
+			await pool.createSession();
+			await expect(pool.createSession()).rejects.toThrow();
+
+			await pool.terminate();
+		});
+
+		it('should throw when pool is terminated', async () => {
+			const pool = new ConnectionPool({
+				maxSessions: 5,
+				autoCleanup: false,
+				serverFactory: createMockServerFactory(),
+			});
+
+			await pool.terminate();
+			await expect(pool.createSession()).rejects.toThrow();
+		});
+
+		it('should throw when no serverFactory is provided', async () => {
+			const pool = new ConnectionPool({
+				maxSessions: 5,
+				autoCleanup: false,
+			});
+
+			await expect(pool.createSession()).rejects.toThrow(
+				'ConnectionPool requires a serverFactory option to create sessions'
+			);
+
+			await pool.terminate();
+		});
+	});
+
+	describe('session self-timeout', () => {
+		it('should auto-close session via Session internal timeout timer', async () => {
+			vi.useFakeTimers();
+			const startTime = Date.now();
+
+			const pool = new ConnectionPool({
+				maxSessions: 5,
+				sessionTimeout: 100,
+				autoCleanup: false,
+				serverFactory: createMockServerFactory(),
+			});
+
+			const sessionId = await pool.createSession();
+			expect(pool.getSessionInfo(sessionId)?.isActive).toBe(true);
+
+			// The setTimeout fires at exactly t+100ms. At that point,
+			// isTimedOut() checks Date.now() - lastActivity > 100.
+			// With fake timers, Date.now() in the callback = startTime + 100,
+			// and lastActivity = startTime, so 100 > 100 is false.
+			// Fix: set Date.now() ahead so isTimedOut() returns true when timer fires.
+			vi.setSystemTime(new Date(startTime + 101));
+			await vi.advanceTimersByTimeAsync(100);
+
+			const info = pool.getSessionInfo(sessionId);
+			expect(info?.isActive).toBe(false);
+
+			await pool.terminate();
+			vi.useRealTimers();
+		});
+
+	});
+
+	describe('terminate edge cases', () => {
+		it('should be a no-op when already terminated', async () => {
+			const pool = new ConnectionPool({
+				maxSessions: 5,
+				autoCleanup: false,
+				serverFactory: createMockServerFactory(),
+			});
+
+			await pool.terminate();
+			await expect(pool.terminate()).resolves.toBeUndefined();
+		});
+	});
 });

@@ -315,4 +315,87 @@ describe('ConfigLoader', () => {
 			expect(opts.maxBranches).toBeUndefined();
 		});
 	});
+
+	describe('uncovered branch coverage', () => {
+		it('should ignore NaN MAX_BRANCH_SIZE from env', () => {
+			process.env.MAX_BRANCH_SIZE = 'not-a-number';
+			loader = new ConfigLoader();
+			mockExistsSync.mockReturnValue(false);
+
+			const config = loader.load();
+			expect(config!.maxBranchSize).toBeUndefined();
+		});
+
+		it('should ignore NaN DISCOVERY_CACHE_TTL from env', () => {
+			process.env.DISCOVERY_CACHE_TTL = 'invalid';
+			loader = new ConfigLoader();
+			mockExistsSync.mockReturnValue(false);
+
+			const config = loader.load();
+			expect(config!.discoveryCache).toBeUndefined();
+		});
+
+		it('should ignore NaN DISCOVERY_CACHE_MAX_SIZE from env', () => {
+			process.env.DISCOVERY_CACHE_MAX_SIZE = 'invalid';
+			loader = new ConfigLoader();
+			mockExistsSync.mockReturnValue(false);
+
+			const config = loader.load();
+			expect(config!.discoveryCache).toBeUndefined();
+		});
+
+		it('should handle non-Error thrown during config parse', () => {
+			loader = new ConfigLoader();
+			const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			mockExistsSync.mockReturnValue(true);
+			// eslint-disable-next-line no-throw-literal
+			mockReadFileSync.mockImplementation(() => {
+				throw 'string error thrown';
+			});
+
+			const config = loader.load();
+			expect(consoleSpy).toHaveBeenCalledWith(
+				expect.stringContaining('Failed to load config'),
+				'string error thrown'
+			);
+			expect(config).toBeDefined();
+			consoleSpy.mockRestore();
+		});
+
+		it('should ignore Infinity MAX_BRANCHES from env', () => {
+			process.env.MAX_BRANCHES = 'Infinity';
+			loader = new ConfigLoader();
+			mockExistsSync.mockReturnValue(false);
+
+			const config = loader.load();
+			expect(config!.maxBranches).toBeUndefined();
+		});
+
+		it('should ignore Infinity MAX_BRANCH_SIZE from env', () => {
+			process.env.MAX_BRANCH_SIZE = 'Infinity';
+			loader = new ConfigLoader();
+			mockExistsSync.mockReturnValue(false);
+
+			const config = loader.load();
+			expect(config!.maxBranchSize).toBeUndefined();
+		});
+
+		it('should ignore Infinity DISCOVERY_CACHE_TTL from env', () => {
+			process.env.DISCOVERY_CACHE_TTL = 'Infinity';
+			loader = new ConfigLoader();
+			mockExistsSync.mockReturnValue(false);
+
+			const config = loader.load();
+			expect(config!.discoveryCache).toBeUndefined();
+		});
+
+		it('should ignore Infinity DISCOVERY_CACHE_MAX_SIZE from env', () => {
+			process.env.DISCOVERY_CACHE_MAX_SIZE = 'Infinity';
+			loader = new ConfigLoader();
+			mockExistsSync.mockReturnValue(false);
+
+			const config = loader.load();
+			expect(config!.discoveryCache).toBeUndefined();
+		});
+	});
 });
