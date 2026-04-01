@@ -4,8 +4,8 @@
  * @module types/thought
  */
 
-import type { StepRecommendation } from './step.js';
 import type { ThoughtType } from './reasoning.js';
+import type { StepRecommendation } from './step.js';
 
 /**
  * Core data structure for a thought in the sequential thinking process.

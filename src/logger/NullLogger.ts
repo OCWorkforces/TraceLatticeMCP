@@ -8,7 +8,7 @@
  * @module logger
  */
 
-import type { LogLevel, LoggerOptions, Logger } from './StructuredLogger.js';
+import type { LogLevel, Logger, LoggerOptions } from './StructuredLogger.js';
 
 /**
  * Null logger that discards all log messages.

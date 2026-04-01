@@ -23,11 +23,11 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { McpServer } from 'tmcp';
-import { createServer, type IncomingMessage, type ServerResponse, type Server } from 'node:http';
 import { safeParse } from 'valibot';
-import { JsonRpcRequestSchema } from '../schema.js';
 import type { IMetrics } from '../contracts/index.js';
+import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 
 /**

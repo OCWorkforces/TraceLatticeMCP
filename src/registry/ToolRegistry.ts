@@ -8,12 +8,12 @@
  * @module registry
  */
 
-import type { Tool } from '../types/tool.js';
-import type { Logger } from '../logger/StructuredLogger.js';
-import { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { InvalidToolError, DuplicateToolError, ToolNotFoundError } from '../errors.js';
+import { DiscoveryCache } from '../cache/DiscoveryCache.js';
+import { DuplicateToolError, InvalidToolError, ToolNotFoundError } from '../errors.js';
+import type { Logger } from '../logger/StructuredLogger.js';
+import type { Tool } from '../types/tool.js';
 import { BaseRegistry } from './BaseRegistry.js';
 
 /**

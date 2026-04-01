@@ -1,21 +1,20 @@
 #!/usr/bin/env node
 
-// CLI entry point for sequentialthinking-tools MCP server.
+// CLI entry point for tracelattice MCP server.
 // This file handles CLI argument parsing, transport selection, and signal handlers.
 // For library usage, import from './lib.js' or './index.js' instead.
 
-import { McpServer } from 'tmcp';
 import { ValibotJsonSchemaAdapter } from '@tmcp/adapter-valibot';
 import { StdioTransport } from '@tmcp/transport-stdio';
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
-import { SequentialThinkingSchema, SEQUENTIAL_THINKING_TOOL } from './schema.js';
-import { initializeServer } from './lib.js';
+import { McpServer } from 'tmcp';
 import type { ToolAwareSequentialThinkingServer } from './lib.js';
+import { initializeServer } from './lib.js';
 import { StructuredLogger } from './logger/StructuredLogger.js';
 import { Metrics } from './metrics/metrics.impl.js';
+import { SEQUENTIAL_THINKING_TOOL, SequentialThinkingSchema } from './schema.js';
 
 // Get version from package.json
 const __filename = fileURLToPath(import.meta.url);
@@ -36,7 +35,7 @@ async function main() {
 		{
 			name,
 			version,
-			description: 'MCP server for Sequential Thinking Tools',
+			description: 'Semantic Sequential Thinking MCP Server',
 		},
 		{
 			adapter,

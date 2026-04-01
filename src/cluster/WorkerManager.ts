@@ -17,14 +17,14 @@
  * ```
  */
 
-import { Worker } from 'node:worker_threads';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { cpus } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Worker } from 'node:worker_threads';
 import type { ThoughtData } from '../core/thought.js';
-import type { IDisposable } from '../types/disposable.js';
 import type { Logger } from '../logger/StructuredLogger.js';
+import type { IDisposable } from '../types/disposable.js';
 
 export interface WorkerManagerOptions {
 	/**
