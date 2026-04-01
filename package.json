@@ -1,12 +1,12 @@
 {
-	"name": "sequentialthinking-tools",
-	"version": "1.2.0",
-	"description": "MCP Server For Sequential Thinking Tools",
+	"name": "tracelattice",
+	"version": "1.2.1",
+	"description": "Semantic Sequential Thinking Tools For Agentic Tools",
 	"type": "module",
 	"main": "dist/lib.js",
 	"types": "dist/index.d.ts",
 	"bin": {
-		"sequentialthinking-tools": "./dist/cli.js"
+		"tracelattice": "./dist/cli.js"
 	},
 	"files": [
 		"dist",

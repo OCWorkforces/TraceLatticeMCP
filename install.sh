@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# install-sequentialthinking-tools.sh
-# Installation script for sequentialthinking-tools as a global npm module
+# install-tracelattice.sh
+# Installation script for tracelattice as a global npm module
 #
 
 set -e  # Exit on error
@@ -14,7 +14,7 @@ readonly BLUE='\033[0;34m'
 readonly NC='\033[0m' # No Color
 
 # Package info
-readonly PACKAGE_NAME="sequentialthinking-tools"
+readonly PACKAGE_NAME="tracelattice"
 
 # Read version from package.json
 _package_version=$(node -p "require('./package.json').version" 2>/dev/null)
@@ -68,7 +68,7 @@ check_node_version() {
 print_banner() {
     cat << "EOF"
 
---- MCP Sequential Thinking Tools - Global Installation ---
+--- Semantic Sequential Thinking MCP Server - Global Installation ---
 
 EOF
 }
