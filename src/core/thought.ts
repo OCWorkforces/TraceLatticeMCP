@@ -190,4 +190,27 @@ export interface ThoughtData {
 	 * ```
 	 */
 	reasoning_depth?: 'shallow' | 'moderate' | 'deep';
+
+	/**
+	 * Optional session identifier for state isolation.
+	 * When provided, thought history, branches, and statistics are scoped to this session.
+	 * Format: alphanumeric, hyphens, underscores, 1-100 chars.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, session_id: 'analysis-task-42' };
+	 * ```
+	 */
+	session_id?: string;
+
+	/**
+	 * When true, clears all state for the target session before processing this thought.
+	 * The thought is then processed as the first in a fresh session.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, session_id: 'task-1', reset_state: true };
+	 * ```
+	 */
+	reset_state?: boolean;
 }

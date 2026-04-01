@@ -42,8 +42,8 @@ describe('InputNormalizer', () => {
 			expect(normalized.current_step).toBeDefined();
 			expect(normalized.current_step?.recommended_tools).toBeDefined();
 			expect(normalized.current_step?.recommended_tools).toHaveLength(1);
-			// @ts-expect-error - Testing that the old singular key is removed
-			expect(normalized.current_step?.recommended_tool).toBeUndefined();
+			const step = normalized.current_step as Record<string, unknown> | undefined;
+			expect(step?.recommended_tool).toBeUndefined();
 		});
 
 		it('should preserve recommended_tools when already plural', () => {
@@ -92,8 +92,8 @@ describe('InputNormalizer', () => {
 			expect(normalized.current_step).toBeDefined();
 			expect(normalized.current_step?.recommended_skills).toBeDefined();
 			expect(normalized.current_step?.recommended_skills).toHaveLength(1);
-			// @ts-expect-error - Testing that the old singular key is removed
-			expect(normalized.current_step?.recommended_skill).toBeUndefined();
+			const step = normalized.current_step as Record<string, unknown> | undefined;
+			expect(step?.recommended_skill).toBeUndefined();
 		});
 
 		it('should preserve recommended_skills when already plural', () => {
@@ -891,5 +891,44 @@ describe('suggested_inputs sanitization', () => {
 		) as ThoughtData;
 		const tool = normalized.current_step?.recommended_tools?.[0];
 		expect(tool?.suggested_inputs).toEqual({ num: 42, bool: true });
+	});
+});
+
+describe('session_id sanitization', () => {
+	const baseInput = {
+		thought: 'Test thought',
+		thought_number: 1,
+		total_thoughts: 1,
+		next_thought_needed: false,
+	};
+
+	it('passes through valid session_id unchanged', () => {
+		const result = normalizeInput({ ...baseInput, session_id: 'analysis-task-42' }) as ThoughtData;
+		expect(result.session_id).toBe('analysis-task-42');
+	});
+
+	it('sanitizes control characters from session_id', () => {
+		const result = normalizeInput({ ...baseInput, session_id: 'session\x00name' }) as ThoughtData;
+		expect(result.session_id).toBe('sessionname');
+	});
+
+	it('strips session_id with invalid characters after sanitization', () => {
+		const result = normalizeInput({ ...baseInput, session_id: 'bad session!' }) as ThoughtData;
+		expect(result.session_id).toBeUndefined();
+	});
+
+	it('strips session_id exceeding 100 characters', () => {
+		const result = normalizeInput({ ...baseInput, session_id: 'a'.repeat(101) }) as ThoughtData;
+		expect(result.session_id).toBeUndefined();
+	});
+
+	it('strips session_id containing path traversal sequences', () => {
+		const result = normalizeInput({ ...baseInput, session_id: '../etc/passwd' }) as ThoughtData;
+		expect(result.session_id).toBeUndefined();
+	});
+
+	it('preserves undefined session_id', () => {
+		const result = normalizeInput({ ...baseInput }) as ThoughtData;
+		expect(result.session_id).toBeUndefined();
 	});
 });

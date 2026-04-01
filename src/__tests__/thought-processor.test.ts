@@ -9,6 +9,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ThoughtProcessor } from '../core/ThoughtProcessor.js';
 import { ThoughtFormatter } from '../core/ThoughtFormatter.js';
 import { StructuredLogger } from '../logger/StructuredLogger.js';
+import type { Logger } from '../logger/StructuredLogger.js';
 import { MockHistoryManager } from './helpers/index.js';
 import type { ThoughtData } from '../core/thought.js';
 import type { IHistoryManager } from '../core/IHistoryManager.js';
@@ -813,13 +814,13 @@ describe('ThoughtProcessor', () => {
 	describe('thought_number > total_thoughts auto-adjust warning', () => {
 		it('should log warning and include in response when auto-adjusting total_thoughts', async () => {
 			const mockHistoryManager = new MockHistoryManager();
-			const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() };
+			const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn(), setLevel: vi.fn(), getLevel: vi.fn() } as Logger;
 
 			const proc = new ThoughtProcessor(
 				mockHistoryManager,
 				new ThoughtFormatter(),
 				new ThoughtEvaluator(),
-				mockLogger as any,
+				mockLogger,
 			);
 
 			const result = await proc.process({
@@ -853,13 +854,13 @@ describe('ThoughtProcessor', () => {
 
 		it('should not warn when thought_number <= total_thoughts', async () => {
 			const mockHistoryManager = new MockHistoryManager();
-			const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn() };
+			const mockLogger = { warn: vi.fn(), info: vi.fn(), error: vi.fn(), debug: vi.fn(), setLevel: vi.fn(), getLevel: vi.fn() } as Logger;
 
 			const proc = new ThoughtProcessor(
 				mockHistoryManager,
 				new ThoughtFormatter(),
 				new ThoughtEvaluator(),
-				mockLogger as any,
+				mockLogger,
 			);
 
 			const result = await proc.process({
@@ -880,6 +881,251 @@ describe('ThoughtProcessor', () => {
 
 			// No warnings in response (unless cross-field validation adds some)
 			expect(response.warnings).toBeUndefined();
+		});
+	});
+
+	describe('session isolation', () => {
+		it('passes session_id to historyManager.getHistory()', async () => {
+			const mockHM = new MockHistoryManager();
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+			const spy = vi.spyOn(mockHM, 'getHistory');
+
+			await proc.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				session_id: 'sess-a',
+			});
+
+			expect(spy).toHaveBeenCalledWith('sess-a');
+		});
+
+		it('passes session_id to historyManager.getBranches()', async () => {
+			const mockHM = new MockHistoryManager();
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+			const spy = vi.spyOn(mockHM, 'getBranches');
+
+			await proc.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				session_id: 'sess-b',
+			});
+
+			expect(spy).toHaveBeenCalledWith('sess-b');
+		});
+
+		it('passes session_id to historyManager.getHistoryLength()', async () => {
+			const mockHM = new MockHistoryManager();
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+			const spy = vi.spyOn(mockHM, 'getHistoryLength');
+
+			await proc.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				session_id: 'sess-c',
+			});
+
+			expect(spy).toHaveBeenCalledWith('sess-c');
+		});
+
+		it('passes session_id to historyManager.getBranchIds()', async () => {
+			const mockHM = new MockHistoryManager();
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+			const spy = vi.spyOn(mockHM, 'getBranchIds');
+
+			await proc.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				session_id: 'sess-d',
+			});
+
+			expect(spy).toHaveBeenCalledWith('sess-d');
+		});
+
+		it('passes session_id to historyManager.getAvailableMcpTools()', async () => {
+			const mockHM = new MockHistoryManager();
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+			const spy = vi.spyOn(mockHM, 'getAvailableMcpTools');
+
+			await proc.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				session_id: 'sess-e',
+			});
+
+			expect(spy).toHaveBeenCalledWith('sess-e');
+		});
+
+		it('passes session_id to historyManager.getAvailableSkills()', async () => {
+			const mockHM = new MockHistoryManager();
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+			const spy = vi.spyOn(mockHM, 'getAvailableSkills');
+
+			await proc.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				session_id: 'sess-f',
+			});
+
+			expect(spy).toHaveBeenCalledWith('sess-f');
+		});
+
+		it('includes session_id in response when provided', async () => {
+			const result = await processor.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				session_id: 'my-session',
+			});
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.session_id).toBe('my-session');
+		});
+
+		it('omits session_id from response when not provided', async () => {
+			const result = await processor.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+			});
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.session_id).toBeUndefined();
+		});
+
+		it('uses session-scoped history for cross-reference validation', async () => {
+			const mockHM = new MockHistoryManager();
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+
+			// Add 2 thoughts to session 'alpha'
+			for (let i = 1; i <= 2; i++) {
+				await proc.process({
+					thought: `Thought ${i}`,
+					thought_number: i,
+					total_thoughts: 3,
+					next_thought_needed: true,
+					session_id: 'alpha',
+				});
+			}
+
+			// Thought 3 in 'alpha' references revises_thought: 1 (valid)
+			const result = await proc.process({
+				thought: 'Revise thought 1',
+				thought_number: 3,
+				total_thoughts: 3,
+				next_thought_needed: false,
+				session_id: 'alpha',
+				is_revision: true,
+				revises_thought: 1,
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			// Should NOT have warnings since thought 1 exists in session 'alpha'
+			expect(parsed.warnings).toBeUndefined();
+		});
+	});
+
+	describe('reset_state', () => {
+		it('calls historyManager.clear(sessionId) when reset_state is true', async () => {
+			const mockHM = new MockHistoryManager();
+			const spy = vi.spyOn(mockHM, 'clear');
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+
+			await proc.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				session_id: 'my-session',
+				reset_state: true,
+			});
+
+			expect(spy).toHaveBeenCalledWith('my-session');
+		});
+
+		it('does not call clear when reset_state is false', async () => {
+			const mockHM = new MockHistoryManager();
+			const spy = vi.spyOn(mockHM, 'clear');
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+
+			await proc.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				session_id: 'my-session',
+				reset_state: false,
+			});
+
+			expect(spy).not.toHaveBeenCalled();
+		});
+
+		it('does not call clear when reset_state is omitted', async () => {
+			const mockHM = new MockHistoryManager();
+			const spy = vi.spyOn(mockHM, 'clear');
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+
+			await proc.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				session_id: 'my-session',
+			});
+
+			expect(spy).not.toHaveBeenCalled();
+		});
+
+		it('processes thought as first after reset (history_length = 1)', async () => {
+			const mockHM = new MockHistoryManager();
+			const proc = new ThoughtProcessor(mockHM, formatter, new ThoughtEvaluator(), logger);
+
+			// Add 3 thoughts to the session
+			for (let i = 1; i <= 3; i++) {
+				await proc.process({
+					thought: `Thought ${i}`,
+					thought_number: i,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					session_id: 'reset-sess',
+				});
+			}
+
+			// Fourth thought with reset_state: true should start fresh
+			const result = await proc.process({
+				thought: 'Fresh start',
+				thought_number: 1,
+				total_thoughts: 2,
+				next_thought_needed: true,
+				session_id: 'reset-sess',
+				reset_state: true,
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.thought_history_length).toBe(1);
+		});
+
+		it('does not echo reset_state in response', async () => {
+			const result = await processor.process({
+				thought: 'Test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				reset_state: true,
+			});
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.reset_state).toBeUndefined();
 		});
 	});
 });

@@ -250,7 +250,7 @@ describe('SkillWatcher', () => {
 
 		it('should handle non-Error objects thrown by removeSkillByName', async () => {
 			(mockRegistry.removeSkillByName as ReturnType<typeof vi.fn>).mockImplementation(() => {
-				throw 'string error'; // eslint-disable-line no-throw-literal
+				throw 'string error';
 			});
 
 			const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});

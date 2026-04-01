@@ -2,7 +2,7 @@
  * History and branch management for sequential thinking.
  *
  * This module provides the `HistoryManager` class which manages thought history,
- * branching, and optional persistence.
+ * branching, and optional persistence with per-session state isolation.
  *
  * @module HistoryManager
  */
@@ -28,6 +28,16 @@ export const ABSOLUTE_MAX_HISTORY_SIZE = 10_000;
  */
 export interface PersistenceEventEmitter {
 	emit(event: 'persistenceError', payload: { operation: string; error: Error }): boolean;
+}
+
+/** Internal state container for a single session's data. */
+interface SessionState {
+	thought_history: ThoughtData[];
+	branches: Record<string, ThoughtData[]>;
+	availableMcpTools: string[] | undefined;
+	availableSkills: string[] | undefined;
+	writeBuffer: ThoughtData[];
+	lastAccessedAt: number;
 }
 
 /**
@@ -100,17 +110,24 @@ export interface HistoryManagerConfig {
  *
  * This class is the central component for managing the state of sequential thinking
  * operations. It handles thought storage, branch management, and optional persistence
- * for state recovery.
+ * for state recovery. State is isolated per session via a `Map<string, SessionState>`.
  *
  * @remarks
  * **History Management:**
- * - Thoughts are stored in a linear history array
+ * - Thoughts are stored in a linear history array per session
  * - Auto-trimming occurs when `maxHistorySize` is exceeded
  * - Oldest thoughts are removed first (FIFO eviction)
  *
+ * **Session Isolation:**
+ * - Each session maintains its own thought history, branches, and cached tools/skills
+ * - Sessions are identified by optional `session_id` on ThoughtData
+ * - Default (undefined) session_id maps to `__global__`
+ * - TTL-based cleanup prevents unbounded memory growth
+ * - LRU eviction when MAX_SESSIONS exceeded
+ *
  * **Branch Management:**
  * - Branches allow exploring alternative reasoning paths
- * - Each branch has its own thought array
+ * - Each branch has its own thought array within a session
  * - Branches are created when `branch_from_thought` and `branch_id` are set
  * - Branch count and size are limited by `maxBranches` and `maxBranchSize`
  *
@@ -148,17 +165,21 @@ export interface HistoryManagerConfig {
  * ```
  */
 export class HistoryManager implements IHistoryManager {
-	/** Linear history of all thoughts. */
-	private _thought_history: ThoughtData[] = [];
+	/** Default session key for backward-compatible global state. */
+	private static readonly DEFAULT_SESSION = '__global__';
 
-	/** Branch storage indexed by branch ID. */
-	private _branches: Record<string, ThoughtData[]> = {};
+	/** TTL for inactive sessions in milliseconds (default: 30 minutes). */
+	private static readonly SESSION_TTL_MS = 30 * 60 * 1000;
 
-	/** Cached available MCP tools from the most recent thought. */
-	private _availableMcpTools: string[] | undefined;
+	/** Maximum number of concurrent sessions before eviction. */
+	private static readonly MAX_SESSIONS = 100;
 
-	/** Cached available skills from the most recent thought. */
-	private _availableSkills: string[] | undefined;
+	/** Session state storage. */
+	private _sessions: Map<string, SessionState> = new Map();
+
+	/** Timer for periodic session cleanup. */
+	private _sessionCleanupTimer: ReturnType<typeof setInterval> | null = null;
+
 	/** Maximum history size before auto-trimming. */
 	private _maxHistorySize: number;
 
@@ -178,9 +199,6 @@ export class HistoryManager implements IHistoryManager {
 	private _persistenceEnabled: boolean;
 
 	private _metrics?: IMetrics;
-
-	/** Write buffer for batching persistence operations. */
-	private _writeBuffer: ThoughtData[] = [];
 
 	/** Timer for periodic buffer flushes. */
 	private _flushTimer: ReturnType<typeof setInterval> | null = null;
@@ -242,6 +260,9 @@ export class HistoryManager implements IHistoryManager {
 		if (this._persistenceEnabled) {
 			this._startFlushTimer();
 		}
+
+		// Start the periodic session cleanup timer
+		this._startSessionCleanupTimer();
 	}
 
 	/**
@@ -255,9 +276,37 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	/**
+	 * Gets or creates the session state for a given session ID.
+	 * Creates a new SessionState if one doesn't exist.
+	 * Updates lastAccessedAt on every access.
+	 *
+	 * @param sessionId - Optional session ID (defaults to `__global__`)
+	 * @returns The session state
+	 * @private
+	 */
+	private _getSession(sessionId?: string): SessionState {
+		const key = sessionId ?? HistoryManager.DEFAULT_SESSION;
+		let session = this._sessions.get(key);
+		if (!session) {
+			session = {
+				thought_history: [],
+				branches: {},
+				availableMcpTools: undefined,
+				availableSkills: undefined,
+				writeBuffer: [],
+				lastAccessedAt: Date.now(),
+			};
+			this._sessions.set(key, session);
+			this._evictExcessSessions();
+		}
+		session.lastAccessedAt = Date.now();
+		return session;
+	}
+
+	/**
 	 * Adds a thought to the history.
 	 *
-	 * The thought is appended to the history array. If history exceeds
+	 * The thought is appended to the session's history array. If history exceeds
 	 * `maxHistorySize`, the oldest thoughts are removed. If the thought
 	 * has `branch_from_thought` and `branch_id` set, it's also added to
 	 * the appropriate branch. The thought is persisted asynchronously if
@@ -276,31 +325,33 @@ export class HistoryManager implements IHistoryManager {
 	 * ```
 	 */
 	public addThought(thought: ThoughtData): void {
+		const session = this._getSession(thought.session_id);
 		this._metrics?.counter(
 			'thought_requests_total',
 			1,
 			{},
 			'Total thought requests added to history'
 		);
-	this._thought_history.push(thought);
 
-	// Cache available_mcp_tools/available_skills for cross-call persistence
-	if (thought.available_mcp_tools) {
-		this._availableMcpTools = thought.available_mcp_tools;
-	}
-	if (thought.available_skills) {
-		this._availableSkills = thought.available_skills;
-	}
+		session.thought_history.push(thought);
 
-		if (this._thought_history.length > this._maxHistorySize) {
-			this._thought_history = this._thought_history.slice(-this._maxHistorySize);
+		// Cache available_mcp_tools/available_skills for cross-call persistence
+		if (thought.available_mcp_tools) {
+			session.availableMcpTools = thought.available_mcp_tools;
+		}
+		if (thought.available_skills) {
+			session.availableSkills = thought.available_skills;
+		}
+
+		if (session.thought_history.length > this._maxHistorySize) {
+			session.thought_history = session.thought_history.slice(-this._maxHistorySize);
 			this.log(`History trimmed to ${this._maxHistorySize} items`, {
 				maxSize: this._maxHistorySize,
 			});
 		}
 
 		if (thought.branch_from_thought && thought.branch_id) {
-			this.addToBranch(thought.branch_id, thought);
+			this._addToSessionBranch(session, thought.branch_id, thought);
 		}
 
 		// Track merge operations for analytics
@@ -314,51 +365,55 @@ export class HistoryManager implements IHistoryManager {
 		}
 
 		// Buffer thought for persistence instead of fire-and-forget
-		if (this._persistenceEnabled && this._persistence) {
-			// Backpressure: if buffer is full and flush is failing, log warning
-			if (this._writeBuffer.length >= this._persistenceBufferSize && this._isFlushing) {
-				this.log('Write buffer full and flush in progress, applying backpressure', {
-					bufferSize: this._writeBuffer.length,
-					maxSize: this._persistenceBufferSize,
-				});
-			}
+		this._bufferForPersistence(session, thought);
+	}
 
-			this._writeBuffer.push(thought);
+	/**
+	 * Buffers a thought for persistence if enabled.
+	 * @param session - The session state to buffer into
+	 * @param thought - The thought to buffer
+	 * @private
+	 */
+	private _bufferForPersistence(session: SessionState, thought: ThoughtData): void {
+		if (!this._persistenceEnabled || !this._persistence) return;
 
-			// Trigger immediate flush if buffer is at capacity
-			if (this._writeBuffer.length >= this._persistenceBufferSize) {
-				void this._flushBuffer();
-			}
+		// Backpressure: if buffer is full and flush is failing, log warning
+		if (session.writeBuffer.length >= this._persistenceBufferSize && this._isFlushing) {
+			this.log('Write buffer full and flush in progress, applying backpressure', {
+				bufferSize: session.writeBuffer.length,
+				maxSize: this._persistenceBufferSize,
+			});
+		}
+
+		session.writeBuffer.push(thought);
+
+		// Trigger immediate flush if buffer is at capacity
+		if (session.writeBuffer.length >= this._persistenceBufferSize) {
+			void this._flushBuffer();
 		}
 	}
 
 	/**
-	 * Adds a thought to a specific branch.
-	 *
-	 * Creates the branch if it doesn't exist. Trims the branch if it exceeds
-	 * `maxBranchSize`. Cleans up old branches if `maxBranches` is exceeded.
-	 * The branch is persisted asynchronously if persistence is enabled.
-	 *
+	 * Adds a thought to a branch within a specific session.
+	 * @param session - The session state
 	 * @param branchId - The branch identifier
-	 * @param thought - The thought data to add to the branch
+	 * @param thought - The thought data to add
 	 * @private
 	 */
-	private addToBranch(branchId: string, thought: ThoughtData): void {
-		if (!this._branches[branchId]) {
-			this._branches[branchId] = [];
+	private _addToSessionBranch(session: SessionState, branchId: string, thought: ThoughtData): void {
+		if (!session.branches[branchId]) {
+			session.branches[branchId] = [];
 		}
+		this._trimSessionBranchSize(session, branchId);
+		session.branches[branchId].push(thought);
 
-		this.trimBranchSize(branchId);
-		this._branches[branchId].push(thought);
-
-		if (Object.keys(this._branches).length > this._maxBranches) {
-			this.cleanupBranches();
+		if (Object.keys(session.branches).length > this._maxBranches) {
+			this._cleanupSessionBranches(session);
 		}
 
 		// Persist branch to backend if enabled
 		if (this._persistenceEnabled && this._persistence) {
-			// Fire and forget - don't await to avoid blocking
-			this._persistence.saveBranch(branchId, this._branches[branchId]).catch((err) => {
+			this._persistence.saveBranch(branchId, session.branches[branchId]).catch((err) => {
 				this.log('Failed to persist branch', {
 					branchId,
 					error: err instanceof Error ? err.message : String(err),
@@ -368,34 +423,34 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	/**
-	 * Removes old branches when the branch count exceeds `maxBranches`.
-	 * Oldest branches are removed first.
+	 * Removes old branches when count exceeds maxBranches within a session.
+	 * @param session - The session state
 	 * @private
 	 */
-	private cleanupBranches(): void {
-		const branchCount = Object.keys(this._branches).length;
+	private _cleanupSessionBranches(session: SessionState): void {
+		const branchCount = Object.keys(session.branches).length;
 		if (branchCount > this._maxBranches) {
-			const branchesToRemove = Object.keys(this._branches).slice(
+			const branchesToRemove = Object.keys(session.branches).slice(
 				0,
 				branchCount - this._maxBranches
 			);
 			for (const branchId of branchesToRemove) {
-				delete this._branches[branchId];
+				delete session.branches[branchId];
 				this.log(`Removed old branch: ${branchId}`, { branchId });
 			}
 		}
 	}
 
 	/**
-	 * Trims a branch to `maxBranchSize` if it exceeds that limit.
-	 * Oldest thoughts in the branch are removed first.
+	 * Trims a branch to maxBranchSize within a session.
+	 * @param session - The session state
 	 * @param branchId - The branch identifier to trim
 	 * @private
 	 */
-	private trimBranchSize(branchId: string): void {
-		if ((this._branches[branchId] ?? []).length > this._maxBranchSize) {
-			const removed = this._branches[branchId]!.length - this._maxBranchSize;
-			this._branches[branchId] = this._branches[branchId]!.slice(-this._maxBranchSize);
+	private _trimSessionBranchSize(session: SessionState, branchId: string): void {
+		if ((session.branches[branchId] ?? []).length > this._maxBranchSize) {
+			const removed = session.branches[branchId]!.length - this._maxBranchSize;
+			session.branches[branchId] = session.branches[branchId]!.slice(-this._maxBranchSize);
 			this.log(`Trimmed branch '${branchId}': removed ${removed} old thoughts`, {
 				branchId,
 				removed,
@@ -406,6 +461,7 @@ export class HistoryManager implements IHistoryManager {
 	/**
 	 * Gets the complete thought history.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns An array of all thoughts in chronological order
 	 *
 	 * @example
@@ -416,13 +472,14 @@ export class HistoryManager implements IHistoryManager {
 	 * });
 	 * ```
 	 */
-	public getHistory(): ThoughtData[] {
-		return this._thought_history;
+	public getHistory(sessionId?: string): ThoughtData[] {
+		return this._getSession(sessionId).thought_history;
 	}
 
 	/**
 	 * Gets the current length of the thought history.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns The number of thoughts in history
 	 *
 	 * @example
@@ -430,13 +487,14 @@ export class HistoryManager implements IHistoryManager {
 	 * console.log(`Total thoughts: ${manager.getHistoryLength()}`);
 	 * ```
 	 */
-	public getHistoryLength(): number {
-		return this._thought_history.length;
+	public getHistoryLength(sessionId?: string): number {
+		return this._getSession(sessionId).thought_history.length;
 	}
 
 	/**
 	 * Gets all branches.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns A record mapping branch IDs to their thought arrays
 	 *
 	 * @example
@@ -447,13 +505,14 @@ export class HistoryManager implements IHistoryManager {
 	 * }
 	 * ```
 	 */
-	public getBranches(): Record<string, ThoughtData[]> {
-		return this._branches;
+	public getBranches(sessionId?: string): Record<string, ThoughtData[]> {
+		return this._getSession(sessionId).branches;
 	}
 
 	/**
 	 * Gets all branch IDs.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns An array of branch identifiers
 	 *
 	 * @example
@@ -462,13 +521,14 @@ export class HistoryManager implements IHistoryManager {
 	 * console.log(`Active branches: ${branchIds.join(', ')}`);
 	 * ```
 	 */
-	public getBranchIds(): string[] {
-		return Object.keys(this._branches);
+	public getBranchIds(sessionId?: string): string[] {
+		return Object.keys(this._getSession(sessionId).branches);
 	}
 
 	/**
 	 * Gets the most recently available MCP tools from the session.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns The last-seen array of MCP tool names, or undefined if never set
 	 *
 	 * @example
@@ -477,13 +537,14 @@ export class HistoryManager implements IHistoryManager {
 	 * // ['Read', 'Grep', 'Glob'] or undefined
 	 * ```
 	 */
-	public getAvailableMcpTools(): string[] | undefined {
-		return this._availableMcpTools;
+	public getAvailableMcpTools(sessionId?: string): string[] | undefined {
+		return this._getSession(sessionId).availableMcpTools;
 	}
 
 	/**
 	 * Gets the most recently available skills from the session.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns The last-seen array of skill names, or undefined if never set
 	 *
 	 * @example
@@ -492,15 +553,15 @@ export class HistoryManager implements IHistoryManager {
 	 * // ['commit', 'review-pr'] or undefined
 	 * ```
 	 */
-	public getAvailableSkills(): string[] | undefined {
-		return this._availableSkills;
+	public getAvailableSkills(sessionId?: string): string[] | undefined {
+		return this._getSession(sessionId).availableSkills;
 	}
-
 
 	/**
 	 * Gets a specific branch by ID.
 	 *
 	 * @param branchId - The branch identifier
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns The branch's thought array, or undefined if not found
 	 *
 	 * @example
@@ -513,15 +574,16 @@ export class HistoryManager implements IHistoryManager {
 	 * }
 	 * ```
 	 */
-	public getBranch(branchId: string): ThoughtData[] | undefined {
-		return this._branches[branchId];
+	public getBranch(branchId: string, sessionId?: string): ThoughtData[] | undefined {
+		return this._getSession(sessionId).branches[branchId];
 	}
 
 	/**
-	 * Clears all history and branches.
+	 * Clears history and branches.
+	 * If sessionId is provided, clears only that session.
+	 * If omitted, clears all sessions.
 	 *
-	 * This resets the manager to an empty state. Persisted data is also
-	 * cleared if persistence is enabled.
+	 * @param sessionId - Optional session ID to clear
 	 *
 	 * @example
 	 * ```typescript
@@ -529,17 +591,19 @@ export class HistoryManager implements IHistoryManager {
 	 * console.log('All history and branches cleared');
 	 * ```
 	 */
-	public clear(): void {
-	this._thought_history = [];
-	this._branches = {};
-	this._writeBuffer = [];
-	this._availableMcpTools = undefined;
-	this._availableSkills = undefined;
-	this.log('History cleared');
+	public clear(sessionId?: string): void {
+		if (sessionId !== undefined) {
+			// Clear specific session
+			this._sessions.delete(sessionId);
+			this.log('Session cleared', { sessionId });
+		} else {
+			// Clear all sessions
+			this._sessions.clear();
+			this.log('History cleared (all sessions)');
+		}
 
 		// Clear persisted data if enabled
 		if (this._persistenceEnabled && this._persistence) {
-			// Fire and forget - don't await to avoid blocking
 			this._persistence.clear().catch((err) => {
 				this.log('Failed to clear persisted data', {
 					error: err instanceof Error ? err.message : String(err),
@@ -548,11 +612,27 @@ export class HistoryManager implements IHistoryManager {
 		}
 	}
 
+	/** Clears state for a specific session. Alias for clear(sessionId). */
+	public clearSession(sessionId: string): void {
+		this.clear(sessionId);
+	}
+
+	/** Gets all active session IDs. */
+	public getSessionIds(): string[] {
+		return Array.from(this._sessions.keys());
+	}
+
+	/** Gets the number of active sessions. */
+	public getSessionCount(): number {
+		return this._sessions.size;
+	}
+
 	/**
 	 * Loads history from the persistence backend.
 	 *
 	 * This should be called during initialization to restore previous state.
 	 * Only loads if persistence is enabled and the backend is healthy.
+	 * Loads into the global session.
 	 *
 	 * @returns Promise that resolves when loading is complete
 	 *
@@ -575,11 +655,13 @@ export class HistoryManager implements IHistoryManager {
 				return;
 			}
 
+			const globalSession = this._getSession();
+
 			// Load history
 			const history = await this._persistence.loadHistory();
 			if (history.length > 0) {
-				this._thought_history = history.slice(-this._maxHistorySize);
-				this.log(`Loaded ${this._thought_history.length} thoughts from persistence`);
+				globalSession.thought_history = history.slice(-this._maxHistorySize);
+				this.log(`Loaded ${globalSession.thought_history.length} thoughts from persistence`);
 			}
 
 			// Load branches
@@ -587,10 +669,10 @@ export class HistoryManager implements IHistoryManager {
 			for (const branchId of branchIds) {
 				const branchData = await this._persistence.loadBranch(branchId);
 				if (branchData) {
-					this._branches[branchId] = branchData.slice(-this._maxBranchSize);
+					globalSession.branches[branchId] = branchData.slice(-this._maxBranchSize);
 				}
 			}
-			this.log(`Loaded ${Object.keys(this._branches).length} branches from persistence`);
+			this.log(`Loaded ${Object.keys(globalSession.branches).length} branches from persistence`);
 		} catch (error) {
 			this.log('Failed to load from persistence', {
 				error: error instanceof Error ? error.message : String(error),
@@ -643,12 +725,14 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	/**
-	 * Gracefully shuts down the write buffer.
-	 * Stops the periodic flush timer and flushes any remaining buffered writes.
+	 * Gracefully shuts down the write buffer and session cleanup.
+	 * Stops the periodic flush timer and session cleanup timer,
+	 * then flushes any remaining buffered writes.
 	 * Should be called during server shutdown before closing the persistence backend.
 	 */
 	public async shutdown(): Promise<void> {
 		this._stopFlushTimer();
+		this._stopSessionCleanupTimer();
 		await this._flushBuffer();
 	}
 
@@ -681,83 +765,185 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	/**
+	 * Starts the periodic session cleanup timer.
+	 * Runs every 5 minutes to evict sessions that exceeded TTL.
+	 * @private
+	 */
+	private _startSessionCleanupTimer(): void {
+		if (this._sessionCleanupTimer !== null) return;
+		this._sessionCleanupTimer = setInterval(
+			() => {
+				this._cleanupStaleSessions();
+			},
+			5 * 60 * 1000
+		);
+		if (
+			this._sessionCleanupTimer &&
+			typeof this._sessionCleanupTimer === 'object' &&
+			'unref' in this._sessionCleanupTimer
+		) {
+			this._sessionCleanupTimer.unref();
+		}
+	}
+
+	/**
+	 * Stops the periodic session cleanup timer.
+	 * @private
+	 */
+	private _stopSessionCleanupTimer(): void {
+		if (this._sessionCleanupTimer !== null) {
+			clearInterval(this._sessionCleanupTimer);
+			this._sessionCleanupTimer = null;
+		}
+	}
+
+	/**
+	 * Evicts sessions that have been inactive longer than SESSION_TTL_MS.
+	 * The global session is never evicted.
+	 * @private
+	 */
+	private _cleanupStaleSessions(): void {
+		const now = Date.now();
+		for (const [key, session] of this._sessions) {
+			// Never evict the global session
+			if (key === HistoryManager.DEFAULT_SESSION) continue;
+			if (now - session.lastAccessedAt > HistoryManager.SESSION_TTL_MS) {
+				this._sessions.delete(key);
+				this.log('Evicted stale session', { sessionId: key });
+			}
+		}
+	}
+
+	/**
+	 * Evicts oldest sessions when MAX_SESSIONS is exceeded (LRU).
+	 * The global session is never evicted.
+	 * @private
+	 */
+	private _evictExcessSessions(): void {
+		while (this._sessions.size > HistoryManager.MAX_SESSIONS) {
+			let oldestKey: string | null = null;
+			let oldestTime = Infinity;
+			for (const [key, session] of this._sessions) {
+				if (key === HistoryManager.DEFAULT_SESSION) continue;
+				if (session.lastAccessedAt < oldestTime) {
+					oldestTime = session.lastAccessedAt;
+					oldestKey = key;
+				}
+			}
+			if (oldestKey !== null) {
+				this._sessions.delete(oldestKey);
+				this.log('Evicted oldest session (LRU)', { sessionId: oldestKey });
+			} else {
+				break;
+			}
+		}
+	}
+
+	/**
 	 * Flushes the write buffer to the persistence backend.
 	 *
-	 * Takes all buffered thoughts and saves them individually with retry logic.
-	 * On persistent failure (all retries exhausted), emits a `persistenceError` event
-	 * and re-queues failed items at the front of the buffer.
+	 * Collects all buffered thoughts across all sessions and saves them
+	 * individually with retry logic. On persistent failure (all retries exhausted),
+	 * emits a `persistenceError` event and re-queues failed items.
 	 *
 	 * This method is safe to call concurrently — duplicate calls are skipped.
 	 * @internal
 	 */
 	public async _flushBuffer(): Promise<void> {
-		if (this._isFlushing || this._writeBuffer.length === 0 || !this._persistence) {
+		if (this._isFlushing || !this._persistence) {
 			return;
 		}
 
-		this._isFlushing = true;
+		// Collect all pending writes from all sessions
+		const allPending: ThoughtData[] = [];
+		for (const session of this._sessions.values()) {
+			if (session.writeBuffer.length > 0) {
+				allPending.push(...session.writeBuffer.splice(0));
+			}
+		}
 
-		// Take all items from the buffer
-		const batch = this._writeBuffer.splice(0, this._writeBuffer.length);
+		if (allPending.length === 0) return;
+
+		this._isFlushing = true;
 		const failedItems: ThoughtData[] = [];
 
 		try {
-			for (const thought of batch) {
-				let saved = false;
-				const backoffDelays = [100, 500, 2000];
-
-				for (let attempt = 0; attempt <= this._persistenceMaxRetries; attempt++) {
-					try {
-						await this._persistence.saveThought(thought);
-						saved = true;
-						break;
-					} catch (err) {
-						if (attempt < this._persistenceMaxRetries) {
-							const delay = backoffDelays[attempt] ?? backoffDelays[backoffDelays.length - 1]!;
-							this.log(`Persistence retry ${attempt + 1}/${this._persistenceMaxRetries}`, {
-								thoughtNumber: thought.thought_number,
-								delay,
-								error: err instanceof Error ? err.message : String(err),
-							});
-							await this._delay(delay);
-						} else {
-							this.log('All persistence retries exhausted for thought', {
-								thoughtNumber: thought.thought_number,
-								error: err instanceof Error ? err.message : String(err),
-							});
-						}
-					}
-				}
-
+			for (const thought of allPending) {
+				const saved = await this._flushSingleThought(thought);
 				if (!saved) {
 					failedItems.push(thought);
 				}
 			}
 
-			if (failedItems.length > 0) {
-				// Re-queue failed items at the front of the buffer
-				this._writeBuffer.unshift(...failedItems);
-				this._flushRetryCount++;
-
-				const error = new Error(
-					`Failed to persist ${failedItems.length} thoughts after ${this._persistenceMaxRetries} retries`
-				);
-				this._eventEmitter?.emit('persistenceError', {
-					operation: 'flushBuffer',
-					error,
-				});
-
-				this.log('Flush completed with failures', {
-					failed: failedItems.length,
-					total: batch.length,
-					consecutiveFailures: this._flushRetryCount,
-				});
-			} else {
-				// Reset retry count on full success
-				this._flushRetryCount = 0;
-			}
+			this._handleFlushResult(failedItems, allPending.length);
 		} finally {
 			this._isFlushing = false;
+		}
+	}
+
+	/**
+	 * Flushes a single thought to persistence with retry logic.
+	 * @param thought - The thought to flush
+	 * @returns true if saved successfully, false otherwise
+	 * @private
+	 */
+	private async _flushSingleThought(thought: ThoughtData): Promise<boolean> {
+		const backoffDelays = [100, 500, 2000];
+
+		for (let attempt = 0; attempt <= this._persistenceMaxRetries; attempt++) {
+			try {
+				await this._persistence!.saveThought(thought);
+				return true;
+			} catch (err) {
+				if (attempt < this._persistenceMaxRetries) {
+					const delay = backoffDelays[attempt] ?? backoffDelays[backoffDelays.length - 1]!;
+					this.log(`Persistence retry ${attempt + 1}/${this._persistenceMaxRetries}`, {
+						thoughtNumber: thought.thought_number,
+						delay,
+						error: err instanceof Error ? err.message : String(err),
+					});
+					await this._delay(delay);
+				} else {
+					this.log('All persistence retries exhausted for thought', {
+						thoughtNumber: thought.thought_number,
+						error: err instanceof Error ? err.message : String(err),
+					});
+				}
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Handles the result of a flush operation, re-queuing failures.
+	 * @param failedItems - Thoughts that failed to persist
+	 * @param totalCount - Total number of thoughts attempted
+	 * @private
+	 */
+	private _handleFlushResult(failedItems: ThoughtData[], totalCount: number): void {
+		if (failedItems.length > 0) {
+			// Put failed items back in the global session's buffer
+			const globalSession = this._getSession();
+			globalSession.writeBuffer.unshift(...failedItems);
+			this._flushRetryCount++;
+
+			const error = new Error(
+				`Failed to persist ${failedItems.length} thoughts after ${this._persistenceMaxRetries} retries`
+			);
+			this._eventEmitter?.emit('persistenceError', {
+				operation: 'flushBuffer',
+				error,
+			});
+
+			this.log('Flush completed with failures', {
+				failed: failedItems.length,
+				total: totalCount,
+				consecutiveFailures: this._flushRetryCount,
+			});
+		} else {
+			// Reset retry count on full success
+			this._flushRetryCount = 0;
 		}
 	}
 
@@ -771,10 +957,14 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	/**
-	 * Gets the current write buffer length.
+	 * Gets the current write buffer length across all sessions.
 	 * Useful for monitoring and testing.
 	 */
 	public getWriteBufferLength(): number {
-		return this._writeBuffer.length;
+		let total = 0;
+		for (const session of this._sessions.values()) {
+			total += session.writeBuffer.length;
+		}
+		return total;
 	}
 }

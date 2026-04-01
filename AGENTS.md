@@ -61,8 +61,9 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `ToolAwareSequentialThinkingServer` | class     | src/lib.ts                               | Main server: DI wiring, MCP tool registration, lifecycle                             |
 | `createServer`                      | function  | src/lib.ts                               | Async factory with persistence + discovery                                           |
 | `initializeServer`                  | function  | src/lib.ts                               | Convenience factory with config + logger + watchers                                  |
-| `HistoryManager`                    | class     | src/core/HistoryManager.ts               | Thought history, branching, buffered persistence (780L)                              |
-| `IHistoryManager`                   | interface | src/core/IHistoryManager.ts              | History manager contract (8 methods)                                                 |
+| `HistoryManager`                    | class     | src/core/HistoryManager.ts               | History + branching + buffered persistence + per-session partitioning via `Map<string, SessionState>`. TTL eviction (30min), LRU (100 max). |
+| `SessionState`                    | interface | src/core/HistoryManager.ts               | Internal per-session state container (thought_history, branches, tools, skills, writeBuffer) |
+| `IHistoryManager`                   | interface | src/core/IHistoryManager.ts              | History manager contract (8 methods + session lifecycle)                                                 |
 | `ThoughtProcessor`                  | class     | src/core/ThoughtProcessor.ts             | Validate → normalize → persist → format → evaluate pipeline                          |
 | `ThoughtEvaluator`                  | class     | src/core/ThoughtEvaluator.ts             | Stateless quality signals + reasoning analytics (190L)                               |
 | `normalizeInput`                    | function  | src/core/InputNormalizer.ts              | Field correction, default filling, branch_id sanitization (433L)                     |
@@ -102,6 +103,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 - **Private `_` prefix**: `_container`, `_logger`, `_historyManager` etc.
 - **Unused params `_`**: ESLint `argsIgnorePattern: '^_'`.
 - **JSDoc**: All public APIs have full TSDoc with `@example`, `@param`, `@returns`.
+- **Session Isolation**: `session_id` on ThoughtData scopes history, branches, and stats to isolated sessions. Omit for backward-compatible global behavior. `reset_state: true` clears session before processing.
 
 ## ANTI-PATTERNS (THIS PROJECT)
 

@@ -43,6 +43,7 @@ import type { ThoughtData } from './thought.js';
 export interface IHistoryManager {
 	/**
 	 * Adds a thought to the history.
+	 * Session is determined by `thought.session_id` (defaults to global session).
 	 *
 	 * @param thought - The thought data to add
 	 */
@@ -51,47 +52,57 @@ export interface IHistoryManager {
 	/**
 	 * Gets the complete thought history.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns An array of all thoughts in chronological order
 	 */
-	getHistory(): ThoughtData[];
+	getHistory(sessionId?: string): ThoughtData[];
 
 	/**
 	 * Gets the current length of the thought history.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns The number of thoughts in history
 	 */
-	getHistoryLength(): number;
+	getHistoryLength(sessionId?: string): number;
 
 	/**
 	 * Gets all branches.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns A record mapping branch IDs to their thought arrays
 	 */
-	getBranches(): Record<string, ThoughtData[]>;
+	getBranches(sessionId?: string): Record<string, ThoughtData[]>;
 
 	/**
 	 * Gets all branch IDs.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns An array of branch identifiers
 	 */
-	getBranchIds(): string[];
+	getBranchIds(sessionId?: string): string[];
 
 	/**
-	 * Clears all history and branches.
+	 * Clears history and branches.
+	 * If sessionId is provided, clears only that session.
+	 * If omitted, clears all sessions.
+	 *
+	 * @param sessionId - Optional session ID to clear
 	 */
-	clear(): void;
+	clear(sessionId?: string): void;
+
 	/**
 	 * Gets the most recently available MCP tools from the session.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns The last-seen array of MCP tool names, or undefined if never set
 	 */
-	getAvailableMcpTools(): string[] | undefined;
+	getAvailableMcpTools(sessionId?: string): string[] | undefined;
 
 	/**
 	 * Gets the most recently available skills from the session.
 	 *
+	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns The last-seen array of skill names, or undefined if never set
 	 */
-	getAvailableSkills(): string[] | undefined;
-
+	getAvailableSkills(sessionId?: string): string[] | undefined;
 }

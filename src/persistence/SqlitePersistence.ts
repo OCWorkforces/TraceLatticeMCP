@@ -75,10 +75,8 @@ export class SqlitePersistence implements PersistenceBackend {
 		const dbPath = options?.dbPath ?? join(defaultDataDir, 'history.db');
 
 		// Load better-sqlite3 dynamically (optional dependency)
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
-		let Database: any;
+		let Database: new (path: string) => Database;
 		try {
-			// @ts-expect-error - better-sqlite3 is an optional dependency
 			const module = await import('better-sqlite3');
 			Database = module.default;
 		} catch {

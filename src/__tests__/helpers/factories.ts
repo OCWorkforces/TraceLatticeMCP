@@ -120,43 +120,57 @@ export function createMetaThought(overrides?: Partial<ThoughtData>): ThoughtData
  * Tracks calls and stores data in-memory.
  */
 export class MockHistoryManager implements IHistoryManager {
-	private _history: ThoughtData[] = [];
-	private _branches: Record<string, ThoughtData[]> = {};
+	private _sessions = new Map<
+		string,
+		{
+			history: ThoughtData[];
+			branches: Record<string, ThoughtData[]>;
+			mcpTools: string[] | undefined;
+			skills: string[] | undefined;
+		}
+	>();
 	private _clearCallCount = 0;
-	private _availableMcpTools: string[] | undefined;
-	private _availableSkills: string[] | undefined;
+	private static readonly DEFAULT = '__global__';
+
+	private _getSession(sessionId?: string) {
+		const key = sessionId ?? MockHistoryManager.DEFAULT;
+		if (!this._sessions.has(key)) {
+			this._sessions.set(key, {
+				history: [],
+				branches: {},
+				mcpTools: undefined,
+				skills: undefined,
+			});
+		}
+		return this._sessions.get(key)!;
+	}
 
 	addThought(thought: ThoughtData): void {
-		this._history.push(thought);
-		if (thought.available_mcp_tools) {
-			this._availableMcpTools = thought.available_mcp_tools;
-		}
-		if (thought.available_skills) {
-			this._availableSkills = thought.available_skills;
-		}
+		const s = this._getSession(thought.session_id);
+		s.history.push(thought);
+		if (thought.available_mcp_tools) s.mcpTools = thought.available_mcp_tools;
+		if (thought.available_skills) s.skills = thought.available_skills;
 	}
 
-	getHistory(): ThoughtData[] {
-		return this._history;
+	getHistory(sessionId?: string): ThoughtData[] {
+		return this._getSession(sessionId).history;
 	}
 
-	getHistoryLength(): number {
-		return this._history.length;
+	getHistoryLength(sessionId?: string): number {
+		return this._getSession(sessionId).history.length;
 	}
 
-	getBranches(): Record<string, ThoughtData[]> {
-		return this._branches;
+	getBranches(sessionId?: string): Record<string, ThoughtData[]> {
+		return this._getSession(sessionId).branches;
 	}
 
-	getBranchIds(): string[] {
-		return Object.keys(this._branches);
+	getBranchIds(sessionId?: string): string[] {
+		return Object.keys(this._getSession(sessionId).branches);
 	}
 
-	clear(): void {
-		this._history = [];
-		this._branches = {};
-		this._availableMcpTools = undefined;
-		this._availableSkills = undefined;
+	clear(sessionId?: string): void {
+		const key = sessionId ?? MockHistoryManager.DEFAULT;
+		this._sessions.delete(key);
 		this._clearCallCount++;
 	}
 
@@ -164,12 +178,12 @@ export class MockHistoryManager implements IHistoryManager {
 		return this._clearCallCount;
 	}
 
-	getAvailableMcpTools(): string[] | undefined {
-		return this._availableMcpTools;
+	getAvailableMcpTools(sessionId?: string): string[] | undefined {
+		return this._getSession(sessionId).mcpTools;
 	}
 
-	getAvailableSkills(): string[] | undefined {
-		return this._availableSkills;
+	getAvailableSkills(sessionId?: string): string[] | undefined {
+		return this._getSession(sessionId).skills;
 	}
 }
 

@@ -1071,4 +1071,294 @@ describe('sequentialthinking-tools MCP Tool', () => {
 			expect(response.current_step?.recommended_skills?.[0]?.skill_name).toBe('custom-skill');
 		});
 	});
+
+	describe('9. Session Isolation (CVE-2026-25536)', () => {
+		// These tests reproduce the exact contamination scenario from the CVE:
+		// When Chain A completes and Chain B starts, Chain B's thought_history_length,
+		// average_confidence, thought_type_counts, and branches all reflect Chain A's data.
+		// The fix adds session_id to scope state per-session.
+
+		function parseResponse(result: unknown) {
+			const content = (result as { content: Array<{ type: string; text: string }> }).content;
+			return JSON.parse(content[0]!.text) as {
+				thought_number: number;
+				total_thoughts: number;
+				next_thought_needed: boolean;
+				branches: string[];
+				thought_history_length: number;
+				session_id?: string;
+				confidence_signals?: {
+					reasoning_depth: number;
+					revision_count: number;
+					branch_count: number;
+					thought_type_distribution: Record<string, number>;
+					has_hypothesis: boolean;
+					has_verification: boolean;
+					average_confidence: number | null;
+				};
+				reasoning_stats?: {
+					total_thoughts: number;
+					total_branches: number;
+					thought_type_counts: Record<string, number>;
+					average_quality_score: number | null;
+					average_confidence: number | null;
+					hypothesis_count: number;
+				};
+			};
+		}
+
+		let server: ToolAwareSequentialThinkingServer;
+
+		beforeEach(() => {
+			server = new ToolAwareSequentialThinkingServer({ maxHistorySize: 100 });
+		});
+
+		it('9.1 Chain B does not inherit Chain A thought_history_length', async () => {
+			// Chain A: process 3 thoughts WITHOUT session_id (global)
+			for (let i = 1; i <= 3; i++) {
+				await server.processThought(
+					createTestThought({
+						thought: `Chain A thought ${i}`,
+						thought_number: i,
+						total_thoughts: 3,
+						next_thought_needed: i < 3,
+					})
+				);
+			}
+
+			// Chain B: process 1 thought WITH session_id='chain-b'
+			const chainBResult = await server.processThought(
+				createTestThought({
+					thought: 'Chain B first thought',
+					thought_number: 1,
+					total_thoughts: 1,
+					next_thought_needed: false,
+					session_id: 'chain-b',
+				})
+			);
+
+			const response = parseResponse(chainBResult);
+
+			// Chain B should have length 1, NOT 4 (contaminated by Chain A)
+			expect(response.thought_history_length).toBe(1);
+			expect(response.session_id).toBe('chain-b');
+		});
+
+		it('9.2 Chain B does not inherit Chain A branches', async () => {
+			// Chain A: create a base thought + branch
+			await server.processThought(
+				createTestThought({
+					thought: 'Chain A base',
+					thought_number: 1,
+					total_thoughts: 2,
+					next_thought_needed: true,
+				})
+			);
+			await server.processThought(
+				createTestThought({
+					thought: 'Chain A branch thought',
+					thought_number: 2,
+					total_thoughts: 2,
+					next_thought_needed: false,
+					branch_from_thought: 1,
+					branch_id: 'chain-a-branch',
+				})
+			);
+
+			// Chain B: new session, verify branches is empty
+			const chainBResult = await server.processThought(
+				createTestThought({
+					thought: 'Chain B thought',
+					thought_number: 1,
+					total_thoughts: 1,
+					next_thought_needed: false,
+					session_id: 'chain-b',
+				})
+			);
+
+			const response = parseResponse(chainBResult);
+
+			// Chain B should have NO branches — Chain A's 'chain-a-branch' must not leak
+			expect(response.branches).toEqual([]);
+			expect(response.confidence_signals?.branch_count).toBe(0);
+		});
+
+		it('9.3 Chain B does not inherit Chain A thought_type_counts', async () => {
+			// Chain A: process thoughts with specific thought_types
+			await server.processThought(
+				createTestThought({
+					thought: 'Chain A hypothesis',
+					thought_number: 1,
+					total_thoughts: 2,
+					next_thought_needed: true,
+					thought_type: 'hypothesis',
+					hypothesis_id: 'hyp-chain-a',
+					confidence: 0.6,
+				})
+			);
+			await server.processThought(
+				createTestThought({
+					thought: 'Chain A verification',
+					thought_number: 2,
+					total_thoughts: 2,
+					next_thought_needed: false,
+					thought_type: 'verification',
+					hypothesis_id: 'hyp-chain-a',
+					verification_target: 1,
+					confidence: 0.9,
+				})
+			);
+
+			// Chain B: only a regular thought
+			const chainBResult = await server.processThought(
+				createTestThought({
+					thought: 'Chain B regular thought',
+					thought_number: 1,
+					total_thoughts: 1,
+					next_thought_needed: false,
+					session_id: 'chain-b',
+				})
+			);
+
+			const response = parseResponse(chainBResult);
+
+			// Chain B should NOT see Chain A's hypothesis/verification counts
+			expect(response.reasoning_stats?.thought_type_counts.hypothesis).toBe(0);
+			expect(response.reasoning_stats?.thought_type_counts.verification).toBe(0);
+			expect(response.reasoning_stats?.thought_type_counts.regular).toBe(1);
+			expect(response.reasoning_stats?.hypothesis_count).toBe(0);
+			expect(response.confidence_signals?.has_hypothesis).toBe(false);
+			expect(response.confidence_signals?.has_verification).toBe(false);
+		});
+
+		it('9.4 Chain B statistics are scoped — average_quality_score reflects only Chain B', async () => {
+			// Chain A: thoughts with specific quality_scores
+			for (let i = 1; i <= 3; i++) {
+				await server.processThought(
+					createTestThought({
+						thought: `Chain A thought ${i}`,
+						thought_number: i,
+						total_thoughts: 3,
+						next_thought_needed: i < 3,
+						quality_score: 0.3,
+						confidence: 0.4,
+					})
+				);
+			}
+
+			// Chain B: single thought with high quality_score
+			const chainBResult = await server.processThought(
+				createTestThought({
+					thought: 'Chain B high-quality thought',
+					thought_number: 1,
+					total_thoughts: 1,
+					next_thought_needed: false,
+					session_id: 'chain-b',
+					quality_score: 0.95,
+					confidence: 0.99,
+				})
+			);
+
+			const response = parseResponse(chainBResult);
+
+			// Chain B average_quality_score should be 0.95 (only its own data), not ~0.46
+			expect(response.reasoning_stats?.average_quality_score).toBe(0.95);
+			expect(response.reasoning_stats?.average_confidence).toBe(0.99);
+			expect(response.confidence_signals?.average_confidence).toBe(0.99);
+		});
+
+		it('9.5 backward compatible — omitting session_id preserves global behavior', async () => {
+			// 3 thoughts without session_id
+			for (let i = 1; i <= 3; i++) {
+				await server.processThought(
+					createTestThought({
+						thought: `Global thought ${i}`,
+						thought_number: i,
+						total_thoughts: 4,
+						next_thought_needed: true,
+					})
+				);
+			}
+
+			// 4th thought also without session_id — should see all 4
+			const result = await server.processThought(
+				createTestThought({
+					thought: 'Global thought 4',
+					thought_number: 4,
+					total_thoughts: 4,
+					next_thought_needed: false,
+				})
+			);
+
+			const response = parseResponse(result);
+
+			// All 4 thoughts share the global session
+			expect(response.thought_history_length).toBe(4);
+			expect(response.session_id).toBeUndefined();
+		});
+
+		it('9.6 reset_state clears session and starts fresh', async () => {
+			// 3 thoughts in session 'task-a'
+			for (let i = 1; i <= 3; i++) {
+				await server.processThought(
+					createTestThought({
+						thought: `Task-A thought ${i}`,
+						thought_number: i,
+						total_thoughts: 3,
+						next_thought_needed: i < 3,
+						session_id: 'task-a',
+					})
+				);
+			}
+
+			// 4th thought with session_id='task-a', reset_state=true
+			const result = await server.processThought(
+				createTestThought({
+					thought: 'Task-A fresh start',
+					thought_number: 1,
+					total_thoughts: 1,
+					next_thought_needed: false,
+					session_id: 'task-a',
+					reset_state: true,
+				})
+			);
+
+			const response = parseResponse(result);
+
+			// After reset, only the new thought exists
+			expect(response.thought_history_length).toBe(1);
+			expect(response.session_id).toBe('task-a');
+		});
+
+		it('9.7 reset_state without session_id clears global state', async () => {
+			// 3 thoughts without session_id
+			for (let i = 1; i <= 3; i++) {
+				await server.processThought(
+					createTestThought({
+						thought: `Global thought ${i}`,
+						thought_number: i,
+						total_thoughts: 3,
+						next_thought_needed: i < 3,
+					})
+				);
+			}
+
+			// 4th thought with reset_state=true (no session_id)
+			const result = await server.processThought(
+				createTestThought({
+					thought: 'Fresh global start',
+					thought_number: 1,
+					total_thoughts: 1,
+					next_thought_needed: false,
+					reset_state: true,
+				})
+			);
+
+			const response = parseResponse(result);
+
+			// After reset, only the new thought exists
+			expect(response.thought_history_length).toBe(1);
+			expect(response.session_id).toBeUndefined();
+		});
+	});
 });

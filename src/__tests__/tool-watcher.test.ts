@@ -251,7 +251,7 @@ describe('ToolWatcher', () => {
 
 		it('should handle non-Error objects thrown by removeTool', async () => {
 			(mockRegistry.removeTool as ReturnType<typeof vi.fn>).mockImplementation(() => {
-				throw 'string error'; // eslint-disable-line no-throw-literal
+				throw 'string error';
 			});
 
 			const watcher = new ToolWatcher(mockRegistry, mockLogger);
