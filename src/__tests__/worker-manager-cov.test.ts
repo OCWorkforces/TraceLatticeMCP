@@ -22,6 +22,21 @@ const { getWorkers, resetWorkers } = vi.hoisted(() => {
 	};
 });
 
+/** Retrieve mock worker at given index, throwing if unavailable. */
+function requireWorkerAt(index: number): MockWorkerShape {
+	const w = getWorkers()[index];
+	if (!w) throw new Error(`Expected worker at index ${index}, got none`);
+	return w;
+}
+
+/** Retrieve last mock worker, throwing if none exist. */
+function requireLastWorker(): MockWorkerShape {
+	const all = getWorkers();
+	const w = all[all.length - 1];
+	if (!w) throw new Error('Expected at least one worker, got none');
+	return w;
+}
+
 vi.mock('node:worker_threads', () => {
 	class MockWorker {
 		handlers = new Map<string, (...args: unknown[]) => void>();
@@ -72,7 +87,7 @@ describe('WorkerManager Coverage', () => {
 	describe('worker message handling', () => {
 		it('should resolve promise on result message', async () => {
 			await manager.start();
-			const worker = getWorkers()[0];
+			const worker = requireWorkerAt(0);
 
 			const thought: ThoughtData = {
 				thought: 'test',
@@ -100,7 +115,7 @@ describe('WorkerManager Coverage', () => {
 
 		it('should reject promise on error message', async () => {
 			await manager.start();
-			const worker = getWorkers()[0];
+			const worker = requireWorkerAt(0);
 
 			const thought: ThoughtData = {
 				thought: 'test',
@@ -124,7 +139,7 @@ describe('WorkerManager Coverage', () => {
 
 		it('should handle error message with no error string', async () => {
 			await manager.start();
-			const worker = getWorkers()[0];
+			const worker = requireWorkerAt(0);
 
 			const thought: ThoughtData = {
 				thought: 'test',
@@ -146,21 +161,21 @@ describe('WorkerManager Coverage', () => {
 
 		it('should handle health check response', async () => {
 			await manager.start();
-			const worker = getWorkers()[0];
+			const worker = requireWorkerAt(0);
 			worker.simulate('message', { type: 'health' });
 			// Should not throw
 		});
 
 		it('should ignore messages with unknown requestId', async () => {
 			await manager.start();
-			const worker = getWorkers()[0];
+			const worker = requireWorkerAt(0);
 			worker.simulate('message', { type: 'result', requestId: 'unknown' });
 			// Should not throw
 		});
 
 		it('should ignore error messages with unknown requestId', async () => {
 			await manager.start();
-			const worker = getWorkers()[0];
+			const worker = requireWorkerAt(0);
 			worker.simulate('message', { type: 'error', requestId: 'unknown' });
 			// Should not throw
 		});
@@ -178,7 +193,7 @@ describe('WorkerManager Coverage', () => {
 			const initialCount = retryManager.getStats().activeWorkers;
 			expect(initialCount).toBe(1);
 
-			const worker = getWorkers()[getWorkers().length - 1];
+			const worker = requireLastWorker();
 			worker.simulate('error');
 
 			expect(worker.terminate).toHaveBeenCalled();
@@ -194,7 +209,7 @@ describe('WorkerManager Coverage', () => {
 			});
 
 			await retryManager.start();
-			const worker = getWorkers()[getWorkers().length - 1];
+			const worker = requireLastWorker();
 
 			// With maxRetries=0, first error should remove
 			worker.simulate('error');
@@ -211,7 +226,7 @@ describe('WorkerManager Coverage', () => {
 			});
 
 			await retryManager.start();
-			const worker = getWorkers()[getWorkers().length - 1];
+			const worker = requireLastWorker();
 			worker.terminate = vi.fn().mockImplementation(() => {
 				throw new Error('terminate failed');
 			});
@@ -230,7 +245,7 @@ describe('WorkerManager Coverage', () => {
 			});
 
 			await retryManager.start();
-			const worker = getWorkers()[getWorkers().length - 1];
+			const worker = requireLastWorker();
 			worker.terminate = vi.fn().mockImplementation(() => {
 				throw new Error('terminate failed');
 			});
@@ -249,7 +264,7 @@ describe('WorkerManager Coverage', () => {
 			});
 
 			await exitManager.start();
-			const worker = getWorkers()[getWorkers().length - 1];
+			const worker = requireLastWorker();
 
 			worker.simulate('exit', 1);
 
@@ -266,7 +281,7 @@ describe('WorkerManager Coverage', () => {
 			});
 
 			await exitManager.start();
-			const worker = getWorkers()[getWorkers().length - 1];
+			const worker = requireLastWorker();
 
 			worker.simulate('exit', 0);
 
@@ -281,7 +296,7 @@ describe('WorkerManager Coverage', () => {
 			});
 
 			await exitManager.start();
-			const worker = getWorkers()[getWorkers().length - 1];
+			const worker = requireLastWorker();
 			await exitManager.terminate();
 
 			worker.simulate('exit', 1);
@@ -295,7 +310,7 @@ describe('WorkerManager Coverage', () => {
 			});
 
 			await exitManager.start();
-			const worker = getWorkers()[getWorkers().length - 1];
+			const worker = requireLastWorker();
 
 			// Make the worker script disappear for the replacement
 			const { existsSync } = await import('node:fs');
@@ -313,7 +328,7 @@ describe('WorkerManager Coverage', () => {
 	describe('worker online event', () => {
 		it('should clear retry count on online', async () => {
 			await manager.start();
-			const worker = getWorkers()[0];
+			const worker = requireWorkerAt(0);
 			worker.simulate('online');
 			// Should not throw
 		});
@@ -370,7 +385,7 @@ describe('WorkerManager Coverage', () => {
 			});
 
 			await healthManager.start();
-			const worker = getWorkers()[getWorkers().length - 1];
+			const worker = requireLastWorker();
 			worker.postMessage = vi.fn().mockImplementation(() => {
 				throw new Error('Worker is dead');
 			});
@@ -386,40 +401,47 @@ describe('WorkerManager Coverage', () => {
 	describe('round-robin distribution', () => {
 		it('should distribute requests across workers', async () => {
 			await manager.start();
-			const workers = getWorkers();
+			const w0 = requireWorkerAt(0);
+const w1 = requireWorkerAt(1);
 
-			const thought: ThoughtData = {
-				thought: 'test',
-				thought_number: 1,
-				total_thoughts: 1,
-				next_thought_needed: false,
-			};
+const thought: ThoughtData = {
+    thought: 'test',
+    thought_number: 1,
+    total_thoughts: 1,
+    next_thought_needed: false,
+};
 
-			// First request goes to worker 0
-			const p1 = manager.processThought(thought);
-			const req1 = workers[0].postMessage.mock.calls[0][0].requestId;
-			workers[0].simulate('message', { type: 'result', requestId: req1, result: 'r1' });
-			await p1;
+// First request goes to worker 0
+const p1 = manager.processThought(thought);
+const call0 = w0.postMessage.mock.calls[0];
+if (!call0) throw new Error('No call recorded on worker 0');
+const req1 = call0[0].requestId;
+w0.simulate('message', { type: 'result', requestId: req1, result: 'r1' });
+await p1;
 
-			// Second request goes to worker 1
-			const p2 = manager.processThought(thought);
-			const req2 = workers[1].postMessage.mock.calls[0][0].requestId;
-			workers[1].simulate('message', { type: 'result', requestId: req2, result: 'r2' });
-			await p2;
+// Second request goes to worker 1
+const p2 = manager.processThought(thought);
+const call1 = w1.postMessage.mock.calls[0];
+if (!call1) throw new Error('No call recorded on worker 1');
+const req2 = call1[0].requestId;
+w1.simulate('message', { type: 'result', requestId: req2, result: 'r2' });
+await p2;
 
-			// Third request wraps back to worker 0
-			const p3 = manager.processThought(thought);
-			const req3 = workers[0].postMessage.mock.calls[1][0].requestId;
-			workers[0].simulate('message', { type: 'result', requestId: req3, result: 'r3' });
-			const r3 = await p3;
-			expect(r3).toBe('r3');
+// Third request wraps back to worker 0
+const p3 = manager.processThought(thought);
+const call0b = w0.postMessage.mock.calls[1];
+if (!call0b) throw new Error('No second call recorded on worker 0');
+const req3 = call0b[0].requestId;
+w0.simulate('message', { type: 'result', requestId: req3, result: 'r3' });
+const r3 = await p3;
+expect(r3).toBe('r3');
 		});
 	});
 
 	describe('processThought edge cases', () => {
 		it('should handle postMessage error', async () => {
 			await manager.start();
-			const worker = getWorkers()[0];
+			const worker = requireWorkerAt(0);
 			worker.postMessage = vi.fn().mockImplementation(() => {
 				throw new Error('postMessage failed');
 			});
