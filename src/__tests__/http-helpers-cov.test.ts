@@ -151,4 +151,30 @@ describe('HttpHelpers', () => {
 			expect(res.end).toHaveBeenCalledWith('Custom Not Found');
 		});
 	});
+
+	describe('readRequestBody with string chunks', () => {
+		function createStringChunkMessage(chunks: string[]): IncomingMessage {
+			const emitter = new EventEmitter();
+			const message = Object.assign(emitter, {
+				[Symbol.asyncIterator]: async function* () {
+					for (const chunk of chunks) {
+						yield chunk;
+					}
+				},
+			}) as unknown as IncomingMessage;
+			return message;
+		}
+
+		it('should handle string chunks without calling toString()', async () => {
+			const req = createStringChunkMessage(['hello', ' world']);
+			const body = await readRequestBody(req, 0);
+			expect(body).toBe('hello world');
+		});
+
+		it('should enforce maxBodySize with string chunks', async () => {
+			const req = createStringChunkMessage(['a'.repeat(200)]);
+			const body = await readRequestBody(req, 100);
+			expect(body).toBeNull();
+		});
+	});
 });

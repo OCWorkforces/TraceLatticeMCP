@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFile, rm, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -257,5 +257,60 @@ describe('Telemetry', () => {
 
 		expect(ended.error).toBeUndefined();
 		expect(telemetry.getSpans()[0]!.error).toBeUndefined();
+	});
+
+	it('isEnabled returns true when telemetry is enabled', () => {
+		const telemetry = new Telemetry({ enabled: true });
+		expect(telemetry.isEnabled).toBe(true);
+	});
+
+	it('isEnabled returns false when telemetry is disabled', () => {
+		const telemetry = new Telemetry({ enabled: false });
+		expect(telemetry.isEnabled).toBe(false);
+	});
+
+	it('isEnabled returns false by default', () => {
+		const telemetry = new Telemetry();
+		expect(telemetry.isEnabled).toBe(false);
+	});
+
+	it('logger.debug is called when enabled and span ends', () => {
+		const mockLogger = {
+			info: () => {},
+			warn: () => {},
+			error: () => {},
+			debug: vi.fn(),
+			setLevel: () => {},
+			getLevel: () => 'info' as const,
+		};
+		const telemetry = new Telemetry({ enabled: true, logger: mockLogger });
+		telemetry.startSpan('logged-op', 'server').end();
+
+		expect(mockLogger.debug).toHaveBeenCalledWith('Telemetry span recorded', {
+			name: 'logged-op',
+			kind: 'server',
+			durationMs: expect.any(Number),
+			hasError: false,
+		});
+	});
+
+	it('logger.debug shows hasError true when span ends with error', () => {
+		const mockLogger = {
+			info: () => {},
+			warn: () => {},
+			error: () => {},
+			debug: vi.fn(),
+			setLevel: () => {},
+			getLevel: () => 'info' as const,
+		};
+		const telemetry = new Telemetry({ enabled: true, logger: mockLogger });
+		telemetry.startSpan('error-logged-op', 'server').end(new Error('oops'));
+
+		expect(mockLogger.debug).toHaveBeenCalledWith('Telemetry span recorded', {
+			name: 'error-logged-op',
+			kind: 'server',
+			durationMs: expect.any(Number),
+			hasError: true,
+		});
 	});
 });

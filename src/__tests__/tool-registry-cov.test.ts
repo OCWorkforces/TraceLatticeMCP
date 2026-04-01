@@ -816,4 +816,36 @@ describe('ToolRegistry (coverage)', () => {
 			expect(registry.has('also-not-tool')).toBe(false);
 		});
 	});
+
+	// ==================== Uncovered Branch Coverage ====================
+	describe('Uncovered Branch Coverage', () => {
+		it('_parseFrontmatter catch branch — YAML parse error during property extraction', () => {
+			const registry = createToolRegistry();
+			// Access the protected method directly to test the catch branch
+			// Create frontmatter YAML that parses but causes an error during extraction
+			// Override _extractFrontmatter to return an object that throws on property access
+			const throwingObj = new Proxy({} as Record<string, unknown>, {
+				get(_target, prop) {
+					if (prop === 'name') {
+						throw new Error('Proxy trap error');
+					}
+					return undefined;
+				},
+			});
+			(registry as unknown as { _extractFrontmatter: () => Record<string, unknown> })._extractFrontmatter = () => throwingObj;
+
+			const result = (registry as unknown as { _parseFrontmatter: (c: string) => { _error?: string } })._parseFrontmatter('---\nname: test\n---');
+			expect(result._error).toBe('YAML parse error');
+		});
+
+		it('_buildItem returns null when name is present but inputSchema is missing', () => {
+			const registry = createToolRegistry();
+			const result = (registry as unknown as { _buildItem: (p: Partial<Tool>) => Tool | null })._buildItem({
+				name: 'test-tool',
+				description: 'test',
+				// inputSchema deliberately omitted
+			});
+			expect(result).toBeNull();
+		});
+	});
 });

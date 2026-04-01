@@ -512,6 +512,104 @@ describe('FilePersistence', () => {
 			expect(existsSync(join(testDir, 'malicious.json'))).toBe(false);
 		});
 	});
+
+	describe('additional coverage', () => {
+		it('should delegate listBranches() to getBranchIds()', async () => {
+			await backend.saveBranch('branch-a', [createTestThought()]);
+			await backend.saveBranch('branch-b', [createTestThought()]);
+
+			const branches = await backend.listBranches();
+
+			expect(branches).toHaveLength(2);
+			expect(branches).toEqual(expect.arrayContaining(['branch-a', 'branch-b']));
+		});
+
+		it('should return false from healthy() when directory creation fails', async () => {
+			// Use an invalid path that will cause mkdir to throw
+			const badBackend = new FilePersistence({ dataDir: '/dev/null/impossible/path' });
+			const result = await badBackend.healthy();
+			expect(result).toBe(false);
+		});
+
+		it('should return empty array from getBranchIds() when readdir throws', async () => {
+			// Create a backend with branches dir pointing to a file (not a directory)
+			// so readdir will fail
+			const { writeFile: wf } = await import('node:fs/promises');
+			const branchesDir = join(testDir, 'branches');
+			// Write a file where the branches directory should be
+			await wf(branchesDir, 'not-a-directory', 'utf-8');
+
+			const ids = await backend.getBranchIds();
+			expect(ids).toEqual([]);
+		});
+
+		it('should be a no-op when close() is called', async () => {
+			await expect(backend.close()).resolves.toBeUndefined();
+		});
+
+		it('should record operation duration with metrics', async () => {
+			const histogramCalls: Array<{ name: string; value: number; labels: Record<string, string> }> = [];
+			const mockMetrics = {
+				histogram(name: string, value: number, labels: Record<string, string>) {
+					histogramCalls.push({ name, value, labels });
+				},
+				counter() {},
+				gauge() {},
+				getAll() { return ''; },
+			};
+			const metricsBackend = new FilePersistence({
+				dataDir: testDir,
+				metrics: mockMetrics as unknown as import('../contracts/index.js').IMetrics,
+			});
+
+			await metricsBackend.saveThought(createTestThought());
+			await metricsBackend.loadHistory();
+
+			const saveOps = histogramCalls.filter((c) => c.labels.operation === 'save_thought');
+			const loadOps = histogramCalls.filter((c) => c.labels.operation === 'load_history');
+			expect(saveOps.length).toBeGreaterThanOrEqual(1);
+			expect(loadOps.length).toBeGreaterThanOrEqual(1);
+		});
+	});
+
+	describe('edge case data handling', () => {
+		it('should return empty array when history contains non-array JSON', async () => {
+			const { writeFile: wf, mkdir: mk } = await import('node:fs/promises');
+			await mk(testDir, { recursive: true });
+			// Write valid JSON that is not an array
+			await wf(join(testDir, 'history.json'), JSON.stringify({ not: 'an array' }), 'utf-8');
+
+			const history = await backend.loadHistory();
+			expect(history).toEqual([]);
+		});
+
+		it('should return undefined when branch contains non-array JSON', async () => {
+			const { writeFile: wf, mkdir: mk } = await import('node:fs/promises');
+			const branchesDir = join(testDir, 'branches');
+			await mk(branchesDir, { recursive: true });
+			// Write valid JSON that is not an array
+			await wf(join(branchesDir, 'not-array.json'), JSON.stringify('string-value'), 'utf-8');
+
+			const loaded = await backend.loadBranch('not-array');
+			expect(loaded).toBeUndefined();
+		});
+
+		it('should skip non-json files during clear()', async () => {
+			const { writeFile: wf, mkdir: mk } = await import('node:fs/promises');
+			const branchesDir = join(testDir, 'branches');
+			await mk(branchesDir, { recursive: true });
+			// Create a non-json file in branches dir
+			await wf(join(branchesDir, 'readme.txt'), 'not a branch', 'utf-8');
+			// Also create a valid branch
+			await backend.saveBranch('valid', [createTestThought()]);
+
+			// Clear should succeed without throwing
+			await expect(backend.clear()).resolves.toBeUndefined();
+
+			// Non-json file should still exist
+			expect(existsSync(join(branchesDir, 'readme.txt'))).toBe(true);
+		});
+	});
 });
 
 describe('createPersistenceBackend', () => {

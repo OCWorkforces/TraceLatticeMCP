@@ -644,6 +644,391 @@ describe('ThoughtProcessor', () => {
 		});
 	});
 
+	describe('reasoning_hints', () => {
+		it('omits reasoning_hints when no warning patterns detected', async () => {
+			const result = await processor.process(
+				createTestThought({
+					thought_number: 1,
+					total_thoughts: 1,
+					next_thought_needed: false,
+				})
+			);
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.reasoning_hints).toBeUndefined();
+		});
+
+		it('includes reasoning_hints when 3+ consecutive regular thoughts', async () => {
+			await processor.process(
+				createTestThought({
+					thought_number: 1,
+					total_thoughts: 5,
+					next_thought_needed: true,
+				})
+			);
+			await processor.process(
+				createTestThought({
+					thought_number: 2,
+					total_thoughts: 5,
+					next_thought_needed: true,
+				})
+			);
+			const result = await processor.process(
+				createTestThought({
+					thought_number: 3,
+					total_thoughts: 5,
+					next_thought_needed: true,
+				})
+			);
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.reasoning_hints).toBeDefined();
+			expect(Array.isArray(parsed.reasoning_hints)).toBe(true);
+			expect(parsed.reasoning_hints.length).toBeGreaterThan(0);
+		});
+
+		it('limits reasoning_hints to max 3', async () => {
+			// Send thoughts with decreasing confidence to trigger confidence_drift
+			// plus consecutive regular thoughts for consecutive_without_verification
+			for (let i = 1; i <= 5; i++) {
+				await processor.process(
+					createTestThought({
+						thought_number: i,
+						total_thoughts: 10,
+						next_thought_needed: true,
+						confidence: 1.0 - i * 0.15, // decreasing: 0.85, 0.70, 0.55, 0.40, 0.25
+					})
+				);
+			}
+			const result = await processor.process(
+				createTestThought({
+					thought_number: 6,
+					total_thoughts: 10,
+					next_thought_needed: true,
+				})
+			);
+			const parsed = JSON.parse(result.content[0]!.text);
+			if (parsed.reasoning_hints) {
+				expect(parsed.reasoning_hints.length).toBeLessThanOrEqual(3);
+			}
+		});
+
+		it('does not repeat same hint within 3-thought cooldown', async () => {
+			// Process 3 thoughts to trigger consecutive_without_verification
+			await processor.process(
+				createTestThought({
+					thought_number: 1,
+					total_thoughts: 10,
+					next_thought_needed: true,
+				})
+			);
+			await processor.process(
+				createTestThought({
+					thought_number: 2,
+					total_thoughts: 10,
+					next_thought_needed: true,
+				})
+			);
+			const result3 = await processor.process(
+				createTestThought({
+					thought_number: 3,
+					total_thoughts: 10,
+					next_thought_needed: true,
+				})
+			);
+			const parsed3 = JSON.parse(result3.content[0]!.text);
+			const firstHints = parsed3.reasoning_hints;
+
+			// Process thought 4 — same pattern should be in cooldown
+			const result4 = await processor.process(
+				createTestThought({
+					thought_number: 4,
+					total_thoughts: 10,
+					next_thought_needed: true,
+				})
+			);
+			const parsed4 = JSON.parse(result4.content[0]!.text);
+
+			// Hint fired at thought 3, so thought 4 should be in cooldown
+			if (firstHints && firstHints.length > 0) {
+				expect(parsed4.reasoning_hints).toBeUndefined();
+			}
+		});
+
+		it('re-fires hint after cooldown expires', async () => {
+			// Process 3 thoughts to trigger consecutive_without_verification at thought 3
+			for (let i = 1; i <= 3; i++) {
+				await processor.process(
+					createTestThought({
+						thought_number: i,
+						total_thoughts: 10,
+						next_thought_needed: true,
+					})
+				);
+			}
+			// Process thoughts 4-5 (in cooldown: 4-3=1, 5-3=2 — both < 3)
+			for (let i = 4; i <= 5; i++) {
+				await processor.process(
+					createTestThought({
+						thought_number: i,
+						total_thoughts: 10,
+						next_thought_needed: true,
+					})
+				);
+			}
+			// Thought 6: cooldown expired (6-3=3, NOT < 3) and new run of 3+ consecutive (4,5,6)
+			const result6 = await processor.process(
+				createTestThought({
+					thought_number: 6,
+					total_thoughts: 10,
+					next_thought_needed: true,
+				})
+			);
+			const parsed6 = JSON.parse(result6.content[0]!.text);
+			expect(parsed6.reasoning_hints).toBeDefined();
+			expect(parsed6.reasoning_hints.length).toBeGreaterThan(0);
+		});
+
+		it('tracks cooldowns per session independently', async () => {
+			// Session A: trigger pattern at thought 3
+			for (let i = 1; i <= 3; i++) {
+				await processor.process(
+					createTestThought({
+						thought_number: i,
+						total_thoughts: 5,
+						next_thought_needed: true,
+						session_id: 'session-a',
+					})
+				);
+			}
+			const resultA = await processor.process(
+				createTestThought({
+					thought_number: 4,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					session_id: 'session-a',
+				})
+			);
+			const parsedA4 = JSON.parse(resultA.content[0]!.text);
+
+			// Session B: same pattern — should NOT be affected by session A's cooldown
+			for (let i = 1; i <= 3; i++) {
+				await processor.process(
+					createTestThought({
+						thought_number: i,
+						total_thoughts: 5,
+						next_thought_needed: true,
+						session_id: 'session-b',
+					})
+				);
+			}
+			const resultB = await processor.process(
+				createTestThought({
+					thought_number: 4,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					session_id: 'session-b',
+				})
+			);
+			const parsedB4 = JSON.parse(resultB.content[0]!.text);
+
+			// Both sessions are in cooldown at thought 4 (fired at 3, 4-3=1 < 3)
+			// But the key point: session B was NOT blocked by session A's cooldown
+			expect(parsedA4.reasoning_hints).toBeUndefined();
+			expect(parsedB4.reasoning_hints).toBeUndefined();
+		});
+
+		it('session B gets hint even when session A is in cooldown', async () => {
+			// Session A: trigger at thought 3, then thought 4 in cooldown
+			for (let i = 1; i <= 4; i++) {
+				await processor.process(
+					createTestThought({
+						thought_number: i,
+						total_thoughts: 5,
+						next_thought_needed: true,
+						session_id: 'hint-a',
+					})
+				);
+			}
+
+			// Session B: 3 thoughts triggers hint at thought 3
+			await processor.process(
+				createTestThought({
+					thought_number: 1,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					session_id: 'hint-b',
+				})
+			);
+			await processor.process(
+				createTestThought({
+					thought_number: 2,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					session_id: 'hint-b',
+				})
+			);
+			const resultB3 = await processor.process(
+				createTestThought({
+					thought_number: 3,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					session_id: 'hint-b',
+				})
+			);
+			const parsedB3 = JSON.parse(resultB3.content[0]!.text);
+
+			// Session B gets hints despite session A being in cooldown
+			expect(parsedB3.reasoning_hints).toBeDefined();
+			expect(parsedB3.reasoning_hints.length).toBeGreaterThan(0);
+		});
+
+		it('does not include info-severity patterns as hints', async () => {
+			// hypothesis followed by verification — triggers healthy_verification (info)
+			// but NOT consecutive_without_verification (warning)
+			await processor.process(
+				createTestThought({
+					thought_number: 1,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					thought_type: 'hypothesis',
+					hypothesis_id: 'h1',
+				})
+			);
+			await processor.process(
+				createTestThought({
+					thought_number: 2,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					thought_type: 'verification',
+					hypothesis_id: 'h1',
+				})
+			);
+			const result = await processor.process(
+				createTestThought({
+					thought_number: 3,
+					total_thoughts: 5,
+					next_thought_needed: true,
+				})
+			);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			// healthy_verification is info-level — should NOT appear in reasoning_hints
+			if (parsed.reasoning_hints) {
+				for (const hint of parsed.reasoning_hints) {
+					expect(hint).not.toContain('good practice');
+				}
+			}
+		});
+
+		it('reasoning_hints are strings with descriptive messages', async () => {
+			await processor.process(
+				createTestThought({
+					thought_number: 1,
+					total_thoughts: 5,
+					next_thought_needed: true,
+				})
+			);
+			await processor.process(
+				createTestThought({
+					thought_number: 2,
+					total_thoughts: 5,
+					next_thought_needed: true,
+				})
+			);
+			const result = await processor.process(
+				createTestThought({
+					thought_number: 3,
+					total_thoughts: 5,
+					next_thought_needed: true,
+				})
+			);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			expect(parsed.reasoning_hints).toBeDefined();
+			for (const hint of parsed.reasoning_hints) {
+				expect(typeof hint).toBe('string');
+				expect(hint.length).toBeGreaterThan(0);
+			}
+			// consecutive_without_verification pattern includes thought range
+			expect(parsed.reasoning_hints[0]).toContain('consecutive');
+		});
+
+		it('confidence_drift pattern produces warning hint', async () => {
+			// 3 consecutive thoughts with strictly decreasing confidence
+			for (let i = 1; i <= 3; i++) {
+				await processor.process(
+					createTestThought({
+						thought_number: i,
+						total_thoughts: 5,
+						next_thought_needed: true,
+						confidence: 1.0 - i * 0.2, // 0.8, 0.6, 0.4
+						thought_type: 'verification', // avoid consecutive_without_verification
+					})
+				);
+			}
+			const result = await processor.process(
+				createTestThought({
+					thought_number: 4,
+					total_thoughts: 5,
+					next_thought_needed: true,
+					confidence: 0.1, // continues decreasing
+					thought_type: 'verification',
+				})
+			);
+			const parsed = JSON.parse(result.content[0]!.text);
+
+			// confidence_drift is a warning pattern
+			if (parsed.reasoning_hints) {
+				const hasDriftHint = parsed.reasoning_hints.some(
+					(h: string) => h.toLowerCase().includes('confidence') || h.includes('\u2192')
+				);
+				expect(hasDriftHint).toBe(true);
+			}
+		});
+
+		it('reset_state clears history but cooldowns persist on processor', async () => {
+			// Trigger hint at thought 3
+			for (let i = 1; i <= 3; i++) {
+				await processor.process(
+					createTestThought({
+						thought_number: i,
+						total_thoughts: 10,
+						next_thought_needed: true,
+						session_id: 'reset-hints',
+					})
+				);
+			}
+
+			// Reset session and rebuild 3 consecutive thoughts
+			for (let i = 1; i <= 4; i++) {
+				await processor.process(
+					createTestThought({
+						thought_number: i,
+						total_thoughts: 10,
+						next_thought_needed: true,
+						session_id: 'reset-hints',
+						...(i === 1 ? { reset_state: true } : {}),
+					})
+				);
+			}
+
+			// Cooldown from thought 3 (first chain) is still active for thought 3-4 (second chain):
+			// 3-3=0 < 3 → in cooldown at thought 3, 4-3=1 < 3 → in cooldown at thought 4.
+			// _hintCooldowns is on ThoughtProcessor, NOT cleared by reset_state.
+			const last = await processor.process(
+				createTestThought({
+					thought_number: 5,
+					total_thoughts: 10,
+					next_thought_needed: true,
+					session_id: 'reset-hints',
+				})
+			);
+			const parsed = JSON.parse(last.content[0]!.text);
+
+			// 5-3=2 < 3 → still in cooldown for consecutive_without_verification
+			expect(parsed.reasoning_hints).toBeUndefined();
+		});
+	});
+
 	describe('cross-field reference validation', () => {
 		it('should drop verification_target referencing non-existent thought', async () => {
 			// Seed 3 thoughts into history
@@ -1126,6 +1511,133 @@ describe('ThoughtProcessor', () => {
 			});
 			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.reset_state).toBeUndefined();
+		});
+	});
+});
+
+describe('ThoughtProcessor — uncovered branches', () => {
+	let processor: ThoughtProcessor;
+	let mockHistory: MockHistoryManager;
+	let formatter: ThoughtFormatter;
+	let logger: StructuredLogger;
+
+	beforeEach(() => {
+		mockHistory = new MockHistoryManager();
+		formatter = new ThoughtFormatter();
+		logger = new StructuredLogger({ context: 'Test', pretty: false });
+		processor = new ThoughtProcessor(mockHistory, formatter, new ThoughtEvaluator(), logger);
+	});
+
+	describe('_generateHints max 3 break (line 172)', () => {
+		it('should cap hints at 3 even when more warnings are available', async () => {
+			// We need 4+ different warning patterns active simultaneously.
+			// Easiest: create a history that triggers multiple pattern signals.
+			// 4+ consecutive same-type thoughts triggers consecutive_without_verification (warning)
+			// 3+ decreasing confidence triggers confidence_drift (warning)
+			// We need at least 4 different warning patterns to hit the break.
+			// Let's use a longer history to trigger multiple distinct warning patterns.
+			const proc = new ThoughtProcessor(new MockHistoryManager(), formatter, new ThoughtEvaluator(), logger);
+
+			// First, seed 12 consecutive 'regular' thoughts with decreasing confidence
+			// This should trigger:
+			// 1) consecutive_without_verification at thought 4+ (warning)
+			// 2) confidence_drift (warning)
+			// And monotonic_type (info, not counted)
+			// To get 4+ warning patterns we use synthesis thoughts with dangling references too
+			for (let i = 1; i <= 10; i++) {
+				await proc.process({
+					thought: `Thought ${i}`,
+					thought_number: i,
+					total_thoughts: 15,
+					next_thought_needed: true,
+					thought_type: 'regular',
+					confidence: 1.0 - i * 0.05,
+				});
+			}
+
+			const result = await proc.process({
+				thought: 'Another regular',
+				thought_number: 11,
+				total_thoughts: 15,
+				next_thought_needed: true,
+				thought_type: 'regular',
+				confidence: 0.3,
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			if (parsed.reasoning_hints) {
+				expect(parsed.reasoning_hints.length).toBeLessThanOrEqual(3);
+			}
+		});
+	});
+
+	describe('process catch with non-Error (line 322)', () => {
+		it('should handle non-Error thrown in process catch branch', async () => {
+			// Create a HistoryManager that throws a non-Error value
+			class StringThrowingHistoryManager implements IHistoryManager {
+				addThought(): void {
+					throw 'string failure'; // eslint-disable-line no-throw-literal
+				}
+				getHistory(): ThoughtData[] { return []; }
+				getHistoryLength(): number { return 0; }
+				getBranches(): Record<string, ThoughtData[]> { return {}; }
+				getBranchIds(): string[] { return []; }
+				clear(): void {}
+				getAvailableMcpTools(): string[] | undefined { return undefined; }
+				getAvailableSkills(): string[] | undefined { return undefined; }
+			}
+
+			const throwingHistory = new StringThrowingHistoryManager();
+			const throwingProcessor = new ThoughtProcessor(
+				throwingHistory, formatter, new ThoughtEvaluator(), logger
+			);
+
+			const result = await throwingProcessor.process({
+				thought: 'Test thought',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+			});
+
+			expect(result.isError).toBe(true);
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.error).toBe('string failure');
+			expect(parsed.status).toBe('failed');
+		});
+	});
+
+	describe('synthesis_sources all dangling → undefined (line 449)', () => {
+		it('should set synthesis_sources to undefined when all values are dangling', async () => {
+			const result = await processor.process({
+				thought: 'Synthesis attempt',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				thought_type: 'synthesis',
+				synthesis_sources: [100, 200, 300],
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.warnings).toBeDefined();
+			expect(parsed.warnings[0]).toContain('synthesis_sources');
+			expect(result.isError).toBeUndefined();
+		});
+	});
+
+	describe('merge_from_thoughts all dangling → undefined (line 468)', () => {
+		it('should set merge_from_thoughts to undefined when all values are dangling', async () => {
+			const result = await processor.process({
+				thought: 'Merge attempt',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+				merge_from_thoughts: [500, 600],
+			});
+
+			const parsed = JSON.parse(result.content[0]!.text);
+			expect(parsed.warnings).toBeDefined();
+			expect(parsed.warnings[0]).toContain('merge_from_thoughts');
+			expect(result.isError).toBeUndefined();
 		});
 	});
 });

@@ -358,4 +358,58 @@ describe('SqlitePersistence', () => {
 			expect(stats.branchCount).toBe(0);
 		});
 	});
+
+	describe('constructor defaults', () => {
+		it('should use .claude/data when existsSync returns true', async () => {
+			const { existsSync } = await import('node:fs');
+			const mockedExistsSync = vi.mocked(existsSync);
+			mockedExistsSync.mockReturnValueOnce(true);
+
+			persistence = await SqlitePersistence.create();
+			expect(persistence).toBeInstanceOf(SqlitePersistence);
+		});
+	});
+
+	describe('close edge cases', () => {
+		it('should handle WAL checkpoint error during close gracefully', async () => {
+			// Override pragma to throw on wal_checkpoint
+			const { default: MockDB } = await import('better-sqlite3');
+			const origPragma = MockDB.prototype.pragma;
+			MockDB.prototype.pragma = function (sql: string) {
+				if (typeof sql === 'string' && sql.includes('wal_checkpoint')) {
+					throw new Error('checkpoint error');
+				}
+				return origPragma.call(this, sql);
+			};
+
+			persistence = await SqlitePersistence.create();
+			// close() should not throw even when checkpoint fails
+			await expect(persistence.close()).resolves.toBeUndefined();
+
+			// Restore original pragma
+			MockDB.prototype.pragma = origPragma;
+		});
+	});
+
+	describe('getStats edge cases', () => {
+		it('should handle undefined result for branch count', async () => {
+			// Override the branch count query to return undefined
+			const { default: MockDB } = await import('better-sqlite3');
+			const origPrepare = MockDB.prototype.prepare;
+			MockDB.prototype.prepare = function (sql: string) {
+				const stmt = origPrepare.call(this, sql);
+				if (sql.includes('SELECT COUNT(*) as count FROM branches')) {
+					stmt.get = () => undefined;
+				}
+				return stmt;
+			};
+
+			persistence = await SqlitePersistence.create({ persistBranches: true });
+			const stats = persistence.getStats();
+			expect(stats.branchCount).toBe(0);
+
+			// Restore
+			MockDB.prototype.prepare = origPrepare;
+		});
+	});
 });

@@ -290,3 +290,70 @@ describe('initializeServer', () => {
 		expect(server).toBeInstanceOf(ToolAwareSequentialThinkingServer);
 	});
 });
+
+describe('lib.ts — uncovered branches', () => {
+	describe('_createContainerCore with fileConfig (lines 246-264)', () => {
+		it('should create server via sync constructor path (no container)', () => {
+			// This triggers _createContainerSync -> _createContainerCore with fileConfig from ConfigLoader
+			// Exercises the fileConfig || {} branch at line 246
+			const server = new ToolAwareSequentialThinkingServer({
+				autoDiscover: false,
+				enableWatcher: false,
+			});
+			expect(server).toBeInstanceOf(ToolAwareSequentialThinkingServer);
+			expect(server.tools).toBeDefined();
+			expect(server.skills).toBeDefined();
+			expect(server.config).toBeDefined();
+			expect(server.config.discoveryCache).toBeDefined();
+			expect(server.config.discoveryCache.ttl).toBeGreaterThan(0);
+		});
+
+		it('should create server with custom logger via sync path', async () => {
+			const customLogger = new (await import('../logger/StructuredLogger.js')).StructuredLogger({
+				context: 'CustomTest',
+				pretty: false,
+				level: 'warn',
+			});
+			const server = new ToolAwareSequentialThinkingServer({
+				autoDiscover: false,
+				enableWatcher: false,
+				logger: customLogger,
+			});
+			expect(server).toBeInstanceOf(ToolAwareSequentialThinkingServer);
+		});
+	});
+
+	describe('stop() non-Error branches (lines 389, 401)', () => {
+		it('should handle non-Error thrown during shutdown flush', async () => {
+			const mocks = createMockContainer();
+			mocks.mockHistoryManager.shutdown.mockRejectedValue('raw string error');
+			const server = new ToolAwareSequentialThinkingServer({
+				container: mocks.container,
+				autoDiscover: false,
+			});
+
+			await expect(server.stop()).resolves.toBeUndefined();
+			expect(mocks.mockLogger.error).toHaveBeenCalledWith(
+				'Error flushing write buffer during shutdown',
+				expect.objectContaining({ error: 'raw string error' })
+			);
+		});
+
+		it('should handle non-Error thrown during persistence close', async () => {
+			const mocks = createMockContainer();
+			const mockPersistence = { close: vi.fn().mockRejectedValue(42) };
+			mocks.container.unregister('Persistence');
+			mocks.container.registerInstance('Persistence', mockPersistence);
+			const server = new ToolAwareSequentialThinkingServer({
+				container: mocks.container,
+				autoDiscover: false,
+			});
+
+			await expect(server.stop()).resolves.toBeUndefined();
+			expect(mocks.mockLogger.error).toHaveBeenCalledWith(
+				'Error closing persistence backend',
+				expect.objectContaining({ error: '42' })
+			);
+		});
+	});
+});

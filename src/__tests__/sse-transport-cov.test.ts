@@ -949,3 +949,232 @@ describe('SseTransport coverage: stop with pool', () => {
 		expect(pool.isRunning()).toBe(false);
 	});
 });
+
+describe('SseTransport coverage: _sendSseEvent catch block', () => {
+	let transport: SseTransport;
+	let testPort: number;
+
+	afterEach(async () => {
+		await transport?.stop();
+	});
+
+	it('should remove client from set when write throws in _sendSseEvent', async () => {
+		testPort = randomPort();
+		transport = new SseTransport({ port: testPort });
+		await transport.connect({} as McpServer);
+
+		// Access internal _clients set and _sendSseEvent
+		const internals = transport as unknown as {
+			_clients: Set<import('node:http').ServerResponse>;
+			_sendSseEvent: (res: import('node:http').ServerResponse, event: string, data: unknown) => void;
+		};
+
+		// Create a mock response whose write() throws
+		const fakeRes = {
+			write: () => {
+				throw new Error('Client disconnected');
+			},
+		} as unknown as import('node:http').ServerResponse;
+
+		// Add fake client to the set
+		internals._clients.add(fakeRes);
+		expect(internals._clients.size).toBe(1);
+
+		// Call _sendSseEvent — should catch the error and remove the client
+		internals._sendSseEvent(fakeRes, 'test', { msg: 'hello' });
+
+		// Client should have been removed from the set
+		expect(internals._clients.has(fakeRes)).toBe(false);
+	});
+
+	it('should handle broadcast when _sendSseEvent catches write errors', async () => {
+		testPort = randomPort();
+		const metrics = createStubMetrics();
+		transport = new SseTransport({ port: testPort, metrics });
+		await transport.connect({} as McpServer);
+
+		const internals = transport as unknown as {
+			_clients: Set<import('node:http').ServerResponse>;
+		};
+
+		// Create a mock response whose write() throws
+		const fakeRes = {
+			write: () => {
+				throw new Error('Connection reset');
+			},
+		} as unknown as import('node:http').ServerResponse;
+
+		internals._clients.add(fakeRes);
+		expect(transport.clientCount).toBe(1);
+
+		// Broadcast — triggers _sendSseEvent for each client, catch removes broken ones
+		transport.broadcast('notification', { data: 'test' });
+
+		// Client should be removed after write failure
+		expect(transport.clientCount).toBe(0);
+	});
+});
+
+describe('SseTransport coverage: CORS preflight', () => {
+	let transport: SseTransport;
+	let testPort: number;
+
+	afterEach(async () => {
+		await transport?.stop();
+	});
+
+	it('should return 204 for OPTIONS request when CORS enabled', async () => {
+		testPort = randomPort();
+		transport = new SseTransport({ port: testPort, enableCors: true });
+		await transport.connect({} as McpServer);
+
+		const response = await makeRequest(testPort, '/sse', 'OPTIONS');
+		expect(response.statusCode).toBe(204);
+	});
+
+	it('should return 404 for unknown paths', async () => {
+		testPort = randomPort();
+		transport = new SseTransport({ port: testPort });
+		await transport.connect({} as McpServer);
+
+		const response = await makeRequest(testPort, '/unknown-path');
+		expect(response.statusCode).toBe(404);
+	});
+});
+
+describe('SseTransport coverage: rate limiting', () => {
+	let transport: SseTransport;
+	let testPort: number;
+
+	afterEach(async () => {
+		await transport?.stop();
+	});
+
+	it('should return 429 when rate limit exceeded', async () => {
+		testPort = randomPort();
+		transport = new SseTransport({
+			port: testPort,
+			enableRateLimit: true,
+			maxRequestsPerMinute: 1,
+		});
+		await transport.connect({} as McpServer);
+
+		// First request should succeed
+		await makeRequest(testPort, '/health');
+
+		// Second request should be rate limited
+		const response = await makeRequest(testPort, '/health');
+		expect(response.statusCode).toBe(429);
+		expect(response.body).toContain('Too many requests');
+	});
+});
+
+describe('SseTransport coverage: CORS origin rejection', () => {
+	let transport: SseTransport;
+	let testPort: number;
+
+	afterEach(async () => {
+		await transport?.stop();
+	});
+
+	it('should return 403 for invalid CORS origin', async () => {
+		testPort = randomPort();
+		transport = new SseTransport({
+			port: testPort,
+			corsOrigin: 'https://allowed.com',
+			enableRateLimit: false,
+		});
+		await transport.connect({} as McpServer);
+
+		const response = await new Promise<{ statusCode: number; body: string }>((resolve, reject) => {
+			const req = request(
+				{
+					hostname: 'localhost',
+					port: testPort,
+					path: '/health',
+					headers: { Origin: 'https://evil.com' },
+				},
+				(res) => {
+					let body = '';
+					res.on('data', (chunk) => { body += chunk; });
+					res.on('end', () => resolve({ statusCode: res.statusCode ?? 0, body }));
+				}
+			);
+			req.on('error', reject);
+			req.end();
+		});
+
+		expect(response.statusCode).toBe(403);
+		expect(response.body).toContain('Forbidden');
+	});
+});
+
+describe('SseTransport coverage: host header validation', () => {
+	let transport: SseTransport;
+	let testPort: number;
+
+	afterEach(async () => {
+		await transport?.stop();
+	});
+
+	it('should return 403 for invalid host header', async () => {
+		testPort = randomPort();
+		transport = new SseTransport({
+			port: testPort,
+			allowedHosts: ['allowed.com'],
+			enableRateLimit: false,
+		});
+		await transport.connect({} as McpServer);
+
+		const response = await new Promise<{ statusCode: number; body: string }>((resolve, reject) => {
+			const req = request(
+				{
+					hostname: '127.0.0.1',
+					port: testPort,
+					path: '/health',
+					headers: { Host: 'evil.com' },
+				},
+				(res) => {
+					let body = '';
+					res.on('data', (chunk) => { body += chunk; });
+					res.on('end', () => resolve({ statusCode: res.statusCode ?? 0, body }));
+				}
+			);
+			req.on('error', reject);
+			req.end();
+		});
+
+		expect(response.statusCode).toBe(403);
+		expect(response.body).toContain('Forbidden');
+	});
+});
+
+describe('SseTransport coverage: null MCP server response', () => {
+	let transport: SseTransport;
+	let testPort: number;
+
+	afterEach(async () => {
+		await transport?.stop();
+	});
+
+	it('should return null result when MCP server returns null response', async () => {
+		testPort = randomPort();
+		const mcpServer = new McpServer(
+			{ name: 'test-null-response', version: '1.0.0' },
+			{
+				adapter: new ValibotJsonSchemaAdapter(),
+				capabilities: { tools: { listChanged: true } },
+			}
+		);
+		transport = new SseTransport({ port: testPort, enableRateLimit: false });
+		await transport.connect(mcpServer);
+
+		// Notification has no id, MCP server returns null
+		const response = await makePostRequest(testPort, '/sse/message', {
+			jsonrpc: '2.0',
+			method: 'notifications/initialized',
+		});
+
+		expect(response.statusCode).toBe(200);
+	});
+});

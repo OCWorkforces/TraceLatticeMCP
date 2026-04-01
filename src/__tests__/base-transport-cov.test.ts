@@ -294,3 +294,45 @@ describe('BaseTransport additional coverage', () => {
 		});
 	});
 });
+
+describe('BaseTransport coverage: NoopLogger setLevel/getLevel', () => {
+	it('should use NoopLogger when no logger provided and exercise setLevel/getLevel', () => {
+		const transport = new TestableTransport();
+		// Access the private _logger to exercise NoopLogger methods
+		const noopLogger = (transport as unknown as { _logger: { setLevel: (level: string) => void; getLevel: () => string } })._logger;
+		noopLogger.setLevel('debug');
+		expect(noopLogger.getLevel()).toBe('debug');
+		noopLogger.setLevel('warn');
+		expect(noopLogger.getLevel()).toBe('warn');
+	});
+});
+
+describe('BaseTransport coverage: _startRateLimitCleanup clears existing interval', () => {
+	it('should clear existing interval before starting new one', () => {
+		const transport = new TestableTransport({ enableRateLimit: true });
+		// _rateLimitCleanupIntervalId is already set from constructor
+		// Call _startRateLimitCleanup again to exercise the clearInterval branch
+		const startCleanup = (transport as unknown as { _startRateLimitCleanup: () => void })._startRateLimitCleanup;
+		startCleanup.call(transport);
+		// Verify it didn't throw and interval is still set
+		const intervalId = (transport as unknown as { _rateLimitCleanupIntervalId: NodeJS.Timeout | null })._rateLimitCleanupIntervalId;
+		expect(intervalId).not.toBeNull();
+		transport.stop();
+	});
+});
+
+describe('BaseTransport coverage: validateHostHeader with empty allowedHosts', () => {
+	it('should return true when allowedHosts set is empty', () => {
+		const transport = new TestableTransport({ allowedHosts: [] });
+		// Empty allowedHosts array => _buildAllowedHosts falls through to default logic
+		// But with host='127.0.0.1' (default) it adds localhost entries
+		// To get allowedHosts.size === 0, we need configuredHosts with only empty strings
+		const transport2 = new TestableTransport({ allowedHosts: [''] });
+		// filter(Boolean) removes empty strings so the set will be empty
+		const req = createMockRequest({ headers: { host: 'any-host.com' } });
+		// With size === 0, validateHostHeader returns true at line 303
+		expect(transport2.validateHostHeader(req)).toBe(true);
+		transport.stop();
+		transport2.stop();
+	});
+});

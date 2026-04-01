@@ -375,3 +375,187 @@ describe('HttpTransport additional coverage', () => {
 		});
 	});
 });
+
+describe('HttpTransport coverage: mcpServer not ready (null)', () => {
+	let transport: HttpTransport;
+	let port: number;
+
+	beforeEach(() => {
+		port = 8500 + Math.floor(Math.random() * 1000);
+	});
+
+	afterEach(async () => {
+		if (transport) await transport.stop();
+	});
+
+	it('should return JSON-RPC error when mcpServer is null', async () => {
+		transport = new HttpTransport({
+			port,
+			host: '127.0.0.1',
+			enableRateLimit: false,
+		});
+		await transport.connect({} as McpServer);
+
+		// Force _mcpServer to null to test the 'server not ready' branch
+		(transport as unknown as { _mcpServer: null })._mcpServer = null;
+
+		const response = await httpRequest({
+			port,
+			body: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 1,
+				method: 'tools/list',
+				params: {},
+			}),
+		});
+		expect(response.statusCode).toBe(200);
+		expect(response.body).toContain('Server not ready');
+	});
+});
+
+describe('HttpTransport coverage: createHttpTransport factory', () => {
+	it('should create transport with default options', () => {
+		const t = new HttpTransport({ port: 19999, host: '127.0.0.1' });
+		expect(t).toBeInstanceOf(HttpTransport);
+		expect(t.clientCount).toBe(0);
+		expect(t.requestCount).toBe(0);
+	});
+
+	it('should create transport via factory function', async () => {
+		const { createHttpTransport } = await import('../transport/HttpTransport.js');
+		const t = createHttpTransport({ port: 19998, host: '127.0.0.1' });
+		expect(t).toBeInstanceOf(HttpTransport);
+	});
+});
+
+describe('HttpTransport coverage: OPTIONS preflight', () => {
+	let transport: HttpTransport;
+	let port: number;
+
+	beforeEach(() => {
+		port = 8500 + Math.floor(Math.random() * 1000);
+	});
+
+	afterEach(async () => {
+		if (transport) await transport.stop();
+	});
+
+	it('should return 204 for OPTIONS request', async () => {
+		transport = new HttpTransport({
+			port,
+			host: '127.0.0.1',
+			enableRateLimit: false,
+		});
+		await transport.connect({} as McpServer);
+
+		const response = await httpRequest({
+			port,
+			method: 'OPTIONS',
+			path: '/messages',
+		});
+		expect(response.statusCode).toBe(204);
+	});
+});
+
+describe('HttpTransport coverage: rate limiting', () => {
+	let transport: HttpTransport;
+	let port: number;
+
+	beforeEach(() => {
+		port = 8500 + Math.floor(Math.random() * 1000);
+	});
+
+	afterEach(async () => {
+		if (transport) await transport.stop();
+	});
+
+	it('should return 429 when rate limited', async () => {
+		transport = new HttpTransport({
+			port,
+			host: '127.0.0.1',
+			enableRateLimit: true,
+			maxRequestsPerMinute: 1,
+		});
+		await transport.connect({} as McpServer);
+
+		// First request should pass
+		await httpRequest({
+			port,
+			method: 'GET',
+			path: '/health',
+		});
+
+		// Second request should be rate limited
+		const response = await httpRequest({
+			port,
+			method: 'GET',
+			path: '/health',
+		});
+		expect(response.statusCode).toBe(429);
+		expect(response.body).toContain('Too many requests');
+	});
+});
+
+describe('HttpTransport coverage: CORS origin validation', () => {
+	let transport: HttpTransport;
+	let port: number;
+
+	beforeEach(() => {
+		port = 8500 + Math.floor(Math.random() * 1000);
+	});
+
+	afterEach(async () => {
+		if (transport) await transport.stop();
+	});
+
+	it('should return 403 for invalid CORS origin', async () => {
+		transport = new HttpTransport({
+			port,
+			host: '127.0.0.1',
+			enableRateLimit: false,
+			corsOrigin: 'https://allowed.com',
+		});
+		await transport.connect({} as McpServer);
+
+		const response = await httpRequest({
+			port,
+			method: 'GET',
+			path: '/health',
+			headers: { Origin: 'https://evil.com' },
+		});
+		expect(response.statusCode).toBe(403);
+		expect(response.body).toContain('Forbidden');
+	});
+});
+
+describe('HttpTransport coverage: host header validation', () => {
+	let transport: HttpTransport;
+	let port: number;
+
+	beforeEach(() => {
+		port = 8500 + Math.floor(Math.random() * 1000);
+	});
+
+	afterEach(async () => {
+		if (transport) await transport.stop();
+	});
+
+	it('should return 403 for invalid host header', async () => {
+		transport = new HttpTransport({
+			port,
+			host: '127.0.0.1',
+			enableRateLimit: false,
+			allowedHosts: ['allowed.com'],
+		});
+		await transport.connect({} as McpServer);
+
+		const response = await httpRequest({
+			port,
+			method: 'GET',
+			path: '/health',
+			headers: { Host: 'evil.com' },
+		});
+		expect(response.statusCode).toBe(403);
+		expect(response.body).toContain('Forbidden');
+	});
+});
