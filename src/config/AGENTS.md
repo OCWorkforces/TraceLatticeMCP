@@ -1,7 +1,7 @@
 # CONFIG MODULE
 
-**Updated:** 2026-03-31
-**Commit:** 509ece3
+**Updated:** 2026-04-02
+**Commit:** 4d84f2e
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW

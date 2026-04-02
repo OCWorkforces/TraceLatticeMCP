@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Updated:** 2026-03-31
-**Commit:** 509ece3
+**Updated:** 2026-04-02
+**Commit:** 4d84f2e
 **Branch:** develop
 
 ## OVERVIEW
@@ -20,7 +20,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 │   ├── registry/         # Tool/Skill registries (BaseRegistry<T> + subclasses)
 │   ├── contracts/        # Shared interfaces (IMetrics, IDiscoveryCache, etc.)
 │   ├── cluster/          # Worker pool for parallel thought processing
-│   ├── __tests__/        # Test suite (Vitest, 1006 tests, 35 files)
+│   ├── __tests__/        # Test suite (Vitest, 1597 tests, 47 files)
 │   ├── cache/            # LRU+TTL discovery cache
 │   ├── logger/           # Structured logging (JSON/pretty)
 │   ├── pool/             # Multi-user session pool
@@ -65,7 +65,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `SessionState`                    | interface | src/core/HistoryManager.ts               | Internal per-session state container (thought_history, branches, tools, skills, writeBuffer) |
 | `IHistoryManager`                   | interface | src/core/IHistoryManager.ts              | History manager contract (8 methods + session lifecycle)                                                 |
 | `ThoughtProcessor`                  | class     | src/core/ThoughtProcessor.ts             | Validate → normalize → persist → format → evaluate pipeline                          |
-| `ThoughtEvaluator`                  | class     | src/core/ThoughtEvaluator.ts             | Stateless quality signals + reasoning analytics (190L)                               |
+| `ThoughtEvaluator`                  | class     | src/core/ThoughtEvaluator.ts             | Stateless quality signals + reasoning analytics (527L)                               |
 | `normalizeInput`                    | function  | src/core/InputNormalizer.ts              | Field correction, default filling, branch_id sanitization (433L)                     |
 | `ThoughtFormatter`                  | class     | src/core/ThoughtFormatter.ts             | Chalk display: 💭🔄🌿🔬✅🔍🧬🧠📝 (231L)                                             |
 | `ThoughtData`                       | interface | src/core/thought.ts                      | Core data structure with 11 optional reasoning fields (193L)                         |
@@ -120,9 +120,9 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 ## SETUP NOTES
 
 - **CI**: `.github/workflows/ci.yml` — Node 22.x + 24.x matrix. Hard gates: type-check, test+coverage, build. Soft gates (continue-on-error): lint, audit.
-- **Coverage**: 83.47% statements (1006 tests, 35 files). Thresholds: branches 55%, functions 60%, lines 65%, statements 65%.
+- **Coverage**: 83.47% statements (1597 tests, 47 files). Thresholds: branches 55%, functions 60%, lines 65%, statements 65%.
 - **Test Helpers**: `src/__tests__/helpers/index.ts` — `createTestThought()`, `MockHistoryManager`, timer helpers.
-- **Large Files**: `HistoryManager.ts` (780L), `StreamableHttpTransport.ts` (724L), `schema.ts` (633L), `errors.ts` (561L), `lib.ts` (484L).
+- **Large Files**: `HistoryManager.ts` (970L), `StreamableHttpTransport.ts` (724L), `ThoughtEvaluator.ts` (527L), `schema.ts` (662L), `errors.ts` (561L), `lib.ts` (484L).
 - **Architectural Layers**: `.sentrux/rules.toml` — 9 layers (types→crosscutting→config→core→domain→infrastructure→di→app→cli), 6 forbidden boundaries.
 - **Duplicate env files**: Both `.env.example` (minimal) and `.example.env` (full) exist — non-standard.
 

@@ -1,7 +1,7 @@
 # PERSISTENCE MODULE
 
-**Updated:** 2026-03-31
-**Parent:** ../AGENTS.md
+**Updated:** 2026-04-02
+**Commit:** 4d84f2e
 
 ## OVERVIEW
 

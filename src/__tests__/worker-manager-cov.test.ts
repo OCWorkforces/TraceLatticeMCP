@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { WorkerManager } from '../cluster/WorkerManager.js';
+import { WorkerManager, createWorkerManager } from '../cluster/WorkerManager.js';
 import type { ThoughtData } from '../core/thought.js';
 
 // Shape of mock worker for type-safe hoisted capture
@@ -12,12 +12,17 @@ interface MockWorkerShape {
 }
 
 // Capturable mock worker
-const { getWorkers, resetWorkers } = vi.hoisted(() => {
+const { getWorkers, resetWorkers, shouldThrowOnSpawn, setShouldThrowOnSpawn } = vi.hoisted(() => {
 	const workers: MockWorkerShape[] = [];
+	let throwOnSpawn = false;
 	return {
 		getWorkers: () => workers,
 		resetWorkers: () => {
 			workers.length = 0;
+		},
+		shouldThrowOnSpawn: () => throwOnSpawn,
+		setShouldThrowOnSpawn: (v: boolean) => {
+			throwOnSpawn = v;
 		},
 	};
 });
@@ -52,6 +57,9 @@ vi.mock('node:worker_threads', () => {
 		}
 
 		constructor() {
+			if (shouldThrowOnSpawn()) {
+				throw new Error('Mock Worker spawn failure');
+			}
 			getWorkers().push(this);
 		}
 	}
@@ -71,6 +79,7 @@ describe('WorkerManager Coverage', () => {
 
 	beforeEach(() => {
 		resetWorkers();
+		setShouldThrowOnSpawn(false);
 		manager = new WorkerManager({
 			maxWorkers: 2,
 			workerTimeout: 5000,
@@ -641,6 +650,140 @@ expect(r3).toBe('r3');
 
 			vi.useRealTimers();
 			await retryManager.terminate();
+		});
+	});
+
+	describe('uncovered function coverage', () => {
+		it('should create a manager via createWorkerManager factory', () => {
+			const m = createWorkerManager({ maxWorkers: 1, enableHealthCheck: false });
+			expect(m).toBeInstanceOf(WorkerManager);
+		});
+
+		it('should reject with timeout when worker does not respond', async () => {
+			vi.useFakeTimers();
+			const timeoutManager = new WorkerManager({
+				maxWorkers: 1,
+				enableHealthCheck: false,
+				workerTimeout: 100,
+			});
+			await timeoutManager.start();
+
+			const thought: ThoughtData = {
+				thought: 'timeout-test',
+				thought_number: 1,
+				total_thoughts: 1,
+				next_thought_needed: false,
+			};
+
+			const promise = timeoutManager.processThought(thought);
+			await vi.advanceTimersByTimeAsync(200);
+			await expect(promise).rejects.toThrow('Worker timeout');
+
+			vi.useRealTimers();
+			await timeoutManager.terminate();
+		});
+
+		it('should log error when spawn fails during delayed retry', async () => {
+			vi.useFakeTimers();
+
+			const mockLogger = {
+				info: vi.fn(),
+				warn: vi.fn(),
+				error: vi.fn(),
+				debug: vi.fn(),
+				setLevel: vi.fn(),
+				getLevel: vi.fn().mockReturnValue('info' as const),
+			};
+
+			const retryManager = new WorkerManager({
+				maxWorkers: 1,
+				enableHealthCheck: false,
+				maxRetries: 2,
+				logger: mockLogger,
+			});
+
+			await retryManager.start();
+			const worker = requireLastWorker();
+
+			// Trigger error so _handleWorkerError schedules a retry via setTimeout
+			worker.simulate('error');
+
+			// Now make Worker constructor throw before the retry timer fires
+			setShouldThrowOnSpawn(true);
+
+			// Advance past the retry delay (1000 * (retryCount+1) = 1000ms)
+			await vi.advanceTimersByTimeAsync(1500);
+
+			expect(mockLogger.error).toHaveBeenCalledWith(
+				expect.stringContaining('Failed to restart'),
+				expect.anything()
+			);
+
+			setShouldThrowOnSpawn(false);
+			vi.useRealTimers();
+			await retryManager.terminate();
+		});
+
+		it('should log error when spawn fails during exit replacement', async () => {
+			const mockLogger = {
+				info: vi.fn(),
+				warn: vi.fn(),
+				error: vi.fn(),
+				debug: vi.fn(),
+				setLevel: vi.fn(),
+				getLevel: vi.fn().mockReturnValue('info' as const),
+			};
+
+			const exitManager = new WorkerManager({
+				maxWorkers: 1,
+				enableHealthCheck: false,
+				logger: mockLogger,
+			});
+
+			await exitManager.start();
+			const worker = requireLastWorker();
+
+			// Make Worker constructor throw so _spawnWorker fails when exit handler calls it
+			setShouldThrowOnSpawn(true);
+			worker.simulate('exit', 1);
+
+			// Wait for the async catch to fire
+			await new Promise((r) => setTimeout(r, 50));
+
+			expect(mockLogger.error).toHaveBeenCalledWith(
+				expect.stringContaining('Failed to spawn replacement'),
+				expect.anything()
+			);
+
+			setShouldThrowOnSpawn(false);
+			await exitManager.terminate();
+		});
+	});
+
+	describe('additional branch coverage', () => {
+		it('should use default enableHealthCheck when not specified', () => {
+			const m = new WorkerManager({ maxWorkers: 1 });
+			const stats = m.getStats();
+			expect(stats.healthCheckEnabled).toBe(true);
+		});
+
+		it('should throw when worker script does not exist', async () => {
+			const { existsSync } = await import('node:fs');
+			vi.mocked(existsSync).mockReturnValueOnce(false);
+
+			const m = new WorkerManager({ maxWorkers: 1, enableHealthCheck: false });
+			await expect(m.start()).rejects.toThrow('Worker script not found');
+		});
+
+		it('should ignore messages with unknown type', async () => {
+			await manager.start();
+			const worker = requireWorkerAt(0);
+
+			// Send a message with an unrecognized type
+			worker.simulate('message', { type: 'unknown', requestId: 'req_test' });
+
+			// No error should be thrown; manager continues working
+			expect(manager.getStats().activeWorkers).toBe(2);
 		});
 	});
 });
