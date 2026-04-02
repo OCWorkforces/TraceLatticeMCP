@@ -1,6 +1,7 @@
 # TRANSPORT MODULE
 
-
+**Updated:** 2026-04-02
+**Commit:** 4d84f2e
 ## OVERVIEW
 
 MCP transport implementations providing communication channels between the MCP server and clients. Supports SSE (Server-Sent Events) for real-time streaming and HTTP for request-response patterns.

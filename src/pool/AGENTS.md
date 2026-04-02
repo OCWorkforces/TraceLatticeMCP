@@ -1,5 +1,8 @@
 # POOL MODULE
 
+
+**Updated:** 2026-04-02
+**Commit:** 4d84f2e
 ## OVERVIEW
 
 Connection pool for multi-user SSE sessions with per-user isolation, timeouts, and cleanup.
