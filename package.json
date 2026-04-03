@@ -14,7 +14,10 @@
 		"LICENSE"
 	],
 	"scripts": {
-		"build": "tsc && chmod +x dist/cli.js",
+		"build": "rslib build && rsbuild build -c rsbuild.config.ts && node scripts/postbuild-cli.mjs",
+		"build:lib": "rslib build",
+		"build:cli": "rsbuild build -c rsbuild.config.ts && node scripts/postbuild-cli.mjs",
+		"build:tsc": "tsc && chmod +x dist/cli.js",
 		"start": "node dist/cli.js",
 		"dev": "npx @modelcontextprotocol/inspector dist/cli.js",
 		"test": "vitest run",
