@@ -8,7 +8,7 @@ const CLI_PATH = join(__dirname, '..', 'dist', 'cli.js');
 const content = readFileSync(CLI_PATH, 'utf-8');
 
 if (!content.startsWith('#!')) {
-	writeFileSync(CLI_PATH, `#!/usr/bin/env node\n${content}`);
+	writeFileSync(CLI_PATH, `#!/usr/bin/env bun\n${content}`);
 }
 chmodSync(CLI_PATH, 0o755);
 console.log('postbuild: CLI shebang injected and permissions set');
