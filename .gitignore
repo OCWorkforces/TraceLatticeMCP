@@ -212,3 +212,7 @@ coverage/
 .agents/
 *.DS_Store
 skills-lock.json
+
+# rslib / rsbuild cache directories
+.rslib/
+.rsbuild/
