@@ -5,6 +5,13 @@
 	"type": "module",
 	"main": "dist/lib.js",
 	"types": "dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
 	"bin": {
 		"tracelattice": "./dist/cli.js"
 	},
