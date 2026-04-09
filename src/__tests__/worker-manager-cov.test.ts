@@ -676,8 +676,9 @@ expect(r3).toBe('r3');
 			};
 
 			const promise = timeoutManager.processThought(thought);
+			const assertion = expect(promise).rejects.toThrow('Worker timeout');
 			await vi.advanceTimersByTimeAsync(200);
-			await expect(promise).rejects.toThrow('Worker timeout');
+			await assertion;
 
 			vi.useRealTimers();
 			await timeoutManager.terminate();
