@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 // CLI entry point for tracelattice MCP server.
 // This file handles CLI argument parsing, transport selection, and signal handlers.

@@ -11,6 +11,7 @@
 		"noUncheckedIndexedAccess": true,
 		"noImplicitOverride": true,
 		"declaration": true,
+		"types": ["node"],
 		"declarationMap": true,
 		"sourceMap": true,
 		"noErrorTruncation": true,
