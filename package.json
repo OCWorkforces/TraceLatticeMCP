@@ -1,6 +1,6 @@
 {
 	"name": "tracelattice",
-	"version": "1.2.5",
+	"version": "1.2.6",
 	"description": "Semantic Sequential Thinking Tools For Agentic Tools",
 	"type": "module",
 	"main": "dist/lib.js",
