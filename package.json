@@ -60,12 +60,12 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com:CCWorkforces/TraceLattice.git"
+		"url": "git+https://github.com/OCWorkforces/TraceLattice.git"
 	},
 	"bugs": {
-		"url": "https://github.com:CCWorkforces/TraceLattice/issues"
+		"url": "https://github.com/OCWorkforces/TraceLattice/issues"
 	},
-	"homepage": "https://github.com:CCWorkforces/TraceLattice#readme",
+	"homepage": "https://github.com/OCWorkforces/TraceLattice#readme",
 	"dependencies": {
 		"@tmcp/adapter-valibot": "^0.1.5",
 		"@tmcp/transport-stdio": "^0.4.2",
