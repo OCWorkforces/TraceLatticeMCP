@@ -17,8 +17,9 @@ Requires [Node.js](https://nodejs.org/) v18+.
 
 From the project root:
 
+```bash
+npm install -g tracelattice
 ```
-> **Tip:** Use `./install.sh --link` for development mode (symlinks instead of copying, rebuild with `npm run build` after changes).
 
 ## Configure MCP Client
 
