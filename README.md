@@ -15,8 +15,6 @@ An MCP (Model Context Protocol) server that provides sequential thinking capabil
 
 Requires [Node.js](https://nodejs.org/) v18+.
 
-From the project root:
-
 ```bash
 npm install -g tracelattice
 ```
