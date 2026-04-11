@@ -49,6 +49,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_KEY }}
 
+      - name: Configure git identity
+        if: steps.check.outputs.published == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Create git tag
         if: steps.check.outputs.published == 'false'
         run: |
