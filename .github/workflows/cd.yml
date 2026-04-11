@@ -1,8 +1,9 @@
 name: CD - Publish to npm
 
 on:
-  release:
-    types: [published]
+  pull_request:
+    types: [closed]
+    branches: [main]
 
 concurrency:
   group: cd-${{ github.ref }}
@@ -13,6 +14,7 @@ permissions:
 
 jobs:
   publish:
+    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
