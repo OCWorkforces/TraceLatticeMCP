@@ -1,6 +1,6 @@
 {
 	"name": "tracelattice",
-	"version": "1.2.8",
+	"version": "1.2.9",
 	"description": "Semantic Sequential Thinking Tools For Agentic Tools",
 	"type": "module",
 	"main": "dist/lib.js",
@@ -79,7 +79,7 @@
 		"@changesets/cli": "^2.30.0",
 		"@eslint/js": "^10.0.1",
 		"@rsbuild/core": "^1.7.5",
-		"@rslib/core": "^0.21.1",
+		"@rslib/core": "^0.21.2",
 		"@tsconfig/node24": "^24.0.4",
 		"@types/node": "^25.6.0",
 		"@typescript-eslint/eslint-plugin": "^8.58.2",
@@ -88,7 +88,7 @@
 		"eslint": "^10.2.0",
 		"globals": "^17.5.0",
 		"prettier": "^3.8.3",
-		"typescript": "^6.0.2",
+		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.58.2",
 		"vitest": "^4.1.4"
 	}
