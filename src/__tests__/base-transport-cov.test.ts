@@ -99,6 +99,10 @@ function createMockPersistence(healthy: boolean): PersistenceBackend {
 		listBranches: vi.fn().mockResolvedValue([]),
 		clear: vi.fn(),
 		close: vi.fn(),
+		saveEdges: vi.fn().mockResolvedValue(undefined),
+		loadEdges: vi.fn().mockResolvedValue([]),
+		saveSummaries: vi.fn().mockResolvedValue(undefined),
+		loadSummaries: vi.fn().mockResolvedValue([]),
 	};
 }
 

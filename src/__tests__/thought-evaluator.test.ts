@@ -28,7 +28,11 @@ describe('ThoughtEvaluator', () => {
 				critique: 0,
 				synthesis: 0,
 				meta: 0,
-			});
+				tool_call: 0,
+				tool_observation: 0,
+				assumption: 0,
+				decomposition: 0,
+				backtrack: 0,			});
 		});
 
 		it('returns correct values for single thought', () => {
@@ -127,7 +131,11 @@ describe('ThoughtEvaluator', () => {
 				critique: 0,
 				synthesis: 0,
 				meta: 0,
-			});
+				tool_call: 0,
+				tool_observation: 0,
+				assumption: 0,
+				decomposition: 0,
+				backtrack: 0,			});
 		});
 
 		it('counts total thoughts correctly', () => {

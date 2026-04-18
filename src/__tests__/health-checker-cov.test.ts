@@ -20,6 +20,10 @@ function createMockBackend(overrides: Partial<PersistenceBackend> = {}): Persist
 		listBranches: vi.fn().mockResolvedValue([]),
 		clear: vi.fn().mockResolvedValue(undefined),
 		close: vi.fn().mockResolvedValue(undefined),
+		saveEdges: vi.fn().mockResolvedValue(undefined),
+		loadEdges: vi.fn().mockResolvedValue([]),
+		saveSummaries: vi.fn().mockResolvedValue(undefined),
+		loadSummaries: vi.fn().mockResolvedValue([]),
 		...overrides,
 	};
 }

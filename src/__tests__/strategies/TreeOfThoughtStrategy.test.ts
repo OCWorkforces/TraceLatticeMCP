@@ -1,0 +1,460 @@
+/**
+ * TreeOfThoughtStrategy tests — covers default config, decide() ordering,
+ * shouldBranch / shouldTerminate predicates, edge cases (empty frontier,
+ * empty history), and purity (deterministic / non-mutating).
+ *
+ * @module __tests__/strategies/TreeOfThoughtStrategy.test
+ */
+
+import { describe, it, expect } from 'vitest';
+import { TreeOfThoughtStrategy } from '../../core/reasoning/strategies/TreeOfThoughtStrategy.js';
+import { EdgeStore } from '../../core/graph/EdgeStore.js';
+import { GraphView } from '../../core/graph/GraphView.js';
+import { createTestThought } from '../helpers/factories.js';
+import type { StrategyContext } from '../../contracts/strategy.js';
+import type { ThoughtData } from '../../core/thought.js';
+import type { ReasoningStats } from '../../core/reasoning.js';
+
+const SID = 'tot-session';
+
+function makeStats(): ReasoningStats {
+	return {
+		total_thoughts: 0,
+		total_branches: 0,
+		total_revisions: 0,
+		total_merges: 0,
+		chain_depth: 0,
+		thought_type_counts: {
+			regular: 0,
+			hypothesis: 0,
+			verification: 0,
+			critique: 0,
+			synthesis: 0,
+			meta: 0,
+			tool_call: 0,
+			tool_observation: 0,
+			assumption: 0,
+			decomposition: 0,
+			backtrack: 0,		},
+		hypothesis_count: 0,
+		verified_hypothesis_count: 0,
+		unresolved_hypothesis_count: 0,
+		average_quality_score: null,
+		average_confidence: null,
+	};
+}
+
+let edgeSeq = 0;
+function addEdge(store: EdgeStore, from: string, to: string): void {
+	store.addEdge({
+		id: `e-${++edgeSeq}`,
+		from,
+		to,
+		kind: 'sequence',
+		sessionId: SID,
+		createdAt: edgeSeq,
+	});
+}
+
+interface CtxOpts {
+	readonly history: readonly ThoughtData[];
+	readonly current: ThoughtData;
+	readonly edges?: ReadonlyArray<readonly [string, string]>;
+}
+
+function makeCtx(opts: CtxOpts): StrategyContext {
+	const store = new EdgeStore();
+	for (const [from, to] of opts.edges ?? []) addEdge(store, from, to);
+	return {
+		sessionId: SID,
+		history: opts.history,
+		graph: new GraphView(store),
+		stats: makeStats(),
+		currentThought: opts.current,
+	};
+}
+
+/** Helper: thought with id + score-shaping fields set for predictable scoring. */
+function tot(
+	id: string,
+	number: number,
+	confidence: number,
+	quality: number = 1
+): ThoughtData {
+	return createTestThought({
+		id,
+		thought_number: number,
+		confidence,
+		quality_score: quality,
+		next_thought_needed: true,
+	});
+}
+
+describe('TreeOfThoughtStrategy', () => {
+	describe('name', () => {
+		it("is 'tot'", () => {
+			expect(new TreeOfThoughtStrategy().name).toBe('tot');
+		});
+	});
+
+	describe('config', () => {
+		it('applies default config when none provided', () => {
+			// 5 leaves > default beamWidth (3) → branch when current outside beam
+			const t1 = tot('t1', 1, 0.1);
+			const t2 = tot('t2', 2, 0.2);
+			const t3 = tot('t3', 3, 0.3);
+			const t4 = tot('t4', 4, 0.4);
+			const t5 = tot('t5', 5, 0.5);
+			const root = tot('root', 0, 0.05);
+			const ctx = makeCtx({
+				history: [root, t1, t2, t3, t4, t5],
+				current: t1,
+				edges: [
+					['root', 't1'],
+					['root', 't2'],
+					['root', 't3'],
+					['root', 't4'],
+					['root', 't5'],
+				],
+			});
+			expect(new TreeOfThoughtStrategy().decide(ctx).action).toBe('branch');
+		});
+
+		it('applies custom config overrides', () => {
+			// With beamWidth=10, frontier of 5 is no longer "wider than beam"
+			const root = tot('root', 0, 0.05);
+			const t1 = tot('t1', 1, 0.1);
+			const ctx = makeCtx({
+				history: [root, t1, tot('t2', 2, 0.2), tot('t3', 3, 0.3)],
+				current: t1,
+				edges: [
+					['root', 't1'],
+					['root', 't2'],
+					['root', 't3'],
+				],
+			});
+			const strategy = new TreeOfThoughtStrategy({ beamWidth: 10 });
+			expect(strategy.decide(ctx).action).toBe('continue');
+		});
+	});
+
+	describe('decide', () => {
+		it('returns continue when history is empty (no frontier)', () => {
+			const current = tot('c', 1, 0.1);
+			const ctx = makeCtx({ history: [], current });
+			expect(new TreeOfThoughtStrategy().decide(ctx)).toEqual({
+				action: 'continue',
+				nextHint: 'explore frontier',
+			});
+		});
+
+		it('returns continue with single-thought history (no edges → empty frontier)', () => {
+			const current = tot('only', 1, 0.1);
+			const ctx = makeCtx({ history: [current], current });
+			expect(new TreeOfThoughtStrategy().decide(ctx).action).toBe('continue');
+		});
+
+		it('returns continue when frontier (leaves) is empty', () => {
+			const current = tot('c', 1, 0.1);
+			const ctx = makeCtx({ history: [current], current, edges: [] });
+			expect(new TreeOfThoughtStrategy().decide(ctx).action).toBe('continue');
+		});
+
+		it('terminates with reason "confidence threshold" when leaf score >= terminationConfidence', () => {
+			const root = tot('root', 1, 0.1);
+			const high = tot('high', 2, 0.95, 1); // score = 0.95
+			const ctx = makeCtx({
+				history: [root, high],
+				current: high,
+				edges: [['root', 'high']],
+			});
+			const decision = new TreeOfThoughtStrategy().decide(ctx);
+			expect(decision).toEqual({ action: 'terminate', reason: 'confidence threshold' });
+		});
+
+		it('terminates with reason "plateau" when recent scores are flat', () => {
+			// All thoughts score 0.5; window=3 → plateau
+			const root = tot('root', 1, 0.5);
+			const a = tot('a', 2, 0.5);
+			const b = tot('b', 3, 0.5);
+			const c = tot('c', 4, 0.5);
+			const ctx = makeCtx({
+				history: [root, a, b, c],
+				current: c,
+				edges: [['root', 'a']], // 'a' is leaf, scored 0.5 — no termination by confidence
+			});
+			const decision = new TreeOfThoughtStrategy().decide(ctx);
+			expect(decision).toEqual({ action: 'terminate', reason: 'plateau' });
+		});
+
+		it('confidence termination takes precedence over plateau', () => {
+			// All scores high → both could fire; confidence threshold checked first.
+			const root = tot('root', 1, 0.95);
+			const a = tot('a', 2, 0.95);
+			const b = tot('b', 3, 0.95);
+			const ctx = makeCtx({
+				history: [root, a, b],
+				current: b,
+				edges: [['root', 'a']],
+			});
+			const decision = new TreeOfThoughtStrategy().decide(ctx);
+			if (decision.action === 'terminate') {
+				expect(decision.reason).toBe('confidence threshold');
+			} else {
+				throw new Error('expected terminate');
+			}
+		});
+
+		it('returns branch when frontier > beamWidth and current is outside the beam', () => {
+			// 5 leaves with scores 0.1..0.5. beamWidth=3 keeps top-3 (t3,t4,t5).
+			// Current = t1 (lowest score) → outside beam → branch.
+			const root = tot('root', 0, 0.05);
+			const t1 = tot('t1', 1, 0.1);
+			const ctx = makeCtx({
+				history: [
+					root,
+					t1,
+					tot('t2', 2, 0.2),
+					tot('t3', 3, 0.3),
+					tot('t4', 4, 0.4),
+					tot('t5', 5, 0.5),
+				],
+				current: t1,
+				edges: [
+					['root', 't1'],
+					['root', 't2'],
+					['root', 't3'],
+					['root', 't4'],
+					['root', 't5'],
+				],
+			});
+			const decision = new TreeOfThoughtStrategy().decide(ctx);
+			expect(decision.action).toBe('branch');
+			if (decision.action === 'branch') {
+				expect(decision.branchId).toBe('tot-1');
+				expect(decision.fromThought).toBe(1);
+			}
+		});
+
+		it('returns continue when current is inside the beam', () => {
+			// Same setup but current = t5 (top-scoring) → inside beam → continue.
+			const root = tot('root', 0, 0.05);
+			const t5 = tot('t5', 5, 0.5);
+			const ctx = makeCtx({
+				history: [
+					root,
+					tot('t1', 1, 0.1),
+					tot('t2', 2, 0.2),
+					tot('t3', 3, 0.3),
+					tot('t4', 4, 0.4),
+					t5,
+				],
+				current: t5,
+				edges: [
+					['root', 't1'],
+					['root', 't2'],
+					['root', 't3'],
+					['root', 't4'],
+					['root', 't5'],
+				],
+			});
+			expect(new TreeOfThoughtStrategy().decide(ctx).action).toBe('continue');
+		});
+
+		it('returns continue when frontier <= beamWidth (no branching pressure)', () => {
+			const root = tot('root', 0, 0.05);
+			const a = tot('a', 1, 0.2);
+			const ctx = makeCtx({
+				history: [root, a, tot('b', 2, 0.3)],
+				current: a,
+				edges: [
+					['root', 'a'],
+					['root', 'b'],
+				],
+			});
+			expect(new TreeOfThoughtStrategy().decide(ctx).action).toBe('continue');
+		});
+	});
+
+	describe('shouldBranch', () => {
+		it('returns true when frontier > beamWidth', () => {
+			const root = tot('root', 0, 0.05);
+			const ctx = makeCtx({
+				history: [
+					root,
+					tot('t1', 1, 0.1),
+					tot('t2', 2, 0.2),
+					tot('t3', 3, 0.3),
+					tot('t4', 4, 0.4),
+				],
+				current: root,
+				edges: [
+					['root', 't1'],
+					['root', 't2'],
+					['root', 't3'],
+					['root', 't4'],
+				],
+			});
+			expect(new TreeOfThoughtStrategy().shouldBranch(ctx)).toBe(true);
+		});
+
+		it('returns false when frontier <= beamWidth', () => {
+			const root = tot('root', 0, 0.05);
+			const ctx = makeCtx({
+				history: [root, tot('a', 1, 0.1)],
+				current: root,
+				edges: [['root', 'a']],
+			});
+			expect(new TreeOfThoughtStrategy().shouldBranch(ctx)).toBe(false);
+		});
+
+		it('returns false when frontier is empty', () => {
+			const root = tot('root', 0, 0.05);
+			const ctx = makeCtx({ history: [root], current: root });
+			expect(new TreeOfThoughtStrategy().shouldBranch(ctx)).toBe(false);
+		});
+	});
+
+	describe('shouldTerminate', () => {
+		it('returns true when best frontier score >= terminationConfidence', () => {
+			const root = tot('root', 1, 0.1);
+			const high = tot('high', 2, 0.95);
+			const ctx = makeCtx({
+				history: [root, high],
+				current: high,
+				edges: [['root', 'high']],
+			});
+			expect(new TreeOfThoughtStrategy().shouldTerminate(ctx)).toBe(true);
+		});
+
+		it('returns true when plateau detected', () => {
+			const root = tot('root', 1, 0.5);
+			const ctx = makeCtx({
+				history: [root, tot('a', 2, 0.5), tot('b', 3, 0.5), tot('c', 4, 0.5)],
+				current: tot('c', 4, 0.5),
+				edges: [['root', 'a']],
+			});
+			expect(new TreeOfThoughtStrategy().shouldTerminate(ctx)).toBe(true);
+		});
+
+		it('returns false when neither condition holds', () => {
+			const root = tot('root', 1, 0.1);
+			const ctx = makeCtx({
+				history: [root, tot('a', 2, 0.3)],
+				current: tot('a', 2, 0.3),
+				edges: [['root', 'a']],
+			});
+			expect(new TreeOfThoughtStrategy().shouldTerminate(ctx)).toBe(false);
+		});
+	});
+
+	describe('purity', () => {
+		it('1000 identical decide() calls return deeply-equal results', () => {
+			const root = tot('root', 0, 0.05);
+			const ctx = makeCtx({
+				history: [
+					root,
+					tot('t1', 1, 0.1),
+					tot('t2', 2, 0.2),
+					tot('t3', 3, 0.3),
+					tot('t4', 4, 0.4),
+					tot('t5', 5, 0.5),
+				],
+				current: tot('t1', 1, 0.1),
+				edges: [
+					['root', 't1'],
+					['root', 't2'],
+					['root', 't3'],
+					['root', 't4'],
+					['root', 't5'],
+				],
+			});
+			const strategy = new TreeOfThoughtStrategy();
+			const baseline = strategy.decide(ctx);
+			for (let i = 0; i < 1000; i++) {
+				expect(strategy.decide(ctx)).toEqual(baseline);
+				expect(strategy.shouldBranch(ctx)).toBe(strategy.shouldBranch(ctx));
+				expect(strategy.shouldTerminate(ctx)).toBe(strategy.shouldTerminate(ctx));
+			}
+		});
+
+		it('decide() does not mutate the input context', () => {
+			const root = tot('root', 1, 0.1);
+			const a = tot('a', 2, 0.3);
+			const history = [root, a];
+			const ctx = makeCtx({ history, current: a, edges: [['root', 'a']] });
+			const snapshotHistory = JSON.parse(JSON.stringify(history));
+			const snapshotCurrent = JSON.parse(JSON.stringify(a));
+			const snapshotStats = JSON.parse(JSON.stringify(ctx.stats));
+			const strategy = new TreeOfThoughtStrategy();
+			strategy.decide(ctx);
+			strategy.shouldBranch(ctx);
+			strategy.shouldTerminate(ctx);
+			expect(history).toEqual(snapshotHistory);
+			expect(ctx.currentThought).toEqual(snapshotCurrent);
+			expect(ctx.stats).toEqual(snapshotStats);
+		});
+
+		it('has no own mutable instance fields beyond `name`', () => {
+			const strategy = new TreeOfThoughtStrategy({ beamWidth: 5 });
+			const ownProps = Object.getOwnPropertyNames(strategy).filter((p) => p !== 'name');
+			expect(ownProps).toEqual([]);
+		});
+
+		it('configOf falls back to DEFAULTS when called with a foreign `this`', () => {
+			const strategy = new TreeOfThoughtStrategy({ beamWidth: 99 });
+			// Borrow shouldBranch with a non-registered `this` → WeakMap miss → DEFAULTS (beamWidth=3)
+			const foreignThis = { name: 'tot' as const };
+			const t1 = tot('t1', 1, 0.1);
+			const t2 = tot('t2', 2, 0.2);
+			const t3 = tot('t3', 3, 0.3);
+			const t4 = tot('t4', 4, 0.4);
+			const root = tot('root', 0, 0.05);
+			const ctx = makeCtx({
+				history: [root, t1, t2, t3, t4],
+				current: t1,
+				edges: [
+					['root', 't1'],
+					['root', 't2'],
+					['root', 't3'],
+					['root', 't4'],
+				],
+			});
+			// 4 leaves > DEFAULTS.beamWidth (3) → true; with beamWidth=99 it would be false.
+			expect(strategy.shouldBranch.call(foreignThis as never, ctx)).toBe(true);
+		});
+
+		it('thoughtKey uses thought_number when id is absent', () => {
+			// Thought without id → thoughtKey falls back to String(thought_number)
+			const noId = createTestThought({
+				thought_number: 42,
+				confidence: 0.1,
+				quality_score: 1,
+				next_thought_needed: true,
+			});
+			const other1 = tot('o1', 1, 0.1);
+			const other2 = tot('o2', 2, 0.2);
+			const other3 = tot('o3', 3, 0.3);
+			const other4 = tot('o4', 4, 0.4);
+			const root = tot('root', 0, 0.05);
+			const ctx = makeCtx({
+				history: [root, noId, other1, other2, other3, other4],
+				current: noId,
+				edges: [
+					['root', '42'],
+					['root', 'o1'],
+					['root', 'o2'],
+					['root', 'o3'],
+					['root', 'o4'],
+				],
+			});
+			// 5 leaves > beamWidth(3); current 'noId' has lowest score → outside beam → branch
+			const decision = new TreeOfThoughtStrategy().decide(ctx);
+			expect(decision.action).toBe('branch');
+			if (decision.action === 'branch') {
+				expect(decision.fromThought).toBe(42);
+				expect(decision.branchId).toBe('tot-42');
+			}
+		});
+	});
+});

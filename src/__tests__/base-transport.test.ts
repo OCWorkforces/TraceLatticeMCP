@@ -75,13 +75,13 @@ describe('BaseTransport', () => {
 			expect(transport.validateSessionId('my_session')).toBe(true);
 		});
 
-		it('should reject session IDs exceeding max length (64)', () => {
-			const longId = 'a'.repeat(65);
+		it('should reject session IDs exceeding max length (100)', () => {
+			const longId = 'a'.repeat(101);
 			expect(transport.validateSessionId(longId)).toBe(false);
 		});
 
-		it('should accept session IDs at exactly max length (64)', () => {
-			const maxId = 'a'.repeat(64);
+		it('should accept session IDs at exactly max length (100)', () => {
+			const maxId = 'a'.repeat(100);
 			expect(transport.validateSessionId(maxId)).toBe(true);
 		});
 

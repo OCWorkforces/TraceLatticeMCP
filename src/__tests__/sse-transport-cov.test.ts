@@ -741,7 +741,7 @@ describe('SseTransport coverage: session ID validation', () => {
 		transport = new SseTransport({ port: testPort });
 		await transport.connect({} as McpServer);
 
-		const longSessionId = 'a'.repeat(65); // MAX_SESSION_ID_LENGTH is 64
+		const longSessionId = 'a'.repeat(101); // MAX_SESSION_ID_LENGTH is 100
 		const response = await makeRequest(testPort, `/health?sessionId=${longSessionId}`);
 
 		expect(response.statusCode).toBe(400);

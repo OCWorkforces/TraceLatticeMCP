@@ -39,10 +39,9 @@ import type { Logger } from '../logger/StructuredLogger.js';
 function createMockRegistry(): SkillRegistry {
 	return {
 		discoverAsync: vi.fn().mockResolvedValue(0),
-		removeSkillByName: vi.fn(),
+		remove: vi.fn(),
 		// Satisfy the SkillRegistry interface shape used by SkillWatcher
 		add: vi.fn(),
-		remove: vi.fn(),
 		has: vi.fn(),
 		get: vi.fn(),
 		getAll: vi.fn().mockReturnValue([]),
@@ -146,7 +145,7 @@ describe('SkillWatcher', () => {
 			expect(unlinkHandler).toBeDefined();
 
 			await unlinkHandler!('/path/to/.claude/skills/remove-skill.md');
-			expect(mockRegistry.removeSkillByName).toHaveBeenCalledWith('remove-skill.md');
+			expect(mockRegistry.remove).toHaveBeenCalledWith('remove-skill.md');
 			watcher.stop();
 		});
 
@@ -181,7 +180,7 @@ describe('SkillWatcher', () => {
 			const unlinkHandler = eventHandlers.get('unlink');
 
 			await unlinkHandler!('/path/to/.claude/skills/verbose-unlink.md');
-			expect(mockRegistry.removeSkillByName).toHaveBeenCalledWith('verbose-unlink.md');
+			expect(mockRegistry.remove).toHaveBeenCalledWith('verbose-unlink.md');
 
 			delete process.env.WATCHER_VERBOSE;
 			watcher.stop();
@@ -256,13 +255,13 @@ describe('SkillWatcher', () => {
 	});
 
 	describe('file change detection - unlink event (skill removal)', () => {
-		it('should call removeSkillByName when a skill file is deleted', async () => {
+		it('should call remove when a skill file is deleted', async () => {
 			const watcher = new SkillWatcher(mockRegistry, mockLogger);
 			const unlinkHandler = eventHandlers.get('unlink');
 			expect(unlinkHandler).toBeDefined();
 
 			await unlinkHandler!('/path/to/.claude/skills/commit.md');
-			expect(mockRegistry.removeSkillByName).toHaveBeenCalledWith('commit.md');
+			expect(mockRegistry.remove).toHaveBeenCalledWith('commit.md');
 			watcher.stop();
 		});
 
@@ -271,7 +270,7 @@ describe('SkillWatcher', () => {
 			const unlinkHandler = eventHandlers.get('unlink');
 
 			await unlinkHandler!('/home/user/.claude/skills/review-pr.yml');
-			expect(mockRegistry.removeSkillByName).toHaveBeenCalledWith('review-pr.yml');
+			expect(mockRegistry.remove).toHaveBeenCalledWith('review-pr.yml');
 			watcher.stop();
 		});
 
@@ -280,24 +279,24 @@ describe('SkillWatcher', () => {
 			const unlinkHandler = eventHandlers.get('unlink');
 
 			await unlinkHandler!('C:\\Users\\test\\.claude\\skills\\my-skill.md');
-			expect(mockRegistry.removeSkillByName).toHaveBeenCalledWith('my-skill.md');
+			expect(mockRegistry.remove).toHaveBeenCalledWith('my-skill.md');
 			watcher.stop();
 		});
 
-		it('should not call removeSkillByName for empty path segments', async () => {
+		it('should not call remove for empty path segments', async () => {
 			const watcher = new SkillWatcher(mockRegistry, mockLogger);
 			const unlinkHandler = eventHandlers.get('unlink');
 
 			// Path ending with a separator yields empty last segment -> null
 			await unlinkHandler!('/path/to/skills/');
-			expect(mockRegistry.removeSkillByName).not.toHaveBeenCalled();
+			expect(mockRegistry.remove).not.toHaveBeenCalled();
 			watcher.stop();
 		});
 	});
 
 	describe('error handling', () => {
-		it('should not throw when removeSkillByName throws', async () => {
-			(mockRegistry.removeSkillByName as ReturnType<typeof vi.fn>).mockImplementation(() => {
+		it('should not throw when remove throws', async () => {
+			(mockRegistry.remove as ReturnType<typeof vi.fn>).mockImplementation(() => {
 				throw new Error('Skill not found');
 			});
 
@@ -316,8 +315,8 @@ describe('SkillWatcher', () => {
 			watcher.stop();
 		});
 
-		it('should handle non-Error objects thrown by removeSkillByName', async () => {
-			(mockRegistry.removeSkillByName as ReturnType<typeof vi.fn>).mockImplementation(() => {
+		it('should handle non-Error objects thrown by remove', async () => {
+			(mockRegistry.remove as ReturnType<typeof vi.fn>).mockImplementation(() => {
 				throw 'string error';
 			});
 
@@ -465,7 +464,7 @@ describe('SkillWatcher', () => {
 			const unlinkHandler = eventHandlers.get('unlink');
 
 			await unlinkHandler!('/path/to/skills/removed.md');
-			expect(mockRegistry.removeSkillByName).toHaveBeenCalledWith('removed.md');
+			expect(mockRegistry.remove).toHaveBeenCalledWith('removed.md');
 			watcher.stop();
 		});
 	});

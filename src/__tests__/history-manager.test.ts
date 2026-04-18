@@ -60,6 +60,18 @@ class MockPersistence implements PersistenceBackend {
 	}
 
 	async close(): Promise<void> {}
+
+	async saveEdges(): Promise<void> {}
+
+	async loadEdges(): Promise<never[]> {
+		return [];
+	}
+
+	async saveSummaries(): Promise<void> {}
+
+	async loadSummaries(): Promise<never[]> {
+		return [];
+	}
 }
 
 describe('HistoryManager', () => {

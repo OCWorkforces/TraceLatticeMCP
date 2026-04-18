@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ToolAwareSequentialThinkingServer } from '../index.js';
+import { ToolAwareSequentialThinkingServer, createServer } from '../index.js';
 import type { Tool } from '../types/tool.js';
 import type { Skill } from '../types/skill.js';
 import type { ThoughtData } from '../core/thought.js';
@@ -7,8 +7,8 @@ import type { ThoughtData } from '../core/thought.js';
 describe('CRUD Operations', () => {
 	let server: ToolAwareSequentialThinkingServer;
 
-	beforeEach(() => {
-		server = new ToolAwareSequentialThinkingServer({ maxHistorySize: 10 });
+	beforeEach(async () => {
+		server = await createServer({ maxHistorySize: 10 });
 	});
 
 	describe('Tool CRUD', () => {
@@ -87,12 +87,12 @@ describe('CRUD Operations', () => {
 
 		it('should remove a skill', () => {
 			server.skills.addSkill(mockSkill);
-			server.skills.removeSkillByName('test-skill');
+			server.skills.remove('test-skill');
 			expect(server.skills.hasSkill('test-skill')).toBe(false);
 		});
 
 		it('should throw when removing non-existent skill', () => {
-			expect(() => server.skills.removeSkillByName('non-existent')).toThrow(
+			expect(() => server.skills.remove('non-existent')).toThrow(
 				"Skill 'non-existent' not found, cannot remove"
 			);
 		});

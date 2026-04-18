@@ -292,34 +292,31 @@ describe('initializeServer', () => {
 });
 
 describe('lib.ts — uncovered branches', () => {
-	describe('_createContainerCore with fileConfig (lines 246-264)', () => {
-		it('should create server via sync constructor path (no container)', () => {
-			// This triggers _createContainerSync -> _createContainerCore with fileConfig from ConfigLoader
-			// Exercises the fileConfig || {} branch at line 246
-			const server = new ToolAwareSequentialThinkingServer({
-				autoDiscover: false,
-				enableWatcher: false,
-			});
-			expect(server).toBeInstanceOf(ToolAwareSequentialThinkingServer);
-			expect(server.tools).toBeDefined();
-			expect(server.skills).toBeDefined();
-			expect(server.config).toBeDefined();
-			expect(server.config.discoveryCache).toBeDefined();
-			expect(server.config.discoveryCache.ttl).toBeGreaterThan(0);
+	describe('constructor without container (lines 246-264)', () => {
+		it('should throw when no container is provided', () => {
+			expect(
+				() =>
+					new ToolAwareSequentialThinkingServer({
+						autoDiscover: false,
+						enableWatcher: false,
+					}),
+			).toThrow('Container is required. Use createServer() or provide a container.');
 		});
 
-		it('should create server with custom logger via sync path', async () => {
+		it('should throw when no container is provided even with custom logger', async () => {
 			const customLogger = new (await import('../logger/StructuredLogger.js')).StructuredLogger({
 				context: 'CustomTest',
 				pretty: false,
 				level: 'warn',
 			});
-			const server = new ToolAwareSequentialThinkingServer({
-				autoDiscover: false,
-				enableWatcher: false,
-				logger: customLogger,
-			});
-			expect(server).toBeInstanceOf(ToolAwareSequentialThinkingServer);
+			expect(
+				() =>
+					new ToolAwareSequentialThinkingServer({
+						autoDiscover: false,
+						enableWatcher: false,
+						logger: customLogger,
+					}),
+			).toThrow('Container is required. Use createServer() or provide a container.');
 		});
 	});
 
