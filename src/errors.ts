@@ -40,6 +40,7 @@
  * - `INVALID_THOUGHT` - Thought validation failed
  * - `SKILL_DISCOVERY_FAILED` - Skill discovery operation failed
  * - `HISTORY_LIMIT_EXCEEDED` - History size limit was exceeded
+ * - `INVALID_EDGE` - An invalid edge operation was attempted
  *
  * @example
  * ```typescript
@@ -558,4 +559,147 @@ export class ValidationError extends SequentialThinkingError {
 		this.name = 'ValidationError';
 		this.field = field;
 	}
+}
+
+/**
+ * Error thrown when an invalid edge operation is attempted.
+ *
+ * This error is thrown when attempting to add an edge that violates
+ * structural invariants of the thought DAG, such as a self-edge
+ * (where `from` and `to` reference the same thought).
+ *
+ * @example
+ * ```typescript
+ * if (edge.from === edge.to) {
+ *   throw new InvalidEdgeError(
+ *     `Self-edge not allowed: from and to are the same (${edge.from})`
+ *   );
+ * }
+ * ```
+ */
+export class InvalidEdgeError extends SequentialThinkingError {
+	/**
+	 * Creates a new InvalidEdgeError.
+	 *
+	 * @param message - Human-readable explanation of the invalid edge
+	 *
+	 * @example
+	 * ```typescript
+	 * throw new InvalidEdgeError('Self-edge not allowed: from and to are the same (t1)');
+	 * // Code: INVALID_EDGE
+	 * ```
+	 */
+	constructor(message: string) {
+		super(message, 'INVALID_EDGE');
+		this.name = 'InvalidEdgeError';
+	}
+}
+
+/**
+ * Error thrown when a cycle is detected during graph traversal.
+ *
+ * This error is thrown by graph algorithms (such as topological sort)
+ * when the thought DAG contains a cycle, violating the acyclic invariant.
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   const order = graphView.topological(sessionId);
+ * } catch (error) {
+ *   if (error instanceof CycleDetectedError) {
+ *     console.error('Cycle in thought graph:', error.message);
+ *   }
+ * }
+ * ```
+ */
+export class CycleDetectedError extends SequentialThinkingError {
+	/**
+	 * Creates a new CycleDetectedError.
+	 *
+	 * @param message - Human-readable explanation of the cycle
+	 *
+	 * @example
+	 * ```typescript
+	 * throw new CycleDetectedError('Cycle detected in session s1');
+	 * // Code: CYCLE_DETECTED
+	 * ```
+	 */
+	constructor(message: string) {
+		super(message, 'CYCLE_DETECTED');
+		this.name = 'CycleDetectedError';
+	}
+}
+
+/**
+ * Error thrown when a suspension record is not found.
+ *
+ * This error is thrown when attempting to resume a tool interleave
+ * suspension that does not exist in the suspension store.
+ */
+export class SuspensionNotFoundError extends SequentialThinkingError {
+	constructor(message: string) {
+		super(message, 'SUSPENSION_NOT_FOUND');
+		this.name = 'SuspensionNotFoundError';
+	}
+}
+
+/**
+ * Error thrown when a suspension record has expired.
+ *
+ * This error is thrown when attempting to resume a tool interleave
+ * suspension whose TTL has elapsed.
+ */
+export class SuspensionExpiredError extends SequentialThinkingError {
+	constructor(message: string) {
+		super(message, 'SUSPENSION_EXPIRED');
+		this.name = 'SuspensionExpiredError';
+	}
+}
+
+/**
+ * Error thrown when a tool call payload is invalid.
+ *
+ * This error is thrown when a tool interleave invocation has malformed
+ * arguments, missing identifiers, or otherwise fails validation.
+ */
+export class InvalidToolCallError extends SequentialThinkingError {
+	constructor(message: string) {
+		super(message, 'INVALID_TOOL_CALL');
+		this.name = 'InvalidToolCallError';
+	}
+}
+
+/**
+ * Error thrown when a backtrack operation is invalid.
+ *
+ * This error is thrown when an attempt to backtrack the reasoning
+ * chain references an unreachable thought or violates DAG invariants.
+ */
+export class InvalidBacktrackError extends SequentialThinkingError {
+	constructor(message: string) {
+		super(message, 'INVALID_BACKTRACK');
+		this.name = 'InvalidBacktrackError';
+	}
+}
+
+/**
+ * Extract a human-readable message from an unknown error value.
+ *
+ * Standardizes the common `error instanceof Error ? error.message : String(error)`
+ * pattern used in catch blocks across the codebase.
+ *
+ * @param error - The unknown error value to extract a message from
+ * @returns The error message string
+ *
+ * @example
+ * ```typescript
+ * try {
+ *   await doSomething();
+ * } catch (error) {
+ *   logger.error('Failed', { error: getErrorMessage(error) });
+ * }
+ * ```
+ */
+export function getErrorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }

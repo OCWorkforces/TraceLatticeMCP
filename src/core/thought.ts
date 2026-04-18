@@ -52,6 +52,18 @@ export interface ThoughtData {
 	/** The current thinking step or reasoning content. */
 	thought: string;
 
+	/**
+	 * Unique identifier for this thought (ulid).
+	 * Auto-generated when not provided. Used as stable DAG node identity.
+	 * Required for DAG edge references; falls back to thought_number for backward compat.
+	 *
+	 * @example
+	 * ```typescript
+	 * const thought: ThoughtData = { ...base, id: '01H0X0X0X0X0X0X0X0X0X0X0X0' };
+	 * ```
+	 */
+	id?: string;
+
 	/** Current thought number in the sequence (1-indexed). */
 	thought_number: number;
 
@@ -213,4 +225,29 @@ export interface ThoughtData {
 	 * ```
 	 */
 	reset_state?: boolean;
+
+	/** Tool name for tool_call thoughts */
+	tool_name?: string;
+
+	/** Arguments for the tool invocation */
+	tool_arguments?: Record<string, unknown>;
+
+	/** Result returned by the tool (for tool_observation) */
+	tool_result?: unknown;
+
+	/** Continuation token linking tool_observation back to suspended tool_call */
+	continuation_token?: string;
+
+	/** Sub-problem labels for decomposition thoughts */
+	decomposition_children?: string[];
+
+	/** Thought number being backtracked from */
+	backtrack_target?: number;
+
+	/**
+	 * Internal: thought_number of the tool_call this tool_observation resumes from.
+	 * Set transiently by ThoughtProcessor; not part of the public API.
+	 * Used by HistoryManager to emit `tool_invocation` DAG edges.
+	 */
+	_resumedFrom?: number;
 }

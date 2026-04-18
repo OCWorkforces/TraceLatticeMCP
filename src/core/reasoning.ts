@@ -7,6 +7,8 @@
  * @module core/reasoning
  */
 
+import type { CalibrationMetrics } from '../contracts/calibrator.js';
+
 /**
  * Classification of thought purpose — enables type-specific formatting, evaluation, and analytics.
  *
@@ -26,7 +28,12 @@ export type ThoughtType =
 	| 'verification' // Testing a hypothesis against evidence
 	| 'critique' // Self-critique of reasoning (Reflexion pattern)
 	| 'synthesis' // Combining multiple thoughts/branches (GoT merge)
-	| 'meta'; // Metacognitive observation about the reasoning process itself
+	| 'meta' // Metacognitive observation about the reasoning process itself
+	| 'tool_call' // Invocation of an external tool
+	| 'tool_observation' // Observation of a tool's result
+	| 'assumption' // Explicitly stated assumption
+	| 'decomposition' // Breaking a problem into sub-problems
+	| 'backtrack'; // Backtracking from a prior thought
 
 /**
  * A detected reasoning pattern — surfaced as metadata or a warning.
@@ -131,6 +138,12 @@ export interface ConfidenceSignals {
 		/** 1 - stddev(confidence values). Defaults to 0.5 if no confidence values. */
 		confidence_stability: number;
 	};
+
+	/** Calibrated confidence score (post temperature scaling + prior shrinkage). Only present when features.calibration=true. */
+	readonly calibrated_confidence?: number;
+
+	/** Calibration quality metrics for the session. Only present when features.calibration=true. */
+	readonly calibration_metrics?: CalibrationMetrics;
 }
 
 /**
