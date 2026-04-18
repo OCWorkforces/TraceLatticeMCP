@@ -23,7 +23,7 @@ export interface InMemorySuspensionStoreConfig {
 	logger?: unknown;
 }
 
-const DEFAULT_TTL_MS = 60_000;
+const DEFAULT_TTL_MS = 300_000;
 const DEFAULT_SWEEP_INTERVAL_MS = 60_000;
 
 /**

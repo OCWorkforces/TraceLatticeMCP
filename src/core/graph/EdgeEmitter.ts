@@ -41,7 +41,7 @@ export class EdgeEmitter {
 
 	constructor(config: EdgeEmitterConfig) {
 		this._edgeStore = config.edgeStore;
-		this._dagEdges = config.dagEdges ?? false;
+		this._dagEdges = config.dagEdges ?? true;
 		this._defaultSessionId = config.defaultSessionId;
 		this._logger = config.logger ?? new NullLogger();
 	}
