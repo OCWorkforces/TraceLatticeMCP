@@ -216,3 +216,5 @@ skills-lock.json
 # rslib / rsbuild cache directories
 .rslib/
 .rsbuild/
+# CocoIndex Code (ccc)
+/.cocoindex_code/

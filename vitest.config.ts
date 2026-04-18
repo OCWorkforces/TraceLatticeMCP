@@ -4,7 +4,7 @@ export default defineConfig({
 	test: {
 		globals: true,
 		exclude: ['**/node_modules/**', '**/dist/**', '**/.next/**', '**/.nuxt/**'],
-		include: ['src/**/*.{test,spec}.{ts,tsx}'],
+		include: ['src/**/*.{test,spec}.{ts,tsx}', 'src/**/*.eval.ts'],
 		coverage: {
 			provider: 'v8',
 			reporter: ['text', 'json', 'html'],
