@@ -2,21 +2,21 @@
 
 [![npm version](https://img.shields.io/npm/v/tracelattice?color=blue&label=npm)](https://www.npmjs.com/package/tracelattice)
 
-An MCP (Model Context Protocol) server providing structured sequential thinking with tool/skill recommendations, DAG-based thought relationships, configurable reasoning strategies, and confidence calibration for AI agents.
+An MCP server that gives AI agents structured sequential thinking. Thoughts live in a DAG, reasoning strategies are pluggable, and confidence scores get calibrated against actual outcomes.
 
 ## Features
 
-- **Structured Thinking**: 11 thought types — regular, hypothesis, verification, critique, synthesis, meta, tool_call, tool_observation, assumption, decomposition, backtrack
-- **DAG Thought Graph**: Multi-parent edges (sequence, branch, merge, verifies, critiques, derives_from, tool_invocation, revises) with topological traversal
-- **Reasoning Strategies**: Pluggable strategy system — sequential (default) or Tree-of-Thought (BFS/beam search with plateau detection)
-- **Tool Interleave**: Suspend/resume flow for interleaving tool calls within thinking chains
-- **Confidence Calibration**: Beta(2,2) priors with Brier score and Expected Calibration Error (ECE)
-- **Branch Compression**: Automatic rollup of cold branches into summaries with sliding-window dehydration
-- **Outcome Recording**: Track tool_call/tool_observation results with metadata
-- **Tool & Skill Recommendations**: AI-driven selection with confidence scores, rationales, and automatic skill discovery
-- **Multi-Session**: Per-session isolation with TTL eviction and LRU caching
-- **Multi-Transport**: stdio, SSE (legacy), and Streamable HTTP (production)
-- **Type-Safe**: Strict TypeScript with Valibot validation, 1913 tests, 18-service DI container
+- 11 thought types: regular, hypothesis, verification, critique, synthesis, meta, tool_call, tool_observation, assumption, decomposition, backtrack
+- DAG-based thought graph with 8 edge kinds (sequence, branch, merge, verifies, critiques, derives_from, tool_invocation, revises) and topological traversal
+- Pluggable reasoning strategies. Sequential by default, or Tree-of-Thought with BFS/beam search and plateau detection
+- Tool interleave: suspend a thinking chain, run a tool call, then resume where you left off
+- Confidence calibration using Beta(2,2) priors, Brier score, and Expected Calibration Error (ECE)
+- Branch compression: cold branches get rolled into summaries automatically, with a sliding-window dehydration policy
+- Outcome recording for tool_call/tool_observation results with metadata
+- Tool and skill recommendations with confidence scores, rationales, and automatic discovery
+- Per-session isolation with TTL eviction and LRU caching
+- Three transports: stdio (default), SSE (legacy), Streamable HTTP (production)
+- Strict TypeScript, Valibot validation, 1913 tests, 18-service DI container
 
 ## Install
 
@@ -26,13 +26,13 @@ Requires [Node.js](https://nodejs.org/) v22+.
 npm install -g tracelattice
 ```
 
-## Configure MCP Client
+## Configure your MCP client
 
-The server uses **stdio transport** by default — no extra configuration needed. Add it to your MCP client:
+The default transport is stdio. Add the server to your client:
 
 ### Claude Code
 
-**User-scoped** (`~/.claude.json`) or **project-scoped** (`.mcp.json` in project root):
+User-scoped (`~/.claude.json`) or project-scoped (`.mcp.json` in project root):
 
 ```json
 {
@@ -52,7 +52,7 @@ claude mcp add tracelattice -- tracelattice
 
 ### Codex CLI
 
-**User-scoped** (`~/.codex/config.toml`) or **project-scoped** (`.codex/config.toml`):
+User-scoped (`~/.codex/config.toml`) or project-scoped (`.codex/config.toml`):
 
 ```toml
 [mcp_servers.tracelattice]
@@ -67,7 +67,7 @@ codex mcp add tracelattice -- tracelattice
 
 ### OpenCode
 
-**Global** (`~/.config/opencode/opencode.json`) or **project-scoped** (`.opencode.json`):
+Global (`~/.config/opencode/opencode.json`) or project-scoped (`.opencode.json`):
 
 ```json
 {
@@ -83,8 +83,7 @@ codex mcp add tracelattice -- tracelattice
       "environment": {
         "MAX_HISTORY_SIZE": "10000"
       }
-    },
-  }
+    }
 }
 ```
 
@@ -100,7 +99,7 @@ codex mcp add tracelattice -- tracelattice
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `PRETTY_LOG` | `true` | Enable pretty log output |
 
-### Feature Flags
+### Feature flags
 
 All flags default to `false`. Set to `true` or `1` to enable.
 
@@ -131,7 +130,7 @@ All flags default to `false`. Set to `true` or `1` to enable.
 | `ENABLE_CORS` | `true` | Enable CORS preflight |
 | `ALLOWED_HOSTS` | (all) | Comma-separated allowed hosts |
 
-### Skill Discovery
+### Skill discovery
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -141,13 +140,14 @@ All flags default to `false`. Set to `true` or `1` to enable.
 
 ## Transports
 
-The server supports three transports via the `TRANSPORT_TYPE` environment variable:
+Set `TRANSPORT_TYPE` to pick one:
 
-| Transport | Use Case | Command |
-|-----------|----------|---------|
+| Transport | When to use | Command |
+|-----------|-------------|---------|
 | `stdio` (default) | Local MCP clients | `tracelattice` |
-| `sse` (legacy) | Multi-user, backwards compat | `TRANSPORT_TYPE=sse tracelattice` |
+| `sse` (legacy) | Multi-user setups, backwards compatibility | `TRANSPORT_TYPE=sse tracelattice` |
 | `streamable-http` | Production deployments | `TRANSPORT_TYPE=streamable-http tracelattice` |
+
 ## Development
 
 ```bash
