@@ -53,6 +53,10 @@ class FakeHistoryManager implements IHistoryManager {
 	getBranchIds(): string[] {
 		return [];
 	}
+	registerBranch(): void {}
+	branchExists(): boolean {
+		return false;
+	}
 	clear(): void {
 		this._thoughts.length = 0;
 	}

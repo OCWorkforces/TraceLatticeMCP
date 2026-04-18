@@ -457,4 +457,82 @@ describe('TreeOfThoughtStrategy', () => {
 			}
 		});
 	});
+
+	describe('newThoughtTypes integration with beam selection', () => {
+		it('decomposition (weight 1.2) outranks regular when scoring frontier', () => {
+			// All 4 leaves have confidence=0.5, quality=1.
+			// Scores: decomposition = 0.5 * 1 * 1.2 = 0.6
+			//          regular       = 0.5 * 1 * 1.0 = 0.5
+			//          assumption    = 0.5 * 1 * 0.5 = 0.25
+			// beamWidth=3 keeps top-3: decomposition + 2 regulars. assumption is OUT.
+			const root = tot('root', 0, 0.05);
+			const decomp = createTestThought({
+				id: 'd',
+				thought_number: 1,
+				confidence: 0.5,
+				quality_score: 1,
+				thought_type: 'decomposition',
+				next_thought_needed: true,
+			});
+			const reg1 = tot('r1', 2, 0.5, 1);
+			const reg2 = tot('r2', 3, 0.5, 1);
+			const assume = createTestThought({
+				id: 'a',
+				thought_number: 4,
+				confidence: 0.5,
+				quality_score: 1,
+				thought_type: 'assumption',
+				next_thought_needed: true,
+			});
+			const ctx = makeCtx({
+				history: [root, decomp, reg1, reg2, assume],
+				current: assume, // assumption is lowest-scored → outside beam
+				edges: [
+					['root', 'd'],
+					['root', 'r1'],
+					['root', 'r2'],
+					['root', 'a'],
+				],
+			});
+			const decision = new TreeOfThoughtStrategy().decide(ctx);
+			expect(decision.action).toBe('branch');
+			if (decision.action === 'branch') {
+				expect(decision.fromThought).toBe(4);
+			}
+		});
+
+		it('decomposition stays inside beam when current; weight boost keeps it ranked', () => {
+			// Same 4 leaves, but current = decomposition (highest-weighted) → inside beam → continue.
+			const root = tot('root', 0, 0.05);
+			const decomp = createTestThought({
+				id: 'd',
+				thought_number: 1,
+				confidence: 0.5,
+				quality_score: 1,
+				thought_type: 'decomposition',
+				next_thought_needed: true,
+			});
+			const reg1 = tot('r1', 2, 0.5, 1);
+			const reg2 = tot('r2', 3, 0.5, 1);
+			const assume = createTestThought({
+				id: 'a',
+				thought_number: 4,
+				confidence: 0.5,
+				quality_score: 1,
+				thought_type: 'assumption',
+				next_thought_needed: true,
+			});
+			const ctx = makeCtx({
+				history: [root, decomp, reg1, reg2, assume],
+				current: decomp,
+				edges: [
+					['root', 'd'],
+					['root', 'r1'],
+					['root', 'r2'],
+					['root', 'a'],
+				],
+			});
+			expect(new TreeOfThoughtStrategy().decide(ctx).action).toBe('continue');
+		});
+	});
 });
