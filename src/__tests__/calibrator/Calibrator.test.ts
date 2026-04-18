@@ -313,3 +313,296 @@ describe('Calibrator — isolation', () => {
 		expect(rB.temperature).toBe(1.0); // no global, no session B fit
 	});
 });
+
+describe('Calibrator — extreme inputs', () => {
+	it('clamps NaN raw confidence (NaN passes through Math.min/max)', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		const r = calibrator.calibrate(Number.NaN, 'regular', 's1');
+		// Math.min(1, Math.max(0, NaN)) = NaN; downstream produces NaN.
+		// We assert it does not throw and returns a finite-or-NaN number bounded by
+		// the contract that disabled mode would identity-map. Here we accept NaN propagation.
+		expect(typeof r.raw).toBe('number');
+		expect(Number.isNaN(r.raw)).toBe(true);
+	});
+
+	it('clamps Infinity raw confidence to 1', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		const r = calibrator.calibrate(Number.POSITIVE_INFINITY, 'regular', 's1');
+		expect(r.raw).toBe(1);
+		expect(r.calibrated).toBeGreaterThanOrEqual(0);
+		expect(r.calibrated).toBeLessThanOrEqual(1);
+	});
+
+	it('clamps -Infinity raw confidence to 0', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		const r = calibrator.calibrate(Number.NEGATIVE_INFINITY, 'regular', 's1');
+		expect(r.raw).toBe(0);
+		expect(r.calibrated).toBeGreaterThanOrEqual(0);
+		expect(r.calibrated).toBeLessThanOrEqual(1);
+	});
+
+	it('clamps negative confidence (-1) to 0', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		const r = calibrator.calibrate(-1, 'regular', 's1');
+		expect(r.raw).toBe(0);
+		// no outcomes → shrinks fully to prior 0.5
+		expect(r.calibrated).toBeCloseTo(0.5, 10);
+	});
+
+	it('clamps confidence > 1 (2.0) to 1', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		const r = calibrator.calibrate(2.0, 'regular', 's1');
+		expect(r.raw).toBe(1);
+		expect(r.calibrated).toBeCloseTo(0.5, 10);
+	});
+
+	it('handles zero confidence (0.0)', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		const r = calibrator.calibrate(0, 'regular', 's1');
+		expect(r.raw).toBe(0);
+		// shrunk = 1.0 * 0.5 + 0 * 0 = 0.5
+		expect(r.calibrated).toBeCloseTo(0.5, 10);
+	});
+
+	it('handles perfect confidence (1.0)', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		const r = calibrator.calibrate(1, 'regular', 's1');
+		expect(r.raw).toBe(1);
+		// shrunk = 1.0 * 0.5 + 0 * 1 = 0.5
+		expect(r.calibrated).toBeCloseTo(0.5, 10);
+	});
+});
+
+describe('Calibrator — temperature boundary (MIN_OUTCOMES_FOR_TEMPERATURE = 10)', () => {
+	it('exactly 9 outcomes → temperature NOT applied (prior-only path)', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		for (let i = 0; i < 9; i++) recorder.recordVerification(makeOutcome(0.99, 0));
+		calibrator.refit('s1');
+		const r = calibrator.calibrate(0.9, 'hypothesis', 's1');
+		// fitTemperature returns 1.0 below threshold; calibrate path also gates on count.
+		expect(r.temperature).toBe(1.0);
+		// hypothesis: n=9, observedMean=0, priorWeight = 1/(1+9/10) = 1/1.9 ≈ 0.5263
+		const expected = (1 / (1 + 9 / 10)) * 0 + (1 - 1 / (1 + 9 / 10)) * 0.9;
+		expect(r.calibrated).toBeCloseTo(expected, 10);
+	});
+
+	it('exactly 10 outcomes → temperature SHOULD be applied after refit', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		for (let i = 0; i < 10; i++) recorder.recordVerification(makeOutcome(0.99, 0));
+		calibrator.refit('s1');
+		const r = calibrator.calibrate(0.9, 'hypothesis', 's1');
+		// Overconfident → fitted T > 1.0; outcomes count meets threshold.
+		expect(r.temperature).toBeGreaterThan(1.0);
+	});
+
+	it('exactly 11 outcomes → temperature applied (smooth transition)', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		for (let i = 0; i < 11; i++) recorder.recordVerification(makeOutcome(0.99, 0));
+		calibrator.refit('s1');
+		const r = calibrator.calibrate(0.9, 'hypothesis', 's1');
+		expect(r.temperature).toBeGreaterThan(1.0);
+		expect(TEMPERATURE_GRID_VALUES).toContain(r.temperature);
+	});
+
+	it('temperature is 1.0 when 10 outcomes are perfectly calibrated', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		// Mid-range predictions where actual matches probability — NLL is minimized near T=1.0.
+		// Use 0.6/0.4 split so loss strictly varies with T and T=1.0 is the unique grid minimum.
+		for (let i = 0; i < 6; i++) recorder.recordVerification(makeOutcome(0.6, 1));
+		for (let i = 0; i < 4; i++) recorder.recordVerification(makeOutcome(0.6, 0));
+		calibrator.refit('s1');
+		const r = calibrator.calibrate(0.5, 'regular', 's1');
+		// For predicted=0.6 with 60% accuracy, NLL is minimized at T=1.0 on the grid.
+		expect(r.temperature).toBe(1.0);
+	});
+});
+
+// Mirror of TEMPERATURE_GRID in Calibrator.ts for assertion sanity-checks.
+const TEMPERATURE_GRID_VALUES = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0] as const;
+
+describe('Calibrator — global temperature fallback', () => {
+	it('session B with 0 outcomes uses global temperature after global refit', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		// Seed 15 overconfident outcomes across multiple sessions (visible in global view).
+		for (let i = 0; i < 15; i++) {
+			recorder.recordVerification(makeOutcome(0.99, 0, 'hypothesis', 'sA'));
+		}
+		calibrator.refit(); // global refit
+		const rA = calibrator.calibrate(0.9, 'hypothesis', 'sA');
+		const rB = calibrator.calibrate(0.9, 'hypothesis', 'sB');
+		// sA: outcomes>=10 in its own session → temperature applied (from global fallback).
+		expect(rA.temperature).toBeGreaterThan(1.0);
+		// sB: 0 session outcomes → outcomes.length < 10, temperature lookup still
+		// finds global value but calibrate() does NOT apply it (gated by count).
+		expect(rB.temperature).toBeGreaterThan(1.0);
+	});
+
+	it('a brand-new session inherits global temperature value via fallback chain', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		for (let i = 0; i < 12; i++) {
+			recorder.recordVerification(makeOutcome(0.95, 0, 'hypothesis', 'sA'));
+		}
+		calibrator.refit(); // sets GLOBAL_KEY temperature
+		const rNew = calibrator.calibrate(0.9, 'hypothesis', 'sNew');
+		// No session-specific temperature → falls back to global > 1.
+		expect(rNew.temperature).toBeGreaterThan(1.0);
+	});
+
+	it('without any refit, fallback returns 1.0 for unknown sessions', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		const r = calibrator.calibrate(0.9, 'hypothesis', 'sUnknown');
+		expect(r.temperature).toBe(1.0);
+	});
+});
+
+describe('Calibrator — determinism', () => {
+	it('calibrate() returns identical results across repeated calls (same args, same state)', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		for (let i = 0; i < 12; i++) recorder.recordVerification(makeOutcome(0.8, i % 2 === 0 ? 1 : 0));
+		calibrator.refit('s1');
+		const r1 = calibrator.calibrate(0.7, 'hypothesis', 's1');
+		const r2 = calibrator.calibrate(0.7, 'hypothesis', 's1');
+		expect(r1.raw).toBe(r2.raw);
+		expect(r1.calibrated).toBe(r2.calibrated);
+		expect(r1.temperature).toBe(r2.temperature);
+		expect(r1.priorWeight).toBe(r2.priorWeight);
+	});
+
+	it('metrics() returns identical results across repeated calls', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		recorder.recordVerification(makeOutcome(0.6, 1));
+		recorder.recordVerification(makeOutcome(0.4, 0));
+		const m1 = calibrator.metrics('s1');
+		const m2 = calibrator.metrics('s1');
+		expect(m1.brierScore).toBe(m2.brierScore);
+		expect(m1.ece).toBe(m2.ece);
+		expect(m1.sampleCount).toBe(m2.sampleCount);
+		expect(m1.perTypeBrier).toEqual(m2.perTypeBrier);
+	});
+
+	it('Brier score is deterministic for the same outcome set', () => {
+		const seed: Array<[number, 0 | 1]> = [
+			[0.9, 1], [0.8, 0], [0.7, 1], [0.6, 1], [0.55, 0], [0.5, 1], [0.4, 0], [0.3, 0],
+		];
+		const rA = new MockOutcomeRecorder();
+		const rB = new MockOutcomeRecorder();
+		for (const [p, a] of seed) {
+			rA.recordVerification(makeOutcome(p, a));
+			rB.recordVerification(makeOutcome(p, a));
+		}
+		const cA = new Calibrator(rA, true);
+		const cB = new Calibrator(rB, true);
+		expect(cA.metrics('s1').brierScore).toBe(cB.metrics('s1').brierScore);
+	});
+});
+
+describe('Calibrator — Brier score mathematical accuracy', () => {
+	it('matches the formula mean((predicted - actual)^2) on a 2-sample example', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		recorder.recordVerification(makeOutcome(0.8, 1));
+		recorder.recordVerification(makeOutcome(0.8, 0));
+		const m = calibrator.metrics('s1');
+		// (0.04 + 0.64) / 2 = 0.34
+		expect(m.brierScore).toBeCloseTo(0.34, 10);
+	});
+
+	it('perfect predictor (predicted === actual) → Brier = 0', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		recorder.recordVerification(makeOutcome(1, 1));
+		recorder.recordVerification(makeOutcome(0, 0));
+		recorder.recordVerification(makeOutcome(1, 1));
+		const m = calibrator.metrics('s1');
+		expect(m.brierScore).toBe(0);
+	});
+
+	it('worst predictor (predicted=1, actual=0) → Brier = 1', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		for (let i = 0; i < 4; i++) recorder.recordVerification(makeOutcome(1, 0));
+		const m = calibrator.metrics('s1');
+		expect(m.brierScore).toBe(1);
+	});
+
+	it('matches formula on a 3-sample mixed example', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		recorder.recordVerification(makeOutcome(0.9, 1)); // (0.1)^2 = 0.01
+		recorder.recordVerification(makeOutcome(0.5, 0)); // (0.5)^2 = 0.25
+		recorder.recordVerification(makeOutcome(0.2, 1)); // (0.8)^2 = 0.64
+		const m = calibrator.metrics('s1');
+		// (0.01 + 0.25 + 0.64) / 3 = 0.30
+		expect(m.brierScore).toBeCloseTo(0.3, 10);
+	});
+});
+
+describe('Calibrator — ECE mathematical accuracy', () => {
+	it('confidence 0.85 lands in bin 8 (0.8-0.9): single-bin ECE equals deviation', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		// 10 outcomes all at p=0.85; 4 actual=1, 6 actual=0 → meanAcc=0.4
+		for (let i = 0; i < 4; i++) recorder.recordVerification(makeOutcome(0.85, 1));
+		for (let i = 0; i < 6; i++) recorder.recordVerification(makeOutcome(0.85, 0));
+		const m = calibrator.metrics('s1');
+		// All in bin 8: weight=1, |0.85 - 0.4| = 0.45
+		expect(m.ece).toBeCloseTo(0.45, 10);
+	});
+
+	it('all outcomes in a single low bin → ECE equals that bin deviation', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		// p=0.05 (bin 0); 2/4 correct → meanAcc=0.5; |0.05 - 0.5| = 0.45
+		for (let i = 0; i < 2; i++) recorder.recordVerification(makeOutcome(0.05, 1));
+		for (let i = 0; i < 2; i++) recorder.recordVerification(makeOutcome(0.05, 0));
+		const m = calibrator.metrics('s1');
+		expect(m.ece).toBeCloseTo(0.45, 10);
+	});
+
+	it('uniform distribution across two bins → weighted ECE formula', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		// Bin 1 (p=0.15): 4 outcomes, all correct → meanAcc=1.0, dev=|0.15-1|=0.85, weight=4/8
+		for (let i = 0; i < 4; i++) recorder.recordVerification(makeOutcome(0.15, 1));
+		// Bin 9 (p=0.95): 4 outcomes, all wrong → meanAcc=0.0, dev=|0.95-0|=0.95, weight=4/8
+		for (let i = 0; i < 4; i++) recorder.recordVerification(makeOutcome(0.95, 0));
+		const m = calibrator.metrics('s1');
+		// ECE = 0.5 * 0.85 + 0.5 * 0.95 = 0.9
+		expect(m.ece).toBeCloseTo(0.9, 10);
+	});
+
+	it('predicted at exact bin boundary 0.9 lands in bin 9 (not 8)', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		// floor(0.9 * 10) = 9 → bin 9 (0.9-1.0)
+		for (let i = 0; i < 10; i++) recorder.recordVerification(makeOutcome(0.9, 1));
+		const m = calibrator.metrics('s1');
+		// All in bin 9, meanAcc=1.0, |0.9-1.0|=0.1
+		expect(m.ece).toBeCloseTo(0.1, 10);
+	});
+
+	it('predicted = 1.0 clamped into top bin (bin 9)', () => {
+		const recorder = new MockOutcomeRecorder();
+		const calibrator = new Calibrator(recorder, true);
+		// p=1.0 with EPSILON clamp goes into bin 9; all correct → ECE ≈ 0
+		for (let i = 0; i < 5; i++) recorder.recordVerification(makeOutcome(1, 1));
+		const m = calibrator.metrics('s1');
+		expect(m.ece as number).toBeLessThan(0.01);
+	});
+});

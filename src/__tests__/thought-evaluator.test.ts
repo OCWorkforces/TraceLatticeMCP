@@ -570,6 +570,114 @@ describe('ThoughtEvaluator', () => {
 			expect(signals.quality_components!.type_diversity).toBeGreaterThanOrEqual(0.01);
 			expect(signals.structural_quality).toBeGreaterThan(0);
 		});
+
+		it('returns confidence_stability null for single thought with confidence', () => {
+			const history = [makeThought({ confidence: 0.2 })];
+			const signals = evaluator.computeConfidenceSignals(history, {});
+			expect(signals.quality_components!.confidence_stability).toBeNull();
+		});
+
+		it('returns confidence_stability ~1.0 for two equal confidences', () => {
+			const history = [
+				makeThought({ confidence: 0.8 }),
+				makeThought({ confidence: 0.8 }),
+			];
+			const signals = evaluator.computeConfidenceSignals(history, {});
+			expect(signals.quality_components!.confidence_stability).toBeCloseTo(1.0, 5);
+		});
+
+		it('returns lower confidence_stability for divergent confidences', () => {
+			const history = [
+				makeThought({ confidence: 0.2 }),
+				makeThought({ confidence: 0.9 }),
+			];
+			const signals = evaluator.computeConfidenceSignals(history, {});
+			expect(signals.quality_components!.confidence_stability).toBeLessThan(0.7);
+		});
+
+		it('uses 3-component geometric mean when confidence_stability is null', () => {
+			// Single thought with confidence → cs is null → redistributed weights
+			const history = [makeThought({ confidence: 0.2, thought_type: 'regular' })];
+			const signals = evaluator.computeConfidenceSignals(history, {});
+
+			const c = signals.quality_components!;
+			expect(c.confidence_stability).toBeNull();
+
+			// Manually compute expected 3-component score: td^0.375 * vc^0.375 * de^0.25
+			const expected =
+				Math.pow(c.type_diversity, 0.375) *
+				Math.pow(c.verification_coverage, 0.375) *
+				Math.pow(c.depth_efficiency, 0.25);
+			expect(signals.structural_quality).toBeCloseTo(expected, 10);
+		});
+
+		it('uses 4-component geometric mean when confidence_stability is present', () => {
+			const history = [
+				makeThought({ confidence: 0.8, thought_type: 'regular' }),
+				makeThought({ confidence: 0.8, thought_type: 'hypothesis' }),
+			];
+			const signals = evaluator.computeConfidenceSignals(history, {});
+
+			const c = signals.quality_components!;
+			expect(c.confidence_stability).not.toBeNull();
+
+			const expected =
+				Math.pow(c.type_diversity, 0.3) *
+				Math.pow(c.verification_coverage, 0.3) *
+				Math.pow(c.depth_efficiency, 0.2) *
+				Math.pow(c.confidence_stability as number, 0.2);
+			expect(signals.structural_quality).toBeCloseTo(expected, 10);
+		});
+	});
+
+	describe('quality_components_raw', () => {
+		it('is undefined for empty history', () => {
+			const signals = evaluator.computeConfidenceSignals([], {});
+			expect(signals.quality_components_raw).toBeUndefined();
+		});
+
+		it('exposes raw type_diversity below the 0.01 floor for all-same-type history', () => {
+			const history = [makeThought({}), makeThought({})];
+			const signals = evaluator.computeConfidenceSignals(history, {});
+			// Shannon entropy is 0 for all-same-type → raw should be 0 (below floor)
+			expect(signals.quality_components_raw!.type_diversity).toBe(0);
+			// Floored value is at the floor
+			expect(signals.quality_components!.type_diversity).toBeCloseTo(0.01, 5);
+		});
+
+		it('exposes raw verification_coverage that may differ from floored', () => {
+			const history = [
+				makeThought({ thought_type: 'hypothesis', hypothesis_id: 'h1' }),
+				makeThought({ thought_type: 'hypothesis', hypothesis_id: 'h2' }),
+				makeThought({ thought_type: 'verification', hypothesis_id: 'h1' }),
+			];
+			const signals = evaluator.computeConfidenceSignals(history, {});
+			expect(signals.quality_components_raw!.verification_coverage).toBeCloseTo(0.5, 10);
+			expect(signals.quality_components!.verification_coverage).toBeCloseTo(0.5, 10);
+		});
+
+		it('exposes raw depth_efficiency without flooring', () => {
+			const history = [makeThought({}), makeThought({})];
+			const signals = evaluator.computeConfidenceSignals(history, {});
+			expect(signals.quality_components_raw!.depth_efficiency).toBeGreaterThan(0);
+			expect(signals.quality_components_raw!.depth_efficiency).toBeLessThanOrEqual(1.0);
+		});
+
+		it('returns null raw confidence_stability when fewer than 2 confidence values', () => {
+			const history = [makeThought({ confidence: 0.5 })];
+			const signals = evaluator.computeConfidenceSignals(history, {});
+			expect(signals.quality_components_raw!.confidence_stability).toBeNull();
+		});
+
+		it('exposes raw confidence_stability as 1 - stddev (no floor)', () => {
+			const history = [
+				makeThought({ confidence: 0.0 }),
+				makeThought({ confidence: 1.0 }),
+			];
+			const signals = evaluator.computeConfidenceSignals(history, {});
+			// stddev = 0.5 → raw = 0.5; floored is also 0.5
+			expect(signals.quality_components_raw!.confidence_stability).toBeCloseTo(0.5, 10);
+		});
 	});
 });
 
