@@ -240,4 +240,111 @@ describe('ThoughtProcessor — tool interleave', () => {
 		const payload = JSON.parse(dup.content[0]!.text);
 		expect(payload.error).toMatch(/Suspension token not found/);
 	});
+
+	describe('full multi-cycle and session isolation', () => {
+		it('handles a full 4-thought call→obs→call→obs cycle in one session', async () => {
+			const { processor, history } = makeProcessor(store);
+
+			// First tool_call
+			const call1 = await processor.process({
+				thought: 'invoke first',
+				thought_number: 1,
+				total_thoughts: 4,
+				next_thought_needed: true,
+				thought_type: 'tool_call',
+				tool_name: 'search',
+				tool_arguments: { q: 'first' },
+			});
+			const token1 = JSON.parse(call1.content[0]!.text).continuation_token as string;
+
+			// First observation
+			const obs1 = await processor.process({
+				thought: 'first observation',
+				thought_number: 2,
+				total_thoughts: 4,
+				next_thought_needed: true,
+				thought_type: 'tool_observation',
+				continuation_token: token1,
+			});
+			expect(obs1.isError).toBeFalsy();
+
+			// Second tool_call
+			const call2 = await processor.process({
+				thought: 'invoke second',
+				thought_number: 3,
+				total_thoughts: 4,
+				next_thought_needed: true,
+				thought_type: 'tool_call',
+				tool_name: 'fetch',
+				tool_arguments: { url: 'http://x' },
+			});
+			const token2 = JSON.parse(call2.content[0]!.text).continuation_token as string;
+			expect(token2).not.toBe(token1);
+
+			// Second observation
+			const obs2 = await processor.process({
+				thought: 'second observation',
+				thought_number: 4,
+				total_thoughts: 4,
+				next_thought_needed: false,
+				thought_type: 'tool_observation',
+				continuation_token: token2,
+			});
+			expect(obs2.isError).toBeFalsy();
+
+			// Verify all 4 thoughts persisted in correct order with correct types
+			const items = history.getHistory();
+			expect(items).toHaveLength(4);
+			expect(items.map((t) => t.thought_type)).toEqual([
+				'tool_call',
+				'tool_observation',
+				'tool_call',
+				'tool_observation',
+			]);
+			// Both observations recorded their resume targets
+			expect((items[1] as ThoughtData & { _resumedFrom?: number })._resumedFrom).toBe(1);
+			expect((items[3] as ThoughtData & { _resumedFrom?: number })._resumedFrom).toBe(3);
+			// Both suspensions were consumed (single-use)
+			expect(store.size()).toBe(0);
+		});
+
+		it('issues distinct tokens per session and tags suspend envelope with session_id', async () => {
+			const { processor } = makeProcessor(store);
+
+			const callA = await processor.process({
+				thought: 'A invokes',
+				thought_number: 1,
+				total_thoughts: 2,
+				next_thought_needed: true,
+				thought_type: 'tool_call',
+				tool_name: 'search',
+				tool_arguments: { q: 'A' },
+				session_id: 'session-A',
+			});
+			const callB = await processor.process({
+				thought: 'B invokes',
+				thought_number: 1,
+				total_thoughts: 2,
+				next_thought_needed: true,
+				thought_type: 'tool_call',
+				tool_name: 'search',
+				tool_arguments: { q: 'B' },
+				session_id: 'session-B',
+			});
+
+			const payloadA = JSON.parse(callA.content[0]!.text);
+			const payloadB = JSON.parse(callB.content[0]!.text);
+			expect(payloadA.session_id).toBe('session-A');
+			expect(payloadB.session_id).toBe('session-B');
+			expect(payloadA.continuation_token).not.toBe(payloadB.continuation_token);
+			// Two suspensions live independently
+			expect(store.size()).toBe(2);
+
+			// Each token still resolvable individually via peek; sessionId metadata preserved
+			const peekA = store.peek(payloadA.continuation_token);
+			const peekB = store.peek(payloadB.continuation_token);
+			expect(peekA?.sessionId).toBe('session-A');
+			expect(peekB?.sessionId).toBe('session-B');
+		});
+	});
 });
