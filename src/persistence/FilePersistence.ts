@@ -350,6 +350,20 @@ export class FilePersistence implements PersistenceBackend {
 	}
 
 	/**
+	 * List all session IDs that have persisted edge files.
+	 *
+	 * @returns Array of session identifiers (filenames without .json extension)
+	 */
+	public async listEdgeSessions(): Promise<string[]> {
+		try {
+			const files = await readdir(this._edgesDir);
+			return files.filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5));
+		} catch {
+			return [];
+		}
+	}
+
+	/**
 	 * Validates session ID format and resolves the summary file path safely.
 	 *
 	 * @param sessionId - The session ID to validate and resolve
