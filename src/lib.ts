@@ -429,7 +429,21 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 	// Main processing method - delegate to ThoughtProcessor
 	public async processThought(input: v.InferInput<typeof SequentialThinkingSchema>) {
 		const startTime = Date.now();
-		const thoughtInput = input as ThoughtData;
+		const thoughtInput = input as ThoughtData & { register_branch_id?: string };
+		if (typeof thoughtInput.register_branch_id === 'string' && thoughtInput.register_branch_id.length > 0) {
+			try {
+				this._historyManager.registerBranch(
+					thoughtInput.session_id,
+					thoughtInput.register_branch_id
+				);
+			} catch (err) {
+				this._logger.warn('registerBranch skipped', {
+					branch_id: thoughtInput.register_branch_id,
+					error: err instanceof Error ? err.message : String(err),
+				});
+			}
+			delete thoughtInput.register_branch_id;
+		}
 		const result = await this._thoughtProcessor.process(thoughtInput);
 		const durationSeconds = (Date.now() - startTime) / 1000;
 		this._metrics.histogram('thought_processing_duration_seconds', durationSeconds, {});
