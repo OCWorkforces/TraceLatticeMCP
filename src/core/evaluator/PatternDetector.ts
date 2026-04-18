@@ -123,7 +123,7 @@ export class PatternDetector {
 		return [
 			{
 				pattern: 'no_alternatives_explored',
-				severity: 'info',
+				severity: 'warning',
 				message: '5+ thoughts with no critique or branching — consider exploring alternatives',
 				thought_range: [start, end],
 			},
@@ -172,7 +172,7 @@ export class PatternDetector {
 		const end = history[runStart + runLength - 1]!.thought_number ?? runStart + runLength;
 		signals.push({
 			pattern: 'monotonic_type',
-			severity: 'info',
+			severity: 'warning',
 			message: `4+ consecutive '${runType}' thoughts (${start}-${end}) — consider varying approach`,
 			thought_range: [start, end],
 		});

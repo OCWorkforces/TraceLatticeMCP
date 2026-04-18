@@ -14,6 +14,16 @@ import type { ThoughtData } from '../thought.js';
 import { _computeChainDepth, _countByType } from './internals.js';
 
 /**
+ * Round a numeric value to a fixed number of decimal places to mitigate
+ * IEEE 754 floating-point accumulation errors (e.g. 0.9 + 0.8 averaging to
+ * 0.8500000000000001 instead of 0.85).
+ */
+function roundToPrecision(value: number, decimals: number = 10): number {
+	const factor = Math.pow(10, decimals);
+	return Math.round(value * factor) / factor;
+}
+
+/**
  * Stateless service that aggregates reasoning analytics from thought
  * history and branch data.
  *
@@ -72,10 +82,12 @@ export class Aggregator {
 			verified_hypothesis_count: [...hypothesisIds].filter((id) => verifiedIds.has(id)).length,
 			unresolved_hypothesis_count: unresolvedCount,
 			average_quality_score:
-				allScores.length > 0 ? allScores.reduce((a, b) => a + b, 0) / allScores.length : null,
+				allScores.length > 0
+					? roundToPrecision(allScores.reduce((a, b) => a + b, 0) / allScores.length)
+					: null,
 			average_confidence:
 				allConfidences.length > 0
-					? allConfidences.reduce((a, b) => a + b, 0) / allConfidences.length
+					? roundToPrecision(allConfidences.reduce((a, b) => a + b, 0) / allConfidences.length)
 					: null,
 		};
 	}
