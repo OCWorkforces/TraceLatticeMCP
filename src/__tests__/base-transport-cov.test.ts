@@ -101,6 +101,7 @@ function createMockPersistence(healthy: boolean): PersistenceBackend {
 		close: vi.fn(),
 		saveEdges: vi.fn().mockResolvedValue(undefined),
 		loadEdges: vi.fn().mockResolvedValue([]),
+		listEdgeSessions: vi.fn().mockResolvedValue([]),
 		saveSummaries: vi.fn().mockResolvedValue(undefined),
 		loadSummaries: vi.fn().mockResolvedValue([]),
 	};
