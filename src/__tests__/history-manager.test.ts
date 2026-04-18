@@ -897,9 +897,9 @@ describe('ABSOLUTE_MAX_HISTORY_SIZE cap', () => {
 		expect((manager as unknown as HistoryManagerTestAccess)._maxHistorySize).toBe(500);
 	});
 
-	it('should use default 1000 when no config provided', () => {
+	it('should use default 10000 when no config provided', () => {
 		const manager = new HistoryManager({});
-		expect((manager as unknown as HistoryManagerTestAccess)._maxHistorySize).toBe(1_000);
+		expect((manager as unknown as HistoryManagerTestAccess)._maxHistorySize).toBe(10_000);
 	});
 
 	it('should log warning when capping occurs', () => {

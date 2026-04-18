@@ -56,12 +56,12 @@ describe('HistoryManager DAG edge emission', () => {
 			expect(manager.getHistoryLength()).toBe(3);
 		});
 
-		it('defaults dagEdges to false when omitted', () => {
+		it('defaults dagEdges to true when omitted', () => {
 			const edgeStore = new EdgeStore();
 			const manager = new HistoryManager({ edgeStore });
 			manager.addThought(makeThought(1));
 			manager.addThought(makeThought(2));
-			expect(edgeStore.size()).toBe(0);
+			expect(edgeStore.size()).toBe(1); // sequence edge emitted by default
 		});
 	});
 
