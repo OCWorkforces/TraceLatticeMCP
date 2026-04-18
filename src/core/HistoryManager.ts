@@ -8,11 +8,21 @@
  */
 
 import type { IMetrics } from '../contracts/index.js';
+import { getErrorMessage } from '../errors.js';
+import type { IEdgeStore } from '../contracts/interfaces.js';
+import type { ISummaryStore } from '../contracts/summary.js';
+import type { Edge, EdgeKind } from './graph/Edge.js';
+import { generateUlid } from './ids.js';
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
 import type { IHistoryManager } from './IHistoryManager.js';
 import type { ThoughtData } from './thought.js';
+import {
+	DehydrationPolicy,
+	type DehydrationOptions,
+	type HydratedEntry,
+} from './compression/DehydrationPolicy.js';
 
 /**
  * Absolute maximum history size. Cannot be overridden by configuration.
@@ -103,6 +113,30 @@ export interface HistoryManagerConfig {
 	 * When provided, persistenceError events are emitted on persistent failures.
 	 */
 	eventEmitter?: PersistenceEventEmitter;
+
+	/**
+	 * Optional EdgeStore for capturing thought DAG edges.
+	 * When provided, edge emission strategies can record relationships between thoughts.
+	 * @default undefined
+	 */
+	edgeStore?: IEdgeStore;
+
+	/**
+	 * Optional summary store for dehydrated history views.
+	 * When provided alongside the `dagEdges` flag, `getHistoryHydrated()`
+	 * uses it to replace cold thoughts with summary references.
+	 * @default undefined
+	 */
+	summaryStore?: ISummaryStore;
+
+	/**
+	 * Whether to emit DAG edges when an EdgeStore is provided.
+	 * When false (default), no edges are emitted even if edgeStore is set.
+	 * Gated independently from edgeStore so that EdgeStore can be registered
+	 * unconditionally in DI while writes remain feature-flagged.
+	 * @default false
+	 */
+	dagEdges?: boolean;
 }
 
 /**
@@ -221,6 +255,15 @@ export class HistoryManager implements IHistoryManager {
 	/** Event emitter for persistence error events. */
 	private _eventEmitter: PersistenceEventEmitter | null;
 
+	/** Optional EdgeStore for capturing thought DAG edges. */
+	private _edgeStore?: IEdgeStore;
+
+	/** Optional SummaryStore used by getHistoryHydrated(). */
+	private _summaryStore?: ISummaryStore;
+
+	/** Whether to emit DAG edges (gated by features.dagEdges flag). */
+	private _dagEdges: boolean;
+
 	/**
 	 * Creates a new HistoryManager instance.
 	 *
@@ -255,6 +298,9 @@ export class HistoryManager implements IHistoryManager {
 		this._persistenceFlushInterval = config.persistenceFlushInterval ?? 1000;
 		this._persistenceMaxRetries = config.persistenceMaxRetries ?? 3;
 		this._eventEmitter = config.eventEmitter ?? null;
+		this._edgeStore = config.edgeStore;
+		this._summaryStore = config.summaryStore;
+		this._dagEdges = config.dagEdges ?? false;
 
 		// Start the periodic flush timer if persistence is enabled
 		if (this._persistenceEnabled) {
@@ -263,6 +309,15 @@ export class HistoryManager implements IHistoryManager {
 
 		// Start the periodic session cleanup timer
 		this._startSessionCleanupTimer();
+	}
+
+	/**
+	 * Get the EdgeStore instance, if configured.
+	 * Returns undefined when no EdgeStore was injected.
+	 * @public Used by ThoughtProcessor to build StrategyContext for reasoning strategies.
+	 */
+	public getEdgeStore(): IEdgeStore | undefined {
+		return this._edgeStore;
 	}
 
 	/**
@@ -364,8 +419,173 @@ export class HistoryManager implements IHistoryManager {
 			);
 		}
 
+		// Emit DAG edges (no-op unless edgeStore + dagEdges flag both enabled)
+		this._emitEdgesForThought(session, thought);
+
 		// Buffer thought for persistence instead of fire-and-forget
 		this._bufferForPersistence(session, thought);
+	}
+
+	/**
+	 * Emits DAG edges for a thought based on its metadata fields.
+	 *
+	 * Edge kinds (in priority order):
+	 * - branch: branch_from_thought + branch_id → parent.id → current.id
+	 * - merge: merge_from_thoughts → source.id → current.id (per source)
+	 * - verifies: verification_target + thought_type=verification → current.id → target.id
+	 * - critiques: verification_target + thought_type=critique → current.id → target.id
+	 * - derives_from: synthesis_sources → source.id → current.id (per source)
+	 * - revises: revises_thought → current.id → target.id
+	 * - sequence: default chronological link from previous thought (if none of the above)
+	 *
+	 * No-op when edgeStore is absent, dagEdges flag is off, or thought has no id.
+	 * @param session - The session state
+	 * @param thought - The current thought being added
+	 * @private
+	 */
+	private _emitEdgesForThought(session: SessionState, thought: ThoughtData): void {
+		if (!this._edgeStore || !this._dagEdges) return;
+		if (!thought.id) return;
+
+		const sessionId = thought.session_id ?? HistoryManager.DEFAULT_SESSION;
+		let emittedRelational = false;
+
+		if (thought.branch_from_thought !== undefined && thought.branch_id) {
+			const parentId = this._resolveThoughtId(session, thought.branch_from_thought);
+			if (this._addEdgeIfValid(parentId, thought.id, 'branch', sessionId)) {
+				emittedRelational = true;
+			}
+		}
+
+		if (thought.merge_from_thoughts?.length) {
+			for (const src of thought.merge_from_thoughts) {
+				const srcId = this._resolveThoughtId(session, src);
+				if (this._addEdgeIfValid(srcId, thought.id, 'merge', sessionId)) {
+					emittedRelational = true;
+				}
+			}
+		}
+
+		if (thought.verification_target !== undefined && thought.thought_type === 'verification') {
+			const targetId = this._resolveThoughtId(session, thought.verification_target);
+			if (this._addEdgeIfValid(thought.id, targetId, 'verifies', sessionId)) {
+				emittedRelational = true;
+			}
+		}
+
+		if (thought.verification_target !== undefined && thought.thought_type === 'critique') {
+			const targetId = this._resolveThoughtId(session, thought.verification_target);
+			if (this._addEdgeIfValid(thought.id, targetId, 'critiques', sessionId)) {
+				emittedRelational = true;
+			}
+		}
+
+		if (thought.synthesis_sources?.length) {
+			for (const src of thought.synthesis_sources) {
+				const srcId = this._resolveThoughtId(session, src);
+				if (this._addEdgeIfValid(srcId, thought.id, 'derives_from', sessionId)) {
+					emittedRelational = true;
+				}
+			}
+		}
+
+		if (thought.revises_thought !== undefined) {
+			const targetId = this._resolveThoughtId(session, thought.revises_thought);
+			if (this._addEdgeIfValid(thought.id, targetId, 'revises', sessionId)) {
+				emittedRelational = true;
+			}
+		}
+
+		// tool_invocation edge: tool_call → tool_observation
+		if (thought.thought_type === 'tool_observation' && thought._resumedFrom !== undefined) {
+			const toolCallId = this._resolveThoughtId(session, thought._resumedFrom);
+			const meta: Record<string, unknown> = {};
+			if (thought.tool_name !== undefined) meta.tool_name = thought.tool_name;
+			if (
+				this._addEdgeIfValid(
+					toolCallId,
+					thought.id,
+					'tool_invocation',
+					sessionId,
+					Object.keys(meta).length > 0 ? meta : undefined
+				)
+			) {
+				emittedRelational = true;
+			}
+		}
+
+		if (!emittedRelational) {
+			// Default: chronological sequence from previous thought (the one before current).
+			// current was just pushed, so prev is at length - 2.
+			const history = session.thought_history;
+			if (history.length >= 2) {
+				const prev = history[history.length - 2]!;
+				if (prev.id) {
+					this._addEdgeIfValid(prev.id, thought.id, 'sequence', sessionId);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Resolves a thought_number to its stable id within the given session.
+	 * @param session - The session state to search
+	 * @param thoughtNumber - The thought_number to look up
+	 * @returns The thought's id if found and non-empty, undefined otherwise
+	 * @private
+	 */
+	private _resolveThoughtId(
+		session: SessionState,
+		thoughtNumber: number
+	): string | undefined {
+		for (const t of session.thought_history) {
+			if (t.thought_number === thoughtNumber && typeof t.id === 'string' && t.id.length > 0) {
+				return t.id;
+			}
+		}
+		return undefined;
+	}
+
+	/**
+	 * Adds an edge to the edge store if both endpoints are non-empty strings.
+	 * Returns true if added, false if skipped (missing endpoint).
+	 * Failures (e.g. self-edge) are caught and logged.
+	 * @private
+	 */
+	private _addEdgeIfValid(
+		from: string | undefined,
+		to: string | undefined,
+		kind: EdgeKind,
+		sessionId: string,
+		metadata?: Record<string, unknown>
+	): boolean {
+		if (!from || !to) {
+			this._logger.debug('Skipping edge: unresolved endpoint', {
+				kind,
+				from: from ?? null,
+				to: to ?? null,
+			});
+			return false;
+		}
+		const edge: Edge = {
+			id: generateUlid(),
+			from,
+			to,
+			kind,
+			sessionId,
+			createdAt: Date.now(),
+			...(metadata !== undefined ? { metadata } : {}),
+		};
+		try {
+			this._edgeStore!.addEdge(edge);
+			return true;
+		} catch (err) {
+			this.log('Failed to add DAG edge', {
+				kind,
+				error: getErrorMessage(err),
+			});
+			return false;
+		}
 	}
 
 	/**
@@ -416,7 +636,7 @@ export class HistoryManager implements IHistoryManager {
 			this._persistence.saveBranch(branchId, session.branches[branchId]).catch((err) => {
 				this.log('Failed to persist branch', {
 					branchId,
-					error: err instanceof Error ? err.message : String(err),
+					error: getErrorMessage(err),
 				});
 			});
 		}
@@ -474,6 +694,34 @@ export class HistoryManager implements IHistoryManager {
 	 */
 	public getHistory(sessionId?: string): ThoughtData[] {
 		return this._getSession(sessionId).thought_history;
+	}
+
+	/**
+	 * Gets the thought history with optional sliding-window dehydration applied.
+	 *
+	 * Non-mutating view: the underlying history is never modified. When the
+	 * `dagEdges` feature flag is off OR no `ISummaryStore` is configured, this
+	 * method returns the same `ThoughtData[]` as {@link getHistory}. Otherwise,
+	 * a {@link DehydrationPolicy} is applied that replaces older thoughts (cold
+	 * prefix beyond `keepLastK`) with {@link SummaryRef} placeholders pointing
+	 * at existing summaries in the store.
+	 *
+	 * @param sessionId - Optional session ID for session-scoped results
+	 * @param opts - Optional dehydration options (e.g. `keepLastK`)
+	 * @returns Mixed array of original thoughts and summary refs (or the raw
+	 *   history when dehydration is disabled)
+	 */
+	public getHistoryHydrated(
+		sessionId?: string,
+		opts?: DehydrationOptions
+	): HydratedEntry[] {
+		const history = this.getHistory(sessionId);
+		if (!this._dagEdges || !this._summaryStore) {
+			return history.slice();
+		}
+		const sid = sessionId ?? HistoryManager.DEFAULT_SESSION;
+		const policy = new DehydrationPolicy(this._summaryStore);
+		return policy.apply(history, sid, opts);
 	}
 
 	/**
@@ -592,6 +840,19 @@ export class HistoryManager implements IHistoryManager {
 	 * ```
 	 */
 	public clear(sessionId?: string): void {
+		// Clear edges from EdgeStore (before session map mutation so keys are still available)
+		if (this._edgeStore) {
+			if (sessionId !== undefined) {
+				this._edgeStore.clearSession(sessionId);
+			} else {
+				for (const sid of this._sessions.keys()) {
+					this._edgeStore.clearSession(sid);
+				}
+				// Also clear the default session in case no session entries exist yet
+				this._edgeStore.clearSession(HistoryManager.DEFAULT_SESSION);
+			}
+		}
+
 		if (sessionId !== undefined) {
 			// Clear specific session
 			this._sessions.delete(sessionId);
@@ -606,7 +867,7 @@ export class HistoryManager implements IHistoryManager {
 		if (this._persistenceEnabled && this._persistence) {
 			this._persistence.clear().catch((err) => {
 				this.log('Failed to clear persisted data', {
-					error: err instanceof Error ? err.message : String(err),
+					error: getErrorMessage(err),
 				});
 			});
 		}
@@ -673,9 +934,31 @@ export class HistoryManager implements IHistoryManager {
 				}
 			}
 			this.log(`Loaded ${Object.keys(globalSession.branches).length} branches from persistence`);
+
+			// Load edges if EdgeStore is configured (DEFAULT_SESSION only — multi-session is additive later)
+			if (this._edgeStore) {
+				try {
+					const globalEdges = await this._persistence.loadEdges(HistoryManager.DEFAULT_SESSION);
+					for (const edge of globalEdges) {
+						try {
+							this._edgeStore.addEdge(edge);
+						} catch (edgeErr) {
+							this.log('Failed to restore edge', {
+								edgeId: edge.id,
+								error: getErrorMessage(edgeErr),
+							});
+						}
+					}
+					this.log(`Loaded ${globalEdges.length} edges for global session from persistence`);
+				} catch (edgeError) {
+					this.log('Failed to load edges from persistence', {
+						error: getErrorMessage(edgeError),
+					});
+				}
+			}
 		} catch (error) {
 			this.log('Failed to load from persistence', {
-				error: error instanceof Error ? error.message : String(error),
+				error: getErrorMessage(error),
 			});
 		}
 	}
@@ -876,8 +1159,36 @@ export class HistoryManager implements IHistoryManager {
 			}
 
 			this._handleFlushResult(failedItems, allPending.length);
+
+			// Flush edges for sessions when EdgeStore is configured
+			if (this._edgeStore) {
+				await this._flushEdges();
+			}
 		} finally {
 			this._isFlushing = false;
+		}
+	}
+
+	/**
+	 * Flushes edges for all known sessions to the persistence backend.
+	 * No-op when EdgeStore or persistence is unavailable.
+	 * @private
+	 */
+	private async _flushEdges(): Promise<void> {
+		if (!this._edgeStore || !this._persistence) return;
+		const sessionKeys = new Set<string>(this._sessions.keys());
+		sessionKeys.add(HistoryManager.DEFAULT_SESSION);
+		for (const sessionId of sessionKeys) {
+			const edges = this._edgeStore.edgesForSession(sessionId);
+			if (edges.length === 0) continue;
+			try {
+				await this._persistence.saveEdges(sessionId, edges);
+			} catch (err) {
+				this.log('Failed to persist edges for session', {
+					sessionId,
+					error: getErrorMessage(err),
+				});
+			}
 		}
 	}
 
@@ -900,13 +1211,13 @@ export class HistoryManager implements IHistoryManager {
 					this.log(`Persistence retry ${attempt + 1}/${this._persistenceMaxRetries}`, {
 						thoughtNumber: thought.thought_number,
 						delay,
-						error: err instanceof Error ? err.message : String(err),
+						error: getErrorMessage(err),
 					});
 					await this._delay(delay);
 				} else {
 					this.log('All persistence retries exhausted for thought', {
 						thoughtNumber: thought.thought_number,
-						error: err instanceof Error ? err.message : String(err),
+						error: getErrorMessage(err),
 					});
 				}
 			}

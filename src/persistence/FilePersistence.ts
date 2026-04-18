@@ -1,9 +1,11 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, readdir, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 import type { IMetrics } from '../contracts/index.js';
 import type { ThoughtData } from '../core/thought.js';
+import type { Edge } from '../core/graph/Edge.js';
+import type { Summary } from '../core/compression/Summary.js';
 import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
 
 /**
@@ -24,6 +26,8 @@ export class FilePersistence implements PersistenceBackend {
 	private _dataDir: string;
 	private _historyPath: string;
 	private _branchesDir: string;
+	private _edgesDir: string;
+	private _summariesDir: string;
 	private _maxHistorySize: number;
 	private _persistBranches: boolean;
 	private _metrics?: IMetrics;
@@ -36,6 +40,8 @@ export class FilePersistence implements PersistenceBackend {
 		this._dataDir = options?.dataDir ?? defaultDataDir;
 		this._historyPath = join(this._dataDir, 'history.json');
 		this._branchesDir = join(this._dataDir, 'branches');
+		this._edgesDir = join(this._dataDir, 'edges');
+		this._summariesDir = join(this._dataDir, 'summaries');
 		this._maxHistorySize = options?.maxHistorySize ?? 10000;
 		this._persistBranches = options?.persistBranches ?? true;
 		this._metrics = options?.metrics;
@@ -55,6 +61,12 @@ export class FilePersistence implements PersistenceBackend {
 		}
 		if (this._persistBranches && !existsSync(this._branchesDir)) {
 			await mkdir(this._branchesDir, { recursive: true });
+		}
+		if (!existsSync(this._edgesDir)) {
+			await mkdir(this._edgesDir, { recursive: true });
+		}
+		if (!existsSync(this._summariesDir)) {
+			await mkdir(this._summariesDir, { recursive: true });
 		}
 	}
 
@@ -189,6 +201,26 @@ export class FilePersistence implements PersistenceBackend {
 					}
 				}
 			}
+
+			// Clear all edges
+			if (existsSync(this._edgesDir)) {
+				const edgeFiles = await readdir(this._edgesDir);
+				for (const file of edgeFiles) {
+					if (file.endsWith('.json')) {
+						await unlink(join(this._edgesDir, file));
+					}
+				}
+			}
+
+			// Clear all summaries
+			if (existsSync(this._summariesDir)) {
+				const summaryFiles = await readdir(this._summariesDir);
+				for (const file of summaryFiles) {
+					if (file.endsWith('.json')) {
+						await unlink(join(this._summariesDir, file));
+					}
+				}
+			}
 		} catch {
 			// Ignore errors during clear
 		}
@@ -232,5 +264,175 @@ export class FilePersistence implements PersistenceBackend {
 	 */
 	public async close(): Promise<void> {
 		// No-op for file backend (files are already flushed on write)
+	}
+
+	/**
+	 * Validates session ID format and resolves the edge file path safely.
+	 *
+	 * @param sessionId - The session ID to validate and resolve
+	 * @returns The safe, resolved edge file path
+	 * @throws Error if session ID is invalid or path traversal is detected
+	 */
+	private _safeEdgePath(sessionId: string): string {
+		const validSessionIdPattern = /^[a-zA-Z0-9_-]{1,100}$/;
+		if (!validSessionIdPattern.test(sessionId)) {
+			throw new Error(
+				`Invalid session ID for edges: must be 1-100 alphanumeric characters, hyphens, or underscores only`
+			);
+		}
+
+		const resolved = resolve(this._edgesDir, `${sessionId}.json`);
+		const normalizedEdgesDir = resolve(this._edgesDir);
+
+		if (!resolved.startsWith(normalizedEdgesDir + sep)) {
+			throw new Error(`Invalid session ID: path traversal detected`);
+		}
+
+		return resolved;
+	}
+
+	/**
+	 * Save edges for a session to a JSON file.
+	 *
+	 * @param sessionId - The session ID
+	 * @param edges - Edges to persist (sorted by createdAt before write)
+	 */
+	public async saveEdges(sessionId: string, edges: readonly Edge[]): Promise<void> {
+		const startTime = Date.now();
+		try {
+			await this._ensureDirectories();
+
+			if (!existsSync(this._edgesDir)) {
+				await mkdir(this._edgesDir, { recursive: true });
+			}
+
+			const edgePath = this._safeEdgePath(sessionId);
+
+			if (edges.length === 0) {
+				if (existsSync(edgePath)) {
+					await unlink(edgePath);
+				}
+				return;
+			}
+
+			const sorted = [...edges].sort((a, b) => a.createdAt - b.createdAt);
+			await writeFile(edgePath, JSON.stringify(sorted, null, 2), 'utf-8');
+		} finally {
+			this._recordOperationDuration('save_edges', startTime);
+		}
+	}
+
+	/**
+	 * Load edges for a session from a JSON file.
+	 *
+	 * @param sessionId - The session ID
+	 * @returns Edges array (empty if file is missing or corrupted)
+	 */
+	public async loadEdges(sessionId: string): Promise<Edge[]> {
+		const startTime = Date.now();
+		try {
+			const edgePath = this._safeEdgePath(sessionId);
+
+			if (!existsSync(edgePath)) {
+				return [];
+			}
+
+			try {
+				const content = await readFile(edgePath, 'utf-8');
+				const data = JSON.parse(content) as Edge[];
+				return Array.isArray(data) ? data : [];
+			} catch {
+				return [];
+			}
+		} finally {
+			this._recordOperationDuration('load_edges', startTime);
+		}
+	}
+
+	/**
+	 * Validates session ID format and resolves the summary file path safely.
+	 *
+	 * @param sessionId - The session ID to validate and resolve
+	 * @returns The safe, resolved summary file path
+	 * @throws Error if session ID is invalid or path traversal is detected
+	 */
+	private _safeSummaryPath(sessionId: string): string {
+		const validSessionIdPattern = /^[a-zA-Z0-9_-]{1,100}$/;
+		if (!validSessionIdPattern.test(sessionId)) {
+			throw new Error(
+				`Invalid session ID for summaries: must be 1-100 alphanumeric characters, hyphens, or underscores only`
+			);
+		}
+
+		const resolved = resolve(this._summariesDir, `${sessionId}.json`);
+		const normalizedSummariesDir = resolve(this._summariesDir);
+
+		if (!resolved.startsWith(normalizedSummariesDir + sep)) {
+			throw new Error(`Invalid session ID: path traversal detected`);
+		}
+
+		return resolved;
+	}
+
+	/**
+	 * Save summaries for a session to a JSON file using an atomic
+	 * write (tmp file + rename) to prevent partial-write corruption.
+	 *
+	 * @param sessionId - The session ID
+	 * @param summaries - Summaries to persist (sorted by createdAt before write)
+	 */
+	public async saveSummaries(sessionId: string, summaries: readonly Summary[]): Promise<void> {
+		const startTime = Date.now();
+		try {
+			await this._ensureDirectories();
+
+			if (!existsSync(this._summariesDir)) {
+				await mkdir(this._summariesDir, { recursive: true });
+			}
+
+			const summaryPath = this._safeSummaryPath(sessionId);
+
+			if (summaries.length === 0) {
+				if (existsSync(summaryPath)) {
+					await unlink(summaryPath);
+				}
+				return;
+			}
+
+			const sorted = [...summaries].sort((a, b) => a.createdAt - b.createdAt);
+			const tmpPath = `${summaryPath}.tmp`;
+			await writeFile(tmpPath, JSON.stringify(sorted, null, 2), 'utf-8');
+			await rename(tmpPath, summaryPath);
+		} finally {
+			this._recordOperationDuration('save_summaries', startTime);
+		}
+	}
+
+	/**
+	 * Load summaries for a session from a JSON file.
+	 *
+	 * @param sessionId - The session ID
+	 * @returns Summaries array (empty if file is missing or corrupted)
+	 */
+	public async loadSummaries(sessionId: string): Promise<Summary[]> {
+		const startTime = Date.now();
+		try {
+			const summaryPath = this._safeSummaryPath(sessionId);
+
+			if (!existsSync(summaryPath)) {
+				return [];
+			}
+
+			try {
+				const content = await readFile(summaryPath, 'utf-8');
+				const data = JSON.parse(content) as Summary[];
+				if (!Array.isArray(data)) return [];
+				return [...data].sort((a, b) => a.createdAt - b.createdAt);
+			} catch {
+				return [];
+			}
+		} finally {
+			this._recordOperationDuration('load_summaries', startTime);
+		}
 	}
 }

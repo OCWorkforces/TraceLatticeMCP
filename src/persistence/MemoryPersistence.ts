@@ -1,4 +1,6 @@
 import type { ThoughtData } from '../core/thought.js';
+import type { Edge } from '../core/graph/Edge.js';
+import type { Summary } from '../core/compression/Summary.js';
 import type { PersistenceBackend } from './PersistenceBackend.js';
 
 /**
@@ -36,6 +38,8 @@ export class MemoryPersistence implements PersistenceBackend {
 	private _history: ThoughtData[] = [];
 	private _branches: Map<string, ThoughtData[]> = new Map();
 	private _maxSize?: number;
+	private _edges: Map<string, Edge[]> = new Map();
+	private _summaries: Map<string, Summary[]> = new Map();
 
 	constructor(options: MemoryPersistenceOptions = {}) {
 		this._maxSize = options.maxSize && options.maxSize > 0 ? options.maxSize : undefined;
@@ -80,6 +84,8 @@ export class MemoryPersistence implements PersistenceBackend {
 	public async clear(): Promise<void> {
 		this._history = [];
 		this._branches.clear();
+		this._edges.clear();
+		this._summaries.clear();
 	}
 
 	/**
@@ -87,6 +93,60 @@ export class MemoryPersistence implements PersistenceBackend {
 	 */
 	public async close(): Promise<void> {
 		// No-op for in-memory backend
+	}
+
+	/**
+	 * Save edges for a session, replacing any previously saved edges.
+	 *
+	 * @param sessionId - The session whose edges to persist
+	 * @param edges - Array of edges to save
+	 */
+	public async saveEdges(sessionId: string, edges: readonly Edge[]): Promise<void> {
+		if (edges.length === 0) {
+			this._edges.delete(sessionId);
+		} else {
+			this._edges.set(sessionId, [...edges]);
+		}
+	}
+
+	/**
+	 * Load edges for a session from memory.
+	 * Returns edges sorted by createdAt ascending.
+	 *
+	 * @param sessionId - The session whose edges to load
+	 * @returns Array of persisted edges, sorted by createdAt
+	 */
+	public async loadEdges(sessionId: string): Promise<Edge[]> {
+		const edges = this._edges.get(sessionId);
+		if (!edges) return [];
+		return [...edges].sort((a, b) => a.createdAt - b.createdAt);
+	}
+
+	/**
+	 * Save summaries for a session, replacing any previously saved summaries.
+	 *
+	 * @param sessionId - The session whose summaries to persist
+	 * @param summaries - Array of summaries to save
+	 */
+	public async saveSummaries(sessionId: string, summaries: readonly Summary[]): Promise<void> {
+		if (summaries.length === 0) {
+			this._summaries.delete(sessionId);
+		} else {
+			this._summaries.set(sessionId, [...summaries]);
+		}
+	}
+
+	/**
+	 * Load summaries for a session from memory.
+	 * Returns summaries sorted by createdAt ascending.
+	 *
+	 * @param sessionId - The session whose summaries to load
+	 * @returns Array of persisted summaries, sorted by createdAt
+	 */
+	public async loadSummaries(sessionId: string): Promise<Summary[]> {
+		const summaries = this._summaries.get(sessionId);
+		if (!summaries) return [];
+		return [...summaries].sort((a, b) => a.createdAt - b.createdAt);
 	}
 
 	/**

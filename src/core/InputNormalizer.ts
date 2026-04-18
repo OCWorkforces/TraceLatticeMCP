@@ -14,21 +14,17 @@
 import { ValidationError } from '../errors.js';
 import { sanitizeString } from '../sanitize.js';
 import type { ThoughtData } from './thought.js';
+import { generateUlid, SESSION_ID_PATTERN, MAX_SESSION_ID_LENGTH } from './ids.js';
 
 /**
- * Default values for missing partial tool recommendation fields.
+ * Default values for missing partial recommendation fields.
+ *
+ * Shared between tool and skill recommendations (identical defaults).
  */
-const DEFAULT_TOOL_CONFIDENCE = 0.5;
-const DEFAULT_TOOL_PRIORITY = 999;
-const DEFAULT_TOOL_RATIONALE = '';
+const DEFAULT_RECOMMENDATION_CONFIDENCE = 0.5;
+const DEFAULT_RECOMMENDATION_PRIORITY = 999;
+const DEFAULT_RECOMMENDATION_RATIONALE = '';
 const DEFAULT_STEP_OUTCOME = '';
-
-/**
- * Default values for missing skill recommendation fields.
- */
-const DEFAULT_SKILL_CONFIDENCE = 0.5;
-const DEFAULT_SKILL_PRIORITY = 999;
-const DEFAULT_SKILL_RATIONALE = '';
 
 /**
  * Recursively sanitizes all string values within an unknown structure.
@@ -76,11 +72,7 @@ export function sanitizeRecursive(value: unknown): unknown {
  */
 const BRANCH_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
 
-/**
- * Valid session ID pattern: alphanumeric, hyphens, underscores, 1-100 chars.
- * Same as branch_id but with longer max length to allow compound identifiers.
- */
-const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]{1,100}$/;
+
 
 /**
  * Sanitizes and validates a branch ID to prevent path traversal attacks.
@@ -122,86 +114,47 @@ export function sanitizeSessionId(sessionId: string): string | undefined {
 	// First sanitize control characters
 	const cleaned = sanitizeString(sessionId);
 	// Validate format after sanitization
-	if (!SESSION_ID_PATTERN.test(cleaned)) {
+	if (cleaned.length > MAX_SESSION_ID_LENGTH || !SESSION_ID_PATTERN.test(cleaned)) {
 		return undefined;
 	}
 	return cleaned;
 }
 
+
 /**
- * Normalizes tool recommendation objects with default values.
- * Normalizes tool recommendation objects with default values.
+ * Normalizes a recommendation object (tool or skill) with default values.
  *
  * Fills in sensible defaults for missing optional fields:
  * - `confidence`: 0.5
  * - `priority`: 999
  * - `rationale`: empty string
  *
- * @param tool - The tool recommendation to normalize
- * @returns The normalized tool recommendation with defaults filled in
+ * @param rec - The recommendation object to normalize
+ * @returns The normalized recommendation with defaults filled in
  *
  * @example
  * ```typescript
  * const input = { tool_name: 'Read', rationale: 'Read the file' };
- * const normalized = normalizeToolRecommendation(input);
+ * const normalized = normalizeRecommendation(input);
  * // { tool_name: 'Read', rationale: 'Read the file', confidence: 0.5, priority: 999 }
  * ```
  */
-function normalizeToolRecommendation(tool: Record<string, unknown>): Record<string, unknown> {
-	const normalized: Record<string, unknown> = { ...tool };
+function normalizeRecommendation(rec: Record<string, unknown>): Record<string, unknown> {
+	const normalized: Record<string, unknown> = { ...rec };
 
 	// Fill in default confidence if missing
 	if (!('confidence' in normalized) || normalized.confidence === undefined) {
-		normalized.confidence = DEFAULT_TOOL_CONFIDENCE;
+		normalized.confidence = DEFAULT_RECOMMENDATION_CONFIDENCE;
 	}
 
 	// Fill in default priority if missing
 	if (!('priority' in normalized) || normalized.priority === undefined) {
-		normalized.priority = DEFAULT_TOOL_PRIORITY;
+		normalized.priority = DEFAULT_RECOMMENDATION_PRIORITY;
 	}
 
 	// Fill in default rationale if missing
 	if (!('rationale' in normalized) || normalized.rationale === undefined) {
-		normalized.rationale = DEFAULT_TOOL_RATIONALE;
-	}
-
-	return normalized;
-}
-
-/**
- * Normalizes skill recommendation objects with default values.
- *
- * Fills in sensible defaults for missing optional fields:
- * - `confidence`: 0.5
- * - `priority`: 999
- * - `rationale`: empty string
- *
- * @param skill - The skill recommendation to normalize
- * @returns The normalized skill recommendation with defaults filled in
- *
- * @example
- * ```typescript
- * const input = { skill_name: 'ast-grep' };
- * const normalized = normalizeSkillRecommendation(input);
- * // { skill_name: 'ast-grep', confidence: 0.5, priority: 999, rationale: '' }
- * ```
- */
-function normalizeSkillRecommendation(skill: Record<string, unknown>): Record<string, unknown> {
-	const normalized: Record<string, unknown> = { ...skill };
-
-	// Fill in default confidence if missing
-	if (!('confidence' in normalized) || normalized.confidence === undefined) {
-		normalized.confidence = DEFAULT_SKILL_CONFIDENCE;
-	}
-
-	// Fill in default priority if missing
-	if (!('priority' in normalized) || normalized.priority === undefined) {
-		normalized.priority = DEFAULT_SKILL_PRIORITY;
-	}
-
-	// Fill in default rationale if missing
-	if (!('rationale' in normalized) || normalized.rationale === undefined) {
-		normalized.rationale = DEFAULT_SKILL_RATIONALE;
+		normalized.rationale = DEFAULT_RECOMMENDATION_RATIONALE;
 	}
 
 	return normalized;
@@ -261,7 +214,7 @@ function normalizeStepRecommendation(
 	if (Array.isArray(normalized.recommended_tools)) {
 		normalized.recommended_tools = normalized.recommended_tools.map((tool) =>
 			typeof tool === 'object' && tool !== null
-				? normalizeToolRecommendation(tool as Record<string, unknown>)
+				? normalizeRecommendation(tool as Record<string, unknown>)
 				: tool
 		);
 	}
@@ -270,7 +223,7 @@ function normalizeStepRecommendation(
 	if (Array.isArray(normalized.recommended_skills)) {
 		normalized.recommended_skills = normalized.recommended_skills.map((skill) =>
 			typeof skill === 'object' && skill !== null
-				? normalizeSkillRecommendation(skill as Record<string, unknown>)
+				? normalizeRecommendation(skill as Record<string, unknown>)
 				: skill
 		);
 	}
@@ -457,6 +410,11 @@ export function normalizeInput(input: unknown): ThoughtData {
 		} else {
 			normalized.session_id = sanitized;
 		}
+	}
+
+	// Auto-generate id if not provided (for DAG node identity)
+	if (!normalized.id || typeof normalized.id !== 'string') {
+		normalized.id = generateUlid();
 	}
 
 	// Normalize reasoning fields

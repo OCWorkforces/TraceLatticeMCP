@@ -28,6 +28,30 @@ import type { PersistenceConfig } from './persistence/PersistenceBackend.js';
  * };
  * ```
  */
+
+/**
+ * Feature flags for opt-in TraceLattice capabilities.
+ *
+ * All flags default to OFF so new features can be merged behind a flag
+ * without altering existing behavior. Flags are flat to keep env var
+ * mappings predictable (TRACELATTICE_FEATURES_*).
+ */
+export interface FeatureFlags {
+	/** Enable DAG edges between thoughts (Item #1). @default false */
+	dagEdges: boolean;
+	/** Reasoning strategy selector (Item #2). @default 'sequential' */
+	reasoningStrategy: 'sequential' | 'tot';
+	/** Enable confidence calibration (Item #3). @default false */
+	calibration: boolean;
+	/** Enable thought compression (Item #5). @default false */
+	compression: boolean;
+	/** Enable tool interleaving (Item #6). @default false */
+	toolInterleave: boolean;
+	/** Enable new thought types (Item #8). @default false */
+	newThoughtTypes: boolean;
+	/** Enable outcome recording (prereq for Item #10). @default false */
+	outcomeRecording: boolean;
+}
 export interface ServerConfigOptions {
 	/**
 	 * Maximum number of thoughts to keep in history.
@@ -91,6 +115,24 @@ export interface ServerConfigOptions {
 	 * @default 3
 	 */
 	persistenceMaxRetries?: number;
+
+	/**
+	 * Feature flag overrides. Missing fields are filled with defaults (all OFF,
+	 * reasoningStrategy='sequential').
+	 */
+	features?: Partial<FeatureFlags>;
+
+	/**
+	 * TTL in milliseconds for suspended tool-interleave entries in SuspensionStore.
+	 * @default 60000
+	 */
+	toolInterleaveTtlMs?: number;
+
+	/**
+	 * Sweep interval in milliseconds for SuspensionStore expiration cleanup.
+	 * @default 60000
+	 */
+	toolInterleaveSweepMs?: number;
 }
 
 /**
@@ -149,6 +191,15 @@ export class ServerConfig {
 	/** Maximum number of retries for failed persistence flushes. */
 	public persistenceMaxRetries: number;
 
+	/** Feature flag toggles. */
+	public features: FeatureFlags;
+
+	/** TTL in milliseconds for suspended tool-interleave entries. */
+	public toolInterleaveTtlMs: number;
+
+	/** Sweep interval in milliseconds for SuspensionStore expiration cleanup. */
+	public toolInterleaveSweepMs: number;
+
 	/**
 	 * Creates a new ServerConfig instance with validation.
 	 *
@@ -177,6 +228,17 @@ export class ServerConfig {
 			options.persistenceFlushInterval
 		);
 		this.persistenceMaxRetries = this.validatePersistenceMaxRetries(options.persistenceMaxRetries);
+		this.features = this.validateFeatures(options.features);
+		this.toolInterleaveTtlMs = this.validatePositiveMs(
+			options.toolInterleaveTtlMs,
+			60000,
+			'toolInterleaveTtlMs'
+		);
+		this.toolInterleaveSweepMs = this.validatePositiveMs(
+			options.toolInterleaveSweepMs,
+			60000,
+			'toolInterleaveSweepMs'
+		);
 	}
 
 	/**
@@ -367,6 +429,47 @@ export class ServerConfig {
 	}
 
 	/**
+	 * Validates feature flags and fills defaults for missing fields.
+	 * @param value - Partial feature flag overrides
+	 * @returns Fully populated FeatureFlags with defaults applied
+	 * @private
+	 */
+	private validateFeatures(value?: Partial<FeatureFlags>): FeatureFlags {
+		return {
+			dagEdges: value?.dagEdges ?? false,
+			reasoningStrategy: value?.reasoningStrategy ?? 'sequential',
+			calibration: value?.calibration ?? false,
+			compression: value?.compression ?? false,
+			toolInterleave: value?.toolInterleave ?? false,
+			newThoughtTypes: value?.newThoughtTypes ?? false,
+			outcomeRecording: value?.outcomeRecording ?? false,
+		};
+	}
+
+	/**
+	 * Validates a positive millisecond value with a default fallback.
+	 * @param value - The value to validate
+	 * @param defaultValue - Default applied if value is undefined/null
+	 * @param fieldName - Field name for error messages
+	 * @returns The validated millisecond value
+	 * @private
+	 */
+	private validatePositiveMs(
+		value: number | undefined,
+		defaultValue: number,
+		fieldName: string
+	): number {
+		if (value === undefined || value === null) return defaultValue;
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			throw new ConfigurationError(`${fieldName} must be a finite number, got ${value}`);
+		}
+		if (value < 1) {
+			throw new ConfigurationError(`${fieldName} must be at least 1, got ${value}`);
+		}
+		return value;
+	}
+
+	/**
 	 * Converts the configuration to a plain object.
 	 *
 	 * Useful for serialization, logging, or when a plain object representation
@@ -392,6 +495,9 @@ export class ServerConfig {
 			persistenceBufferSize: this.persistenceBufferSize,
 			persistenceFlushInterval: this.persistenceFlushInterval,
 			persistenceMaxRetries: this.persistenceMaxRetries,
+			features: this.features,
+			toolInterleaveTtlMs: this.toolInterleaveTtlMs,
+			toolInterleaveSweepMs: this.toolInterleaveSweepMs,
 		};
 	}
 }

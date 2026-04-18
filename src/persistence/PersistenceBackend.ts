@@ -1,4 +1,6 @@
 import type { ThoughtData } from '../core/thought.js';
+import type { Edge } from '../core/graph/Edge.js';
+import type { Summary } from '../core/compression/Summary.js';
 
 /**
  * Persistence backend interface for storing thought history and branches.
@@ -62,6 +64,42 @@ export interface PersistenceBackend {
 	 * Should be called during graceful shutdown to ensure data is flushed.
 	 */
 	close(): Promise<void>;
+
+	/**
+	 * Save edges for a session, replacing any previously saved edges.
+	 *
+	 * @param sessionId - The session whose edges to persist
+	 * @param edges - Array of edges to save
+	 */
+	saveEdges(sessionId: string, edges: readonly Edge[]): Promise<void>;
+
+	/**
+	 * Load edges for a session from persistent storage.
+	 * Returns edges in chronological order (by createdAt ascending).
+	 * Returns empty array if no edges exist for the session.
+	 *
+	 * @param sessionId - The session whose edges to load
+	 * @returns Array of persisted edges, sorted by createdAt
+	 */
+	loadEdges(sessionId: string): Promise<Edge[]>;
+
+	/**
+	 * Save summaries for a session, replacing any previously saved summaries.
+	 *
+	 * @param sessionId - The session whose summaries to persist
+	 * @param summaries - Array of summaries to save
+	 */
+	saveSummaries(sessionId: string, summaries: readonly Summary[]): Promise<void>;
+
+	/**
+	 * Load summaries for a session from persistent storage.
+	 * Returns summaries in chronological order (by createdAt ascending).
+	 * Returns empty array if no summaries exist for the session.
+	 *
+	 * @param sessionId - The session whose summaries to load
+	 * @returns Array of persisted summaries, sorted by createdAt
+	 */
+	loadSummaries(sessionId: string): Promise<Summary[]>;
 }
 
 export interface PersistenceConfig {
