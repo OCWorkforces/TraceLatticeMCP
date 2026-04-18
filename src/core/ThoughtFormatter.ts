@@ -227,7 +227,8 @@ export class ThoughtFormatter {
 		}
 
 		// Build header: "💭 Thought 1/3: "
-		const header = `${icon} ${label} ${thought_number}/${total_thoughts}${suffix}: `;
+		const retractedTag = thoughtData.retracted ? chalk.red.strikethrough('[RETRACTED] ') : '';
+		const header = `${icon} ${label} ${thought_number}/${total_thoughts}${suffix}: ${retractedTag}`;
 
 		// Build content lines
 		const lines: string[] = [];
