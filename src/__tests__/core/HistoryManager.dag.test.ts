@@ -284,4 +284,24 @@ describe('HistoryManager DAG edge emission', () => {
 			expect(aEdges[0]!.sessionId).toBe('A');
 		});
 	});
+
+	describe('branch-from-branch resolution', () => {
+		it('resolves branch parent that lives on another branch', () => {
+			const { manager, edgeStore } = setup();
+			const t1 = makeThought(1);
+			const t2 = makeThought(2, { branch_from_thought: 1, branch_id: 'A' });
+			const t3 = makeThought(3, { branch_from_thought: 2, branch_id: 'B' });
+			manager.addThought(t1);
+			manager.addThought(t2);
+			manager.addThought(t3);
+
+			const branchEdges = edgeStore
+				.edgesForSession('__global__')
+				.filter((e) => e.kind === 'branch');
+			expect(branchEdges).toHaveLength(2);
+			const t3BranchEdge = branchEdges.find((e) => e.to === t3.id);
+			expect(t3BranchEdge).toBeDefined();
+			expect(t3BranchEdge!.from).toBe(t2.id);
+		});
+	});
 });

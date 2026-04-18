@@ -170,4 +170,114 @@ describe('HistoryManager edge persistence', () => {
 		expect(loaded.every((e) => e.kind === 'sequence')).toBe(true);
 		await fresh.shutdown();
 	});
+
+	it('listEdgeSessions returns all sessions with persisted edges', async () => {
+		const persistence = new MemoryPersistence();
+		await persistence.saveEdges('test-A', [
+			{
+				id: generateUlid(),
+				from: 'a1',
+				to: 'a2',
+				kind: 'sequence',
+				sessionId: 'test-A',
+				createdAt: 1,
+			},
+		]);
+		await persistence.saveEdges('test-B', [
+			{
+				id: generateUlid(),
+				from: 'b1',
+				to: 'b2',
+				kind: 'sequence',
+				sessionId: 'test-B',
+				createdAt: 2,
+			},
+		]);
+
+		const sessions = await persistence.listEdgeSessions();
+		expect(sessions.sort()).toEqual(['test-A', 'test-B']);
+	});
+
+	it('restores edges for ALL sessions, not just global', async () => {
+		const persistence = new MemoryPersistence();
+		const seedA: Edge[] = [
+			{
+				id: generateUlid(),
+				from: 'a1',
+				to: 'a2',
+				kind: 'sequence',
+				sessionId: 'test-A',
+				createdAt: 100,
+			},
+			{
+				id: generateUlid(),
+				from: 'a2',
+				to: 'a3',
+				kind: 'sequence',
+				sessionId: 'test-A',
+				createdAt: 101,
+			},
+		];
+		const seedB: Edge[] = [
+			{
+				id: generateUlid(),
+				from: 'b1',
+				to: 'b2',
+				kind: 'derives_from',
+				sessionId: 'test-B',
+				createdAt: 200,
+			},
+		];
+		await persistence.saveEdges('test-A', seedA);
+		await persistence.saveEdges('test-B', seedB);
+
+		const edgeStore = new EdgeStore();
+		const manager = new HistoryManager({
+			edgeStore,
+			dagEdges: true,
+			persistence,
+			persistenceFlushInterval: 60_000,
+		});
+
+		await manager.loadFromPersistence();
+
+		expect(edgeStore.size('test-A')).toBe(2);
+		expect(edgeStore.size('test-B')).toBe(1);
+		expect(edgeStore.edgesForSession('test-A').map((e) => e.kind)).toEqual([
+			'sequence',
+			'sequence',
+		]);
+		expect(edgeStore.edgesForSession('test-B').map((e) => e.kind)).toEqual(['derives_from']);
+		await manager.shutdown();
+	});
+
+	it('roundtrips multi-session edges via _flushBuffer + loadFromPersistence', async () => {
+		const persistence = new MemoryPersistence();
+		const { manager } = setup({ persistence });
+
+		manager.addThought(makeThought(1, { session_id: 'test-A' }));
+		manager.addThought(makeThought(2, { session_id: 'test-A' }));
+		manager.addThought(makeThought(1, { session_id: 'test-B' }));
+		manager.addThought(makeThought(2, { session_id: 'test-B' }));
+
+		await manager._flushBuffer();
+		await manager.shutdown();
+
+		const sessions = await persistence.listEdgeSessions();
+		expect(sessions.sort()).toEqual(['test-A', 'test-B']);
+
+		const freshEdgeStore = new EdgeStore();
+		const fresh = new HistoryManager({
+			edgeStore: freshEdgeStore,
+			dagEdges: true,
+			persistence,
+			persistenceFlushInterval: 60_000,
+		});
+
+		await fresh.loadFromPersistence();
+
+		expect(freshEdgeStore.size('test-A')).toBe(1);
+		expect(freshEdgeStore.size('test-B')).toBe(1);
+		await fresh.shutdown();
+	});
 });
