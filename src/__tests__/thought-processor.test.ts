@@ -1063,8 +1063,11 @@ describe('ThoughtProcessor', () => {
 			);
 			const parsed = JSON.parse(last.content[0]!.text);
 
-			// 5-3=2 < 3 → still in cooldown for consecutive_without_verification
-			expect(parsed.reasoning_hints).toBeUndefined();
+			// 5-3=2 < 3 → still in cooldown for consecutive_without_verification.
+			// monotonic_type and no_alternatives_explored (warning since bugs #4/#5 fixed)
+			// have independent cooldowns and may fire here — assert the cooled-down hint is absent.
+			const hints = parsed.reasoning_hints ?? [];
+			expect(hints.some((h: string) => h.includes('without verification'))).toBe(false);
 		});
 	});
 
