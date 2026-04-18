@@ -1,0 +1,299 @@
+/**
+ * Confidence calibration for sequential thinking reasoning.
+ *
+ * Provides the {@link Calibrator} class — maps raw model confidence values
+ * to calibrated probabilities using per-type Beta(2, 2) priors and
+ * grid-searched temperature scaling. Reports calibration quality through
+ * Brier score and 10-bin Expected Calibration Error (ECE).
+ *
+ * Math summary:
+ * - **Per-type prior**: Beta(α=2, β=2), prior mean = 0.5. As outcomes accumulate
+ *   for a type, the calibrated value shrinks toward the observed mean of that
+ *   type with weight `priorWeight = 1 / (1 + n / 10)` where `n` is the type's
+ *   sample count.
+ * - **Temperature scaling**: Grid search T ∈ {0.5, 0.75, 1.0, 1.25, 1.5, 2.0}
+ *   minimizing negative log-likelihood (NLL) over recorded outcomes. Default T=1.0.
+ *   Requires ≥10 outcomes; below that threshold only prior shrinkage is applied.
+ * - **Brier score**: `mean((predicted - actual)^2)` over recorded outcomes.
+ * - **ECE (10-bin)**: bucket predictions in 0.1 increments, compute weighted
+ *   absolute deviation between bin mean confidence and bin accuracy.
+ *
+ * @module core/evaluator/Calibrator
+ */
+
+import type {
+	CalibrationMetrics,
+	CalibrationResult,
+	ICalibrator,
+} from '../../contracts/calibrator.js';
+import type { IOutcomeRecorder, VerificationOutcome } from '../../contracts/interfaces.js';
+import type { ThoughtType } from '../reasoning.js';
+
+const THOUGHT_TYPES: readonly ThoughtType[] = [
+	'regular',
+	'hypothesis',
+	'verification',
+	'critique',
+	'synthesis',
+	'meta',
+];
+
+/** Candidate temperatures evaluated during grid search refit. */
+const TEMPERATURE_GRID: readonly number[] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+
+/** Minimum outcomes required before temperature scaling is applied. */
+const MIN_OUTCOMES_FOR_TEMPERATURE = 10;
+
+/** Number of bins used by ECE (10-bin → 0.1 increments). */
+const ECE_BINS = 10;
+
+/** Sentinel used in the per-session temperature map for global state. */
+const GLOBAL_KEY = '__global__';
+
+/** Small epsilon to keep log() finite when probabilities approach 0 or 1. */
+const EPSILON = 1e-9;
+
+/**
+ * Build per-type empirical means + counts from a list of outcomes.
+ *
+ * @param outcomes - Outcomes to aggregate.
+ * @returns Map of thought type to `{ mean, count }`. Types with no outcomes
+ *          are absent from the map.
+ */
+function aggregatePerType(
+	outcomes: readonly VerificationOutcome[],
+): Map<string, { mean: number; count: number }> {
+	const sums = new Map<string, { sum: number; count: number }>();
+	for (const o of outcomes) {
+		const prev = sums.get(o.type) ?? { sum: 0, count: 0 };
+		prev.sum += o.actual;
+		prev.count += 1;
+		sums.set(o.type, prev);
+	}
+	const result = new Map<string, { mean: number; count: number }>();
+	for (const [type, { sum, count }] of sums) {
+		result.set(type, { mean: sum / count, count });
+	}
+	return result;
+}
+
+/**
+ * Apply temperature scaling to a probability `p`.
+ *
+ * Uses the standard logit re-scaling:
+ * `sigmoid(logit(p) / T)`. T=1 is the identity.
+ *
+ * @param p - Probability in `[0, 1]`.
+ * @param temperature - Temperature scalar (must be > 0).
+ * @returns Scaled probability in `[0, 1]`.
+ */
+function applyTemperature(p: number, temperature: number): number {
+	const clamped = Math.min(1 - EPSILON, Math.max(EPSILON, p));
+	const logit = Math.log(clamped / (1 - clamped));
+	const scaled = logit / temperature;
+	return 1 / (1 + Math.exp(-scaled));
+}
+
+/**
+ * Compute negative log-likelihood for a candidate temperature.
+ *
+ * @param outcomes - Outcomes whose `predicted` is the raw confidence and
+ *                   `actual` is the observed 0/1 label.
+ * @param temperature - Temperature to evaluate.
+ * @returns Mean NLL across outcomes (lower is better). Returns `Infinity` if
+ *          `outcomes` is empty.
+ */
+function negativeLogLikelihood(
+	outcomes: readonly VerificationOutcome[],
+	temperature: number,
+): number {
+	if (outcomes.length === 0) return Number.POSITIVE_INFINITY;
+	let total = 0;
+	for (const o of outcomes) {
+		const p = applyTemperature(o.predicted, temperature);
+		const clamped = Math.min(1 - EPSILON, Math.max(EPSILON, p));
+		total += -(o.actual * Math.log(clamped) + (1 - o.actual) * Math.log(1 - clamped));
+	}
+	return total / outcomes.length;
+}
+
+/**
+ * Grid-search the temperature minimizing NLL.
+ *
+ * Falls back to T=1.0 when there are fewer than {@link MIN_OUTCOMES_FOR_TEMPERATURE}
+ * outcomes available.
+ *
+ * @param outcomes - Outcomes to fit against.
+ * @returns Best temperature from {@link TEMPERATURE_GRID}.
+ */
+function fitTemperature(outcomes: readonly VerificationOutcome[]): number {
+	if (outcomes.length < MIN_OUTCOMES_FOR_TEMPERATURE) return 1.0;
+	let best = 1.0;
+	let bestLoss = Number.POSITIVE_INFINITY;
+	for (const t of TEMPERATURE_GRID) {
+		const loss = negativeLogLikelihood(outcomes, t);
+		if (loss < bestLoss) {
+			bestLoss = loss;
+			best = t;
+		}
+	}
+	return best;
+}
+
+/**
+ * Compute the Brier score over a list of outcomes.
+ *
+ * @param outcomes - Outcomes to score.
+ * @returns Mean squared error between predicted probability and actual label,
+ *          or `null` if `outcomes` is empty.
+ */
+function brierScore(outcomes: readonly VerificationOutcome[]): number | null {
+	if (outcomes.length === 0) return null;
+	let sum = 0;
+	for (const o of outcomes) {
+		const diff = o.predicted - o.actual;
+		sum += diff * diff;
+	}
+	return sum / outcomes.length;
+}
+
+/**
+ * Compute 10-bin Expected Calibration Error.
+ *
+ * Buckets predictions in 0.1-wide bins, then sums weighted absolute
+ * differences between bin mean confidence and bin accuracy.
+ *
+ * @param outcomes - Outcomes to evaluate.
+ * @returns ECE in `[0, 1]`, or `null` if `outcomes` is empty.
+ */
+function expectedCalibrationError(outcomes: readonly VerificationOutcome[]): number | null {
+	if (outcomes.length === 0) return null;
+	const binConfSum = new Array<number>(ECE_BINS).fill(0);
+	const binAccSum = new Array<number>(ECE_BINS).fill(0);
+	const binCount = new Array<number>(ECE_BINS).fill(0);
+	for (const o of outcomes) {
+		const p = Math.min(1 - EPSILON, Math.max(0, o.predicted));
+		const idx = Math.min(ECE_BINS - 1, Math.floor(p * ECE_BINS));
+		binConfSum[idx] = (binConfSum[idx] ?? 0) + p;
+		binAccSum[idx] = (binAccSum[idx] ?? 0) + o.actual;
+		binCount[idx] = (binCount[idx] ?? 0) + 1;
+	}
+	const total = outcomes.length;
+	let ece = 0;
+	for (let i = 0; i < ECE_BINS; i++) {
+		const n = binCount[i] ?? 0;
+		if (n === 0) continue;
+		const meanConf = (binConfSum[i] ?? 0) / n;
+		const meanAcc = (binAccSum[i] ?? 0) / n;
+		ece += (n / total) * Math.abs(meanConf - meanAcc);
+	}
+	return ece;
+}
+
+/**
+ * Build the per-type Brier score breakdown for {@link CalibrationMetrics}.
+ *
+ * @param outcomes - Outcomes to bucket by type.
+ * @returns Record keyed by every {@link ThoughtType}; `null` for types with
+ *          no recorded outcomes.
+ */
+function perTypeBrier(
+	outcomes: readonly VerificationOutcome[],
+): Record<ThoughtType, number | null> {
+	const buckets = new Map<string, VerificationOutcome[]>();
+	for (const o of outcomes) {
+		const list = buckets.get(o.type) ?? [];
+		list.push(o);
+		buckets.set(o.type, list);
+	}
+	const result = {} as Record<ThoughtType, number | null>;
+	for (const t of THOUGHT_TYPES) {
+		result[t] = brierScore(buckets.get(t) ?? []);
+	}
+	return result;
+}
+
+/** Empty CalibrationMetrics returned when calibration is disabled. */
+function emptyMetrics(): CalibrationMetrics {
+	const perType = {} as Record<ThoughtType, number | null>;
+	for (const t of THOUGHT_TYPES) perType[t] = null;
+	return {
+		brierScore: null,
+		ece: null,
+		sampleCount: 0,
+		perTypeBrier: perType,
+	};
+}
+
+/**
+ * Confidence calibration service.
+ *
+ * Stateless w.r.t. outcome storage (delegated to {@link IOutcomeRecorder}),
+ * but maintains a small per-session temperature cache that is recomputed
+ * via {@link Calibrator.refit}.
+ *
+ * @example
+ * ```typescript
+ * const calibrator = new Calibrator(outcomeRecorder, true);
+ * const result = calibrator.calibrate(0.9, 'hypothesis', 'session-1');
+ * console.log(result.calibrated, result.temperature, result.priorWeight);
+ * ```
+ */
+export class Calibrator implements ICalibrator {
+	public readonly enabled: boolean;
+	private readonly _recorder: IOutcomeRecorder;
+	private readonly _temperatures = new Map<string, number>();
+
+	constructor(outcomeRecorder: IOutcomeRecorder, enabled: boolean) {
+		this._recorder = outcomeRecorder;
+		this.enabled = enabled;
+	}
+
+	public calibrate(
+		rawConfidence: number,
+		type: ThoughtType,
+		sessionId: string,
+	): CalibrationResult {
+		const raw = Math.min(1, Math.max(0, rawConfidence));
+		if (!this.enabled) {
+			return { raw, calibrated: raw, temperature: 1.0, priorWeight: 0 };
+		}
+		const outcomes = this._recorder.getOutcomes(sessionId);
+		const perType = aggregatePerType(outcomes);
+		const typeStats = perType.get(type);
+		const n = typeStats?.count ?? 0;
+		const observedMean = typeStats?.mean ?? 0.5;
+		const priorWeight = 1 / (1 + n / 10);
+		const shrunk = priorWeight * observedMean + (1 - priorWeight) * raw;
+		const temperature = this._temperatures.get(sessionId) ?? this._temperatures.get(GLOBAL_KEY) ?? 1.0;
+		const calibrated =
+			outcomes.length >= MIN_OUTCOMES_FOR_TEMPERATURE
+				? applyTemperature(shrunk, temperature)
+				: shrunk;
+		return { raw, calibrated, temperature, priorWeight };
+	}
+
+	public metrics(sessionId?: string): CalibrationMetrics {
+		if (!this.enabled) return emptyMetrics();
+		const outcomes =
+			sessionId === undefined
+				? this._recorder.getAllOutcomes()
+				: this._recorder.getOutcomes(sessionId);
+		return {
+			brierScore: brierScore(outcomes),
+			ece: expectedCalibrationError(outcomes),
+			sampleCount: outcomes.length,
+			perTypeBrier: perTypeBrier(outcomes),
+		};
+	}
+
+	public refit(sessionId?: string): void {
+		if (!this.enabled) return;
+		const key = sessionId ?? GLOBAL_KEY;
+		const outcomes =
+			sessionId === undefined
+				? this._recorder.getAllOutcomes()
+				: this._recorder.getOutcomes(sessionId);
+		this._temperatures.set(key, fitTemperature(outcomes));
+	}
+}
