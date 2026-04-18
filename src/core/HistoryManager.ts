@@ -13,22 +13,22 @@
  */
 
 import type { IMetrics } from '../contracts/index.js';
-import { ValidationError, getErrorMessage } from '../errors.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
 import type { ISummaryStore } from '../contracts/summary.js';
+import { ValidationError, getErrorMessage } from '../errors.js';
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
-import type { IHistoryManager } from './IHistoryManager.js';
-import type { ThoughtData } from './thought.js';
 import {
 	DehydrationPolicy,
 	type DehydrationOptions,
 	type HydratedEntry,
 } from './compression/DehydrationPolicy.js';
 import { EdgeEmitter } from './graph/EdgeEmitter.js';
+import type { IHistoryManager } from './IHistoryManager.js';
 import { PersistenceBuffer, type PersistenceEventEmitter } from './PersistenceBuffer.js';
 import { SessionManager } from './SessionManager.js';
+import type { ThoughtData } from './thought.js';
 
 export type { PersistenceEventEmitter } from './PersistenceBuffer.js';
 
@@ -101,7 +101,7 @@ export class HistoryManager implements IHistoryManager {
 
 	constructor(config: HistoryManagerConfig = {}) {
 		this._logger = config.logger ?? new NullLogger();
-		const requestedMaxSize = config.maxHistorySize ?? 1000;
+		const requestedMaxSize = config.maxHistorySize ?? 10000;
 		this._maxHistorySize = Math.min(requestedMaxSize, ABSOLUTE_MAX_HISTORY_SIZE);
 		if (requestedMaxSize > ABSOLUTE_MAX_HISTORY_SIZE) {
 			this._logger.warn('maxHistorySize exceeds absolute maximum, capped', {
@@ -117,7 +117,7 @@ export class HistoryManager implements IHistoryManager {
 		this._eventEmitter = config.eventEmitter ?? null;
 		this._edgeStore = config.edgeStore;
 		this._summaryStore = config.summaryStore;
-		this._dagEdges = config.dagEdges ?? false;
+		this._dagEdges = config.dagEdges ?? true;
 
 		// Wire delegates
 		this._edgeEmitter = new EdgeEmitter({

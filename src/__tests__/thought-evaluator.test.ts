@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
+import { safeParse } from 'valibot';
 import { ThoughtEvaluator } from '../core/ThoughtEvaluator.js';
+import { ThoughtProcessor } from '../core/ThoughtProcessor.js';
+import { ThoughtFormatter } from '../core/ThoughtFormatter.js';
+import { normalizeInput } from '../core/InputNormalizer.js';
+import { SequentialThinkingSchema } from '../schema.js';
+import { MockHistoryManager } from './helpers/index.js';
 import { createTestThought } from './helpers/index.js';
 import type { ThoughtData } from '../core/thought.js';
 
@@ -108,6 +114,36 @@ describe('ThoughtEvaluator', () => {
 
 			expect(signals.thought_type_distribution.regular).toBe(2);
 		});
+		describe('floating-point precision (regression — bug #1)', () => {
+			it('rounds average_confidence (0.9 + 0.8) / 2 = 0.85', () => {
+				const history = [
+					makeThought({ confidence: 0.9 }),
+					makeThought({ confidence: 0.8 }),
+				];
+				const signals = evaluator.computeConfidenceSignals(history, {});
+				expect(signals.average_confidence).toBe(0.85);
+			});
+
+			it('rounds average_confidence (0.7 + 0.7) / 2 = 0.7', () => {
+				const history = [
+					makeThought({ confidence: 0.7 }),
+					makeThought({ confidence: 0.7 }),
+				];
+				const signals = evaluator.computeConfidenceSignals(history, {});
+				expect(signals.average_confidence).toBe(0.7);
+			});
+
+			it('rounds average_confidence for 3-value avg', () => {
+				const history = [
+					makeThought({ confidence: 0.9 }),
+					makeThought({ confidence: 0.8 }),
+					makeThought({ confidence: 0.75 }),
+				];
+				const signals = evaluator.computeConfidenceSignals(history, {});
+				expect(signals.average_confidence).toBe(0.8166666667);
+			});
+		});
+
 	});
 
 	describe('computeReasoningStats', () => {
@@ -275,6 +311,36 @@ describe('ThoughtEvaluator', () => {
 
 			expect(stats.thought_type_counts.regular).toBe(2);
 		});
+		describe('floating-point precision (regression — bug #1)', () => {
+			it('rounds average_confidence (0.9 + 0.8) / 2 = 0.85', () => {
+				const history = [
+					makeThought({ confidence: 0.9 }),
+					makeThought({ confidence: 0.8 }),
+				];
+				const stats = evaluator.computeReasoningStats(history, {});
+				expect(stats.average_confidence).toBe(0.85);
+			});
+
+			it('rounds average_quality_score when present', () => {
+				const history = [
+					makeThought({ quality_score: 0.9 }),
+					makeThought({ quality_score: 0.8 }),
+				];
+				const stats = evaluator.computeReasoningStats(history, {});
+				expect(stats.average_quality_score).toBe(0.85);
+			});
+
+			it('rounds average_confidence for 3-value avg', () => {
+				const history = [
+					makeThought({ confidence: 0.9 }),
+					makeThought({ confidence: 0.8 }),
+					makeThought({ confidence: 0.75 }),
+				];
+				const stats = evaluator.computeReasoningStats(history, {});
+				expect(stats.average_confidence).toBe(0.8166666667);
+			});
+		});
+
 	});
 
 	describe('computePatternSignals', () => {
@@ -371,7 +437,7 @@ describe('ThoughtEvaluator', () => {
 			const signals = evaluator.computePatternSignals(history, {});
 			const match = signals.find((s) => s.pattern === 'no_alternatives_explored');
 			expect(match).toBeDefined();
-			expect(match!.severity).toBe('info');
+			expect(match!.severity).toBe('warning');
 		});
 
 		it('does not fire when critique exists', () => {
@@ -412,7 +478,7 @@ describe('ThoughtEvaluator', () => {
 			const signals = evaluator.computePatternSignals(history, {});
 			const match = signals.find((s) => s.pattern === 'monotonic_type');
 			expect(match).toBeDefined();
-			expect(match!.severity).toBe('info');
+			expect(match!.severity).toBe('warning');
 		});
 
 		it('does not fire for 3 consecutive same type', () => {
@@ -732,5 +798,201 @@ describe('ThoughtEvaluator — uncovered branches (lines 347-351)', () => {
 			expect(driftPatterns.length).toBeGreaterThanOrEqual(1);
 			expect(driftPatterns[0]!.thought_range).toEqual([1, 4]);
 		});
+	});
+});
+
+// =============================================================================
+// Investigation: Bugs #2 & #3 — previous_steps data degradation
+// Hypothesis: server preserves previous_steps as-is; degradation is caller-side.
+// =============================================================================
+
+const FULL_TOOL = {
+	tool_name: 'read_file',
+	confidence: 0.92,
+	rationale: 'Need to inspect the source to understand the bug',
+	priority: 1,
+	alternatives: ['grep', 'glob'],
+	suggested_inputs: { path: '/tmp/foo.ts' },
+};
+
+const FULL_STEP = {
+	step_description: 'Inspect source for the reported degradation',
+	recommended_tools: [
+		FULL_TOOL,
+		{
+			tool_name: 'lsp_diagnostics',
+			confidence: 0.7,
+			rationale: 'Verify no type errors after edit',
+			priority: 2,
+			alternatives: [],
+		},
+	],
+	expected_outcome: 'Identify exact pass-through point',
+	next_step_conditions: ['if no loss → caller bug', 'if loss → server bug'],
+};
+
+describe('Bugs #2 & #3 — schema validation (valibot direct)', () => {
+	it('PartialToolRecommendationSchema preserves all fields when present (Bug #2)', () => {
+		const input = {
+			thought: 't',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			previous_steps: [FULL_STEP],
+		};
+		const result = safeParse(SequentialThinkingSchema, input);
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+		const tool = result.output.previous_steps![0]!.recommended_tools![0]!;
+		expect(tool.confidence).toBe(0.92);
+		expect(tool.rationale).toBe('Need to inspect the source to understand the bug');
+		expect(tool.priority).toBe(1);
+		expect(tool.alternatives).toEqual(['grep', 'glob']);
+		expect(tool.suggested_inputs).toEqual({ path: '/tmp/foo.ts' });
+	});
+
+	it('preserves all tools in recommended_tools array (Bug #3 — no drops)', () => {
+		const input = {
+			thought: 't',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			previous_steps: [FULL_STEP],
+		};
+		const result = safeParse(SequentialThinkingSchema, input);
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+		const tools = result.output.previous_steps![0]!.recommended_tools!;
+		expect(tools).toHaveLength(2);
+		expect(tools.map((t) => t.tool_name)).toEqual(['read_file', 'lsp_diagnostics']);
+	});
+
+	it('partial fields receive defaults (expected lenient behavior, not a bug)', () => {
+		const input = {
+			thought: 't',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			previous_steps: [
+				{
+					step_description: 'partial step',
+					recommended_tools: [{ tool_name: 'minimal_tool' }],
+				},
+			],
+		};
+		const result = safeParse(SequentialThinkingSchema, input);
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+		const tool = result.output.previous_steps![0]!.recommended_tools![0]!;
+		expect(tool.tool_name).toBe('minimal_tool');
+		// Schema is lenient (no v.fallback); defaults applied later by InputNormalizer.
+		expect(tool.confidence).toBeUndefined();
+		expect(tool.rationale).toBeUndefined();
+		expect(tool.priority).toBeUndefined();
+	});
+});
+
+describe('Bugs #2 & #3 — InputNormalizer (only place defaults are applied)', () => {
+	it('does not overwrite present fields in previous_steps recommendations', () => {
+		const normalized = normalizeInput({
+			thought: 't',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			previous_steps: [FULL_STEP],
+		});
+		const tool = (normalized.previous_steps as Array<{ recommended_tools: Array<{ tool_name: string; confidence: number; rationale: string; priority: number; alternatives?: string[]; suggested_inputs?: Record<string, unknown> }> }>)[0]!.recommended_tools[0]!;
+		expect(tool.confidence).toBe(0.92);
+		expect(tool.rationale).toBe('Need to inspect the source to understand the bug');
+		expect(tool.priority).toBe(1);
+		expect(tool.alternatives).toEqual(['grep', 'glob']);
+		expect(tool.suggested_inputs).toEqual({ path: '/tmp/foo.ts' });
+	});
+});
+
+describe('Bugs #2 & #3 — ThoughtProcessor.process() end-to-end round-trip', () => {
+	it('echoes previous_steps with all fields intact (server is stateless pass-through)', async () => {
+		const processor = new ThoughtProcessor(
+			new MockHistoryManager(),
+			new ThoughtFormatter(),
+			new ThoughtEvaluator(),
+		);
+		const result = await processor.process({
+			thought: 't',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			thought_type: 'regular',
+			previous_steps: [FULL_STEP],
+		});
+		const payload = JSON.parse(result.content[0]!.text);
+		expect(payload.previous_steps).toBeDefined();
+		expect(payload.previous_steps).toHaveLength(1);
+		const tools = payload.previous_steps[0].recommended_tools;
+		expect(tools).toHaveLength(2);
+		expect(tools[0].tool_name).toBe('read_file');
+		expect(tools[0].confidence).toBe(0.92);
+		expect(tools[0].rationale).toBe('Need to inspect the source to understand the bug');
+		expect(tools[0].priority).toBe(1);
+		expect(tools[0].alternatives).toEqual(['grep', 'glob']);
+		expect(tools[0].suggested_inputs).toEqual({ path: '/tmp/foo.ts' });
+		expect(tools[1].tool_name).toBe('lsp_diagnostics');
+		expect(tools[1].confidence).toBe(0.7);
+	});
+});
+
+describe('Pattern hints surfacing — bugs #4 & #5', () => {
+	const evaluator = new ThoughtEvaluator();
+
+	function makeThought(overrides?: Partial<ThoughtData>): ThoughtData {
+		return createTestThought(overrides);
+	}
+
+	it('monotonic_type fires as warning when 4+ consecutive same-type thoughts exist (history >= 5)', () => {
+		const history = [
+			makeThought({ thought_number: 1, thought_type: 'hypothesis' }),
+			makeThought({ thought_number: 2, thought_type: 'regular' }),
+			makeThought({ thought_number: 3, thought_type: 'regular' }),
+			makeThought({ thought_number: 4, thought_type: 'regular' }),
+			makeThought({ thought_number: 5, thought_type: 'regular' }),
+		];
+		const patterns = evaluator.computePatternSignals(history, {});
+		const match = patterns.find((p) => p.pattern === 'monotonic_type');
+		expect(match).toBeDefined();
+		expect(match!.severity).toBe('warning');
+	});
+
+	it('no_alternatives_explored fires as warning when 5+ regular thoughts have no critique/branch', () => {
+		const history = Array.from({ length: 5 }, (_, i) =>
+			makeThought({ thought_number: i + 1, thought_type: 'regular' })
+		);
+		const patterns = evaluator.computePatternSignals(history, {});
+		const match = patterns.find((p) => p.pattern === 'no_alternatives_explored');
+		expect(match).toBeDefined();
+		expect(match!.severity).toBe('warning');
+	});
+
+	it('monotonic_type does NOT fire with only 3 consecutive same-type thoughts (threshold is 4)', () => {
+		const history = [
+			makeThought({ thought_number: 1, thought_type: 'hypothesis' }),
+			makeThought({ thought_number: 2, thought_type: 'regular' }),
+			makeThought({ thought_number: 3, thought_type: 'regular' }),
+			makeThought({ thought_number: 4, thought_type: 'regular' }),
+			makeThought({ thought_number: 5, thought_type: 'verification' }),
+		];
+		const patterns = evaluator.computePatternSignals(history, {});
+		expect(patterns.find((p) => p.pattern === 'monotonic_type')).toBeUndefined();
+	});
+
+	it('monotonic_type and no_alternatives_explored coexist with consecutive_without_verification', () => {
+		const history = Array.from({ length: 5 }, (_, i) =>
+			makeThought({ thought_number: i + 1, thought_type: 'regular' })
+		);
+		const patterns = evaluator.computePatternSignals(history, {});
+		const warnings = patterns.filter((p) => p.severity === 'warning');
+		const names = new Set(warnings.map((w) => w.pattern));
+		expect(names.has('monotonic_type')).toBe(true);
+		expect(names.has('no_alternatives_explored')).toBe(true);
+		expect(names.has('consecutive_without_verification')).toBe(true);
 	});
 });

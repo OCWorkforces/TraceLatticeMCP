@@ -1,5 +1,7 @@
 # TraceLattice
 
+[![npm version](https://img.shields.io/npm/v/tracelattice?color=blue&label=npm)](https://www.npmjs.com/package/tracelattice)
+
 An MCP (Model Context Protocol) server providing structured sequential thinking with tool/skill recommendations, DAG-based thought relationships, configurable reasoning strategies, and confidence calibration for AI agents.
 
 ## Features

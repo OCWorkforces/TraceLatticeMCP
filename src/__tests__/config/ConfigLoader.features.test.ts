@@ -38,18 +38,18 @@ describe('ConfigLoader feature flags', () => {
 		vi.restoreAllMocks();
 	});
 
-	it('defaults all feature flags to OFF when no env vars or file set them', () => {
+	it('defaults all boolean feature flags to ON when no env vars or file set them', () => {
 		const loader = new ConfigLoader();
 		const loaded = loader.load();
 		const opts = loader.toServerConfigOptions(loaded ?? {});
 		const config = new ServerConfig(opts);
 
-		expect(config.features.dagEdges).toBe(false);
-		expect(config.features.calibration).toBe(false);
-		expect(config.features.compression).toBe(false);
-		expect(config.features.toolInterleave).toBe(false);
-		expect(config.features.newThoughtTypes).toBe(false);
-		expect(config.features.outcomeRecording).toBe(false);
+		expect(config.features.dagEdges).toBe(true);
+		expect(config.features.calibration).toBe(true);
+		expect(config.features.compression).toBe(true);
+		expect(config.features.toolInterleave).toBe(true);
+		expect(config.features.newThoughtTypes).toBe(true);
+		expect(config.features.outcomeRecording).toBe(true);
 		expect(config.features.reasoningStrategy).toBe('sequential');
 	});
 
@@ -60,8 +60,8 @@ describe('ConfigLoader feature flags', () => {
 		const config = new ServerConfig(loader.toServerConfigOptions(loaded ?? {}));
 
 		expect(config.features.dagEdges).toBe(true);
-		// Other flags remain off.
-		expect(config.features.calibration).toBe(false);
+		// Other flags remain on by default.
+		expect(config.features.calibration).toBe(true);
 	});
 
 	it('TRACELATTICE_FEATURES_REASONING_STRATEGY=tot sets reasoningStrategy', () => {
@@ -126,7 +126,7 @@ describe('ConfigLoader feature flags', () => {
 		expect(config.features.compression).toBe(false);
 	});
 
-	it('invalid boolean values are warned and ignored (default OFF preserved)', () => {
+	it('invalid boolean values are warned and ignored (default ON preserved)', () => {
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		process.env.TRACELATTICE_FEATURES_DAG_EDGES = 'maybe';
 
@@ -134,7 +134,7 @@ describe('ConfigLoader feature flags', () => {
 		const loaded = loader.load();
 		const config = new ServerConfig(loader.toServerConfigOptions(loaded ?? {}));
 
-		expect(config.features.dagEdges).toBe(false);
+		expect(config.features.dagEdges).toBe(true);
 		expect(warnSpy).toHaveBeenCalledWith(
 			expect.stringContaining('TRACELATTICE_FEATURES_DAG_EDGES')
 		);
@@ -162,7 +162,7 @@ describe('ConfigLoader feature flags', () => {
 		expect(config.features.dagEdges).toBe(false); // env wins
 		expect(config.features.reasoningStrategy).toBe('tot'); // env wins
 		expect(config.features.calibration).toBe(true); // from file
-		expect(config.features.compression).toBe(false); // default
+		expect(config.features.compression).toBe(true); // default (now ON)
 	});
 
 	it('feature flags from YAML config file are loaded', () => {
@@ -183,7 +183,7 @@ describe('ConfigLoader feature flags', () => {
 		expect(config.features.dagEdges).toBe(true);
 		expect(config.features.reasoningStrategy).toBe('tot');
 		expect(config.features.outcomeRecording).toBe(true);
-		expect(config.features.calibration).toBe(false);
+		expect(config.features.calibration).toBe(true); // default (now ON)
 	});
 
 	it('toJSON includes the features field', () => {
@@ -192,11 +192,11 @@ describe('ConfigLoader feature flags', () => {
 		expect(json.features).toEqual({
 			dagEdges: true,
 			reasoningStrategy: 'sequential',
-			calibration: false,
-			compression: false,
-			toolInterleave: false,
-			newThoughtTypes: false,
-			outcomeRecording: false,
+			calibration: true,
+			compression: true,
+			toolInterleave: true,
+			newThoughtTypes: true,
+			outcomeRecording: true,
 		});
 	});
 });

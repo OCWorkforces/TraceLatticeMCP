@@ -18,6 +18,16 @@ import { ALL_THOUGHT_TYPES, _computeChainDepth, _countByType } from './internals
 /** Floor value applied to each quality component to prevent geometric mean collapse. */
 const FLOOR = 0.01;
 
+/**
+ * Round a numeric value to a fixed number of decimal places to mitigate
+ * IEEE 754 floating-point accumulation errors (e.g. 0.9 + 0.8 averaging to
+ * 0.8500000000000001 instead of 0.85).
+ */
+function roundToPrecision(value: number, decimals: number = 10): number {
+	const factor = Math.pow(10, decimals);
+	return Math.round(value * factor) / factor;
+}
+
 /** Result of {@link SignalComputer.computeStructuralQuality}. */
 interface StructuralQualityResult {
 	score: number;
@@ -121,7 +131,7 @@ export class SignalComputer {
 			has_verification: history.some((t) => t.thought_type === 'verification'),
 			average_confidence:
 				allConfidences.length > 0
-					? allConfidences.reduce((a, b) => a + b, 0) / allConfidences.length
+					? roundToPrecision(allConfidences.reduce((a, b) => a + b, 0) / allConfidences.length)
 					: null,
 			...(structuralResult !== null && {
 				structural_quality: structuralResult.score,

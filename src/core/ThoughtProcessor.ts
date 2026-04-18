@@ -41,13 +41,13 @@ type ResumableThought = ThoughtData & { _resumedFrom?: number };
 
 /** Default feature flags used when none are supplied to ThoughtProcessor. */
 const DEFAULT_FEATURES: FeatureFlags = {
-	dagEdges: false,
+	dagEdges: true,
 	reasoningStrategy: 'sequential',
-	calibration: false,
-	compression: false,
-	toolInterleave: false,
-	newThoughtTypes: false,
-	outcomeRecording: false,
+	calibration: true,
+	compression: true,
+	toolInterleave: true,
+	newThoughtTypes: true,
+	outcomeRecording: true,
 };
 
 /**

@@ -6,7 +6,7 @@ describe('ServerConfig', () => {
 	describe('defaults', () => {
 		it('should apply all defaults when no options provided', () => {
 			const config = new ServerConfig();
-			expect(config.maxHistorySize).toBe(1000);
+			expect(config.maxHistorySize).toBe(10000);
 			expect(config.maxBranches).toBe(50);
 			expect(config.maxBranchSize).toBe(100);
 			expect(config.persistenceBufferSize).toBe(100);
@@ -27,14 +27,14 @@ describe('ServerConfig', () => {
 			expect(c2.maxHistorySize).toBe(10000);
 		});
 
-		it('should default to 1000 when undefined', () => {
+		it('should default to 10000 when undefined', () => {
 			const config = new ServerConfig({ maxHistorySize: undefined });
-			expect(config.maxHistorySize).toBe(1000);
+			expect(config.maxHistorySize).toBe(10000);
 		});
 
-		it('should default to 1000 when null', () => {
+		it('should default to 10000 when null', () => {
 			const config = new ServerConfig({ maxHistorySize: null as unknown as number });
-			expect(config.maxHistorySize).toBe(1000);
+			expect(config.maxHistorySize).toBe(10000);
 		});
 
 		it('should throw for 0', () => {

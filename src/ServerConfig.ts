@@ -30,26 +30,25 @@ import type { PersistenceConfig } from './persistence/PersistenceBackend.js';
  */
 
 /**
- * Feature flags for opt-in TraceLattice capabilities.
+ * Feature flags for opt-in/out TraceLattice capabilities.
  *
- * All flags default to OFF so new features can be merged behind a flag
- * without altering existing behavior. Flags are flat to keep env var
- * mappings predictable (TRACELATTICE_FEATURES_*).
+ * All flags default to ON. Users can disable any flag via
+ * TRACELATTICE_FEATURES_*=false environment variables.
  */
 export interface FeatureFlags {
-	/** Enable DAG edges between thoughts (Item #1). @default false */
+	/** Enable DAG edges between thoughts (Item #1). @default true */
 	dagEdges: boolean;
 	/** Reasoning strategy selector (Item #2). @default 'sequential' */
 	reasoningStrategy: 'sequential' | 'tot';
-	/** Enable confidence calibration (Item #3). @default false */
+	/** Enable confidence calibration (Item #3). @default true */
 	calibration: boolean;
-	/** Enable thought compression (Item #5). @default false */
+	/** Enable thought compression (Item #5). @default true */
 	compression: boolean;
-	/** Enable tool interleaving (Item #6). @default false */
+	/** Enable tool interleaving (Item #6). @default true */
 	toolInterleave: boolean;
-	/** Enable new thought types (Item #8). @default false */
+	/** Enable new thought types (Item #8). @default true */
 	newThoughtTypes: boolean;
-	/** Enable outcome recording (prereq for Item #10). @default false */
+	/** Enable outcome recording (prereq for Item #10). @default true */
 	outcomeRecording: boolean;
 }
 export interface ServerConfigOptions {
@@ -151,7 +150,7 @@ export interface ServerConfigOptions {
  * ```typescript
  * // Using defaults
  * const config1 = new ServerConfig();
- * console.log(config1.maxHistorySize); // 1000
+ * console.log(config1.maxHistorySize); // 10000
  *
  * // With custom options
  * const config2 = new ServerConfig({
@@ -248,7 +247,7 @@ export class ServerConfig {
 	 * @private
 	 */
 	private validateMaxHistorySize(value?: number): number {
-		const defaultValue = 1000;
+		const defaultValue = 10000;
 		if (value === undefined || value === null) return defaultValue;
 		if (typeof value !== 'number' || !Number.isFinite(value)) {
 			throw new ConfigurationError(`maxHistorySize must be a finite number, got ${value}`);
@@ -436,13 +435,13 @@ export class ServerConfig {
 	 */
 	private validateFeatures(value?: Partial<FeatureFlags>): FeatureFlags {
 		return {
-			dagEdges: value?.dagEdges ?? false,
+			dagEdges: value?.dagEdges ?? true,
 			reasoningStrategy: value?.reasoningStrategy ?? 'sequential',
-			calibration: value?.calibration ?? false,
-			compression: value?.compression ?? false,
-			toolInterleave: value?.toolInterleave ?? false,
-			newThoughtTypes: value?.newThoughtTypes ?? false,
-			outcomeRecording: value?.outcomeRecording ?? false,
+			calibration: value?.calibration ?? true,
+			compression: value?.compression ?? true,
+			toolInterleave: value?.toolInterleave ?? true,
+			newThoughtTypes: value?.newThoughtTypes ?? true,
+			outcomeRecording: value?.outcomeRecording ?? true,
 		};
 	}
 

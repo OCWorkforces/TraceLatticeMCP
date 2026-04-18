@@ -8,9 +8,9 @@ Decomposed evaluation pipeline. `ThoughtEvaluator` (parent) is a thin facade del
 
 | File | Role |
 | --- | --- |
-| `SignalComputer.ts` | Computes `ConfidenceSignals` per response. Owns `structural_quality` geomean + `quality_components` (floored) + `quality_components_raw` (pre-floor, debug). |
-| `Aggregator.ts` | Builds `ReasoningStats`: hypothesis chains (id → verifications/critiques), type distribution, averages. |
-| `PatternDetector.ts` | 6 detectors → priority-ranked hints. Cooldown + max-3 cap applied at selection. |
+| `SignalComputer.ts` | Computes `ConfidenceSignals` per response. Owns `structural_quality` geomean + `quality_components` (floored) + `quality_components_raw` (pre-floor, debug). Uses `roundToPrecision()` for FP-safe averages. |
+| `Aggregator.ts` | Builds `ReasoningStats`: hypothesis chains (id → verifications/critiques), type distribution, averages. Uses `roundToPrecision()` for FP-safe averages. |
+| `PatternDetector.ts` | 6 detectors → priority-ranked hints (all emit `warning` severity, except `healthy_verification` which is `info`-only). Cooldown + max-3 cap applied at selection. |
 | `Calibrator.ts` | Beta(2,2) prior smoothing of confidence; Brier + ECE (10 bins); temperature search over fixed grid. |
 | `internals.ts` | Shared private helpers reused across the four. Not exported from `src/index.ts`. |
 
@@ -31,9 +31,9 @@ Priority order (lower fires first, max 3 hints per response):
 1. `confidence_drift`
 2. `unverified_hypothesis` — needs ≥ 3 thoughts AFTER the hypothesis before firing
 3. `consecutive_without_verification`
-4. `monotonic_type` — gated on `history.length ≥ 5` AND `runLength ≥ 4`
-5. `no_alternatives_explored`
-6. `healthy_verification` (info-only)
+4. `monotonic_type` — gated on `history.length ≥ 5` AND `runLength ≥ 4`. Severity: `warning`.
+5. `no_alternatives_explored` — Severity: `warning`.
+6. `healthy_verification` (info-only, severity: `info`)
 
 Per-pattern cooldown is configurable per session.
 

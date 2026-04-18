@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 1990 tests across 75 files, 16 skipped for known gaps. Coverage gates: branches 55%, functions 60%, lines 65%, statements 65%.
+Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 2005 tests across 75 files, 16 skipped for known gaps. Coverage gates: branches 55%, functions 60%, lines 65%, statements 65%.
 
 ## STRUCTURE
 

@@ -23,7 +23,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 │   ├── di/               # DI container + service registry (18 services)
 │   ├── registry/         # Tool/Skill registries (BaseRegistry<T> + subclasses)
 │   ├── contracts/        # Shared interfaces (IMetrics, IDiscoveryCache, etc.)
-│   ├── __tests__/        # Test suite (Vitest, 1990 tests, 75 files)
+│   ├── __tests__/        # Test suite (Vitest, 2005 tests, 75 files)
 │   ├── cache/            # LRU+TTL discovery cache
 │   ├── logger/           # Structured logging (JSON/pretty)
 │   ├── pool/             # Multi-user session pool
@@ -113,9 +113,9 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `InMemorySummaryStore`              | class     | src/core/compression/InMemorySummaryStore.ts | In-memory `ISummaryStore` impl with per-session Maps                              |
 | `CompressionService`                | class     | src/core/compression/CompressionService.ts | Deterministic branch rollup: collapses cold branches into Summary records (197L)   |
 | `DehydrationPolicy`                 | class     | src/core/compression/DehydrationPolicy.ts | Sliding-window policy: decides which branches/thoughts to dehydrate                 |
-| `SignalComputer`                    | class     | src/core/evaluator/SignalComputer.ts     | Stateless `ConfidenceSignals` computation (extracted from ThoughtEvaluator)          |
-| `Aggregator`                        | class     | src/core/evaluator/Aggregator.ts         | `ReasoningStats` aggregation: hypothesis chains, type distributions, averages        |
-| `PatternDetector`                   | class     | src/core/evaluator/PatternDetector.ts    | 6 pattern detectors: consecutive_without_verification, unverified_hypothesis, etc. (262L) |
+| `SignalComputer` | class | src/core/evaluator/SignalComputer.ts | Stateless `ConfidenceSignals` computation (extracted from ThoughtEvaluator). Uses `roundToPrecision()` for FP-safe averages. |
+| `Aggregator` | class | src/core/evaluator/Aggregator.ts | `ReasoningStats` aggregation: hypothesis chains, type distributions, averages. Uses `roundToPrecision()` for FP-safe averages. |
+| `PatternDetector` | class | src/core/evaluator/PatternDetector.ts | 6 pattern detectors (all emit `warning` severity): consecutive_without_verification, unverified_hypothesis, monotonic_type, no_alternatives_explored, confidence_drift, healthy_verification (`info`-only). (262L) |
 | `Calibrator`                        | class     | src/core/evaluator/Calibrator.ts         | Beta(2,2) priors + Brier score + ECE for confidence calibration (302L)               |
 | `ICalibrator`                       | interface | src/contracts/calibrator.ts              | Calibrator contract + `CalibrationMetrics`, `CalibrationResult` types                 |
 | `InMemorySuspensionStore`           | class     | src/core/tools/InMemorySuspensionStore.ts | Per-session tool suspension with TTL expiry, periodic sweep (150L) |
@@ -163,7 +163,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 ## SETUP NOTES
 
 - **CI**: `.github/workflows/ci.yml` — Node 22.x + 24.x matrix. Hard gates: type-check, test+coverage, build. Soft gates (continue-on-error): lint, audit.
-- **Coverage**: 1990 tests (75 files, 16 skipped). Thresholds: branches 55%, functions 60%, lines 65%, statements 65%.
+- **Coverage**: 2005 tests (75 files, 16 skipped). Thresholds: branches 55%, functions 60%, lines 65%, statements 65%.
 - **Test Helpers**: `src/__tests__/helpers/index.ts` — `createTestThought()`, `MockHistoryManager`, timer helpers.
 - **Large Files**: `ThoughtProcessor.ts` (750L), `schema.ts` (718L), `errors.ts` (705L), `StreamableHttpTransport.ts` (704L), `lib.ts` (577L), `HistoryManager.ts` (538L), `ServerConfig.ts` (503L), `SseTransport.ts` (476L), `ConnectionPool.ts` (470L), `metrics.impl.ts` (470L).
 - **Architectural Layers**: `.sentrux/rules.toml` — 9 layers (types→crosscutting→config→core→domain→infrastructure→di→app→cli), 6 forbidden boundaries.
@@ -175,7 +175,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 npm run build       # tsc && chmod +x dist/cli.js
 npm run start       # node dist/cli.js
 npm run dev         # MCP inspector mode
-npm test            # vitest run (1990 tests)
+npm test            # vitest run (2005 tests)
 npm run test:coverage # vitest run --coverage
 npm run type-check  # tsc --noEmit
 npm run lint        # eslint src/
