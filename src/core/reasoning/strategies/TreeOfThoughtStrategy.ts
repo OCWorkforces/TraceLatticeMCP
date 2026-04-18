@@ -1,0 +1,178 @@
+/**
+ * Tree-of-Thought reasoning strategy — beam search over the thought DAG.
+ *
+ * Observes the frontier (graph leaves), scores each leaf via
+ * {@link scoreThought}, and decides whether to continue, branch (when the
+ * current thought falls outside the beam), or terminate (on confidence
+ * threshold or score plateau).
+ *
+ * Pure policy: configuration lives in a module-level {@link WeakMap}, not
+ * on the instance, so `Object.getOwnPropertyNames(strategy)` only ever
+ * surfaces the readonly `name` discriminator. All other state is derived
+ * from the {@link StrategyContext} on every call.
+ *
+ * @module core/reasoning/strategies/TreeOfThoughtStrategy
+ */
+
+import type {
+	IReasoningStrategy,
+	StrategyContext,
+	StrategyDecision,
+} from '../../../contracts/strategy.js';
+import type { ThoughtData } from '../../thought.js';
+import { scoreThought, selectBeam, type ScoredCandidate } from './totScoring.js';
+import { detectPlateau } from './plateau.js';
+
+/**
+ * Configuration knobs for {@link TreeOfThoughtStrategy}. All fields are
+ * optional; defaults are applied in the constructor.
+ */
+export interface TotConfig {
+	/** Top-K candidates kept on the frontier (default `3`). */
+	readonly beamWidth?: number;
+	/** Maximum exploration depth before forcing termination (default `8`). */
+	readonly depthCap?: number;
+	/** Score at/above which the chain terminates (default `0.85`). */
+	readonly terminationConfidence?: number;
+	/** Window size for plateau detection (default `3`). */
+	readonly plateauWindow?: number;
+	/** Minimum meaningful score change for plateau detection (default `0.02`). */
+	readonly plateauEpsilon?: number;
+}
+
+/** Defaults applied when a {@link TotConfig} field is omitted. */
+const DEFAULTS: Required<TotConfig> = {
+	beamWidth: 3,
+	depthCap: 8,
+	terminationConfidence: 0.85,
+	plateauWindow: 3,
+	plateauEpsilon: 0.02,
+};
+
+/**
+ * Module-private config storage. Keyed by strategy instance so that no
+ * own-properties leak onto `this` (preserving the purity contract).
+ */
+const CONFIGS: WeakMap<TreeOfThoughtStrategy, Required<TotConfig>> = new WeakMap();
+
+/** Resolve the per-instance config (constructor always populates the map). */
+function configOf(s: TreeOfThoughtStrategy): Required<TotConfig> {
+	return CONFIGS.get(s) ?? DEFAULTS;
+}
+
+/** Stable identifier for a thought: `id` if present, else its sequence number. */
+function thoughtKey(t: ThoughtData): string {
+	return t.id ?? String(t.thought_number);
+}
+
+/** Index history by stable key for O(1) leaf-id → ThoughtData lookup. */
+function indexHistory(history: readonly ThoughtData[]): Map<string, ThoughtData> {
+	const out = new Map<string, ThoughtData>();
+	for (const t of history) out.set(thoughtKey(t), t);
+	return out;
+}
+
+/** Score the frontier (graph leaves), skipping ids absent from history. */
+function scoreFrontier(
+	frontier: readonly string[],
+	byKey: Map<string, ThoughtData>
+): ScoredCandidate[] {
+	const out: ScoredCandidate[] = [];
+	for (const id of frontier) {
+		const t = byKey.get(id);
+		if (t !== undefined) out.push({ id, score: scoreThought(t) });
+	}
+	return out;
+}
+
+/** Highest score in a candidate set, or `-Infinity` when empty. */
+function bestScore(scored: readonly ScoredCandidate[]): number {
+	let best = Number.NEGATIVE_INFINITY;
+	for (const c of scored) {
+		if (c.score > best) best = c.score;
+	}
+	return best;
+}
+
+/** Recent per-thought scores, used for plateau detection. */
+function recentScores(history: readonly ThoughtData[], window: number): number[] {
+	const start = history.length > window ? history.length - window : 0;
+	const out: number[] = [];
+	for (let i = start; i < history.length; i++) out.push(scoreThought(history[i]!));
+	return out;
+}
+
+/**
+ * Tree-of-Thought strategy: beam search over the thought DAG. Pure policy.
+ *
+ * @example
+ * ```typescript
+ * const strategy = new TreeOfThoughtStrategy({ beamWidth: 4 });
+ * const decision = strategy.decide(ctx);
+ * ```
+ */
+export class TreeOfThoughtStrategy implements IReasoningStrategy {
+	readonly name = 'tot' as const;
+
+	/** @param config - See {@link TotConfig}. */
+	constructor(config?: TotConfig) {
+		CONFIGS.set(this, { ...DEFAULTS, ...(config ?? {}) });
+	}
+
+	/**
+	 * Compute the next action for the chain.
+	 *
+	 * Order of checks: termination by confidence → termination by plateau →
+	 * branch when the current thought is outside the beam → continue.
+	 */
+	decide(ctx: StrategyContext): StrategyDecision {
+		const cfg = configOf(this);
+		const frontier = ctx.graph.leaves(ctx.sessionId);
+		const byKey = indexHistory(ctx.history);
+		const scored = scoreFrontier(frontier, byKey);
+
+		if (scored.length > 0 && bestScore(scored) >= cfg.terminationConfidence) {
+			return { action: 'terminate', reason: 'confidence threshold' };
+		}
+
+		const recent = recentScores(ctx.history, cfg.plateauWindow);
+		if (detectPlateau(recent, cfg.plateauWindow, cfg.plateauEpsilon)) {
+			return { action: 'terminate', reason: 'plateau' };
+		}
+
+		if (scored.length > cfg.beamWidth) {
+			const beam = selectBeam(scored, cfg.beamWidth);
+			const currentKey = thoughtKey(ctx.currentThought);
+			if (!beam.includes(currentKey)) {
+				return {
+					action: 'branch',
+					branchId: `tot-${ctx.currentThought.thought_number}`,
+					fromThought: ctx.currentThought.thought_number,
+					reason: 'outside beam',
+				};
+			}
+		}
+
+		return { action: 'continue', nextHint: 'explore frontier' };
+	}
+
+	/** True when the frontier is wider than the beam (diverse exploration). */
+	shouldBranch(ctx: StrategyContext): boolean {
+		const cfg = configOf(this);
+		const frontier = ctx.graph.leaves(ctx.sessionId);
+		return frontier.length > cfg.beamWidth;
+	}
+
+	/** True when the best frontier score crosses the threshold OR scores plateau. */
+	shouldTerminate(ctx: StrategyContext): boolean {
+		const cfg = configOf(this);
+		const frontier = ctx.graph.leaves(ctx.sessionId);
+		const byKey = indexHistory(ctx.history);
+		const scored = scoreFrontier(frontier, byKey);
+		if (scored.length > 0 && bestScore(scored) >= cfg.terminationConfidence) {
+			return true;
+		}
+		const recent = recentScores(ctx.history, cfg.plateauWindow);
+		return detectPlateau(recent, cfg.plateauWindow, cfg.plateauEpsilon);
+	}
+}

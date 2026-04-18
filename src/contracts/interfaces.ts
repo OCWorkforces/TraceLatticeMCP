@@ -10,7 +10,7 @@
  *
  * @module contracts
  */
-
+import type { Edge } from '../core/graph/Edge.js';
 
 /**
  * Metrics interface for observability.
@@ -58,54 +58,142 @@ export interface DiscoveryCacheOptions {
 	metrics?: IMetrics;
 }
 
+
 /**
- * Thought processor interface for processing thought data.
+ * Outcome recording interface for calibration data collection.
  *
- * Defines the contract for the main processing pipeline.
+ * Captures verification outcomes (predicted vs actual) to enable
+ * confidence calibration (Brier score, ECE) in later phases.
  */
-export interface IThoughtProcessor {
-	process(input: unknown): Promise<unknown>;
+export interface VerificationOutcome {
+	/** The thought id that made the prediction. */
+	thoughtId: string;
+	/** The thought number of the prediction (backward compat). */
+	thoughtNumber: number;
+	/** The session this outcome belongs to. */
+	sessionId: string;
+	/** The predicted confidence (0-1). */
+	predicted: number;
+	/** The actual outcome (0 = wrong, 1 = correct). */
+	actual: 0 | 1;
+	/** The thought type that made the prediction. */
+	type: string;
+	/** Timestamp of outcome recording. */
+	recordedAt: number;
 }
 
 /**
- * Server configuration interface.
+ * Interface for recording verification outcomes for calibration.
  *
- * Defines the contract for server configuration used by the DI container.
+ * Implementation is no-op when feature flags disable outcome recording.
+ * Enabled outcomes feed into the Calibrator (Phase 1 Wave A.3) for
+ * Brier score and ECE computation.
  */
-export interface IServerConfig {
-	maxHistorySize: number;
-	maxBranches: number;
-	maxBranchSize: number;
-	skillDirs?: string[];
-	discoveryCache?: DiscoveryCacheOptions;
-	persistence?: Record<string, unknown>;
-	persistenceBufferSize?: number;
-	persistenceFlushInterval?: number;
-	persistenceMaxRetries?: number;
+export interface IOutcomeRecorder {
+	/**
+	 * Record a verification outcome.
+	 * No-op when outcome recording is disabled.
+	 */
+	recordVerification(outcome: Omit<VerificationOutcome, 'recordedAt'>): void;
+
+	/**
+	 * Get all recorded outcomes for a session.
+	 * Returns empty array when disabled or no outcomes recorded.
+	 */
+	getOutcomes(sessionId: string): VerificationOutcome[];
+
+	/**
+	 * Get outcomes across all sessions.
+	 * Returns empty array when disabled.
+	 */
+	getAllOutcomes(): VerificationOutcome[];
+
+	/**
+	 * Clear outcomes for a specific session.
+	 */
+	clearOutcomes(sessionId: string): void;
+
+	/**
+	 * Whether outcome recording is currently enabled.
+	 */
+	readonly enabled: boolean;
 }
 
 /**
- * Tool registry interface for managing MCP tools.
+ * Edge store interface for managing directed acyclic graph edges.
  *
- * Defines the contract for tool registration and discovery.
+ * Stores relationships between thoughts as typed directed edges.
+ * Each edge connects two thoughts (by their `id` field) with a semantic
+ * relationship kind that drives reasoning controller decisions.
+ *
+ * Implementations must provide per-session isolation — edges in one
+ * session are invisible to another.
+ *
+ * @example
+ * ```typescript
+ * const store: IEdgeStore = new EdgeStore();
+ * store.addEdge({ id: 'abc', from: 'thought-1', to: 'thought-2', kind: 'sequence', sessionId: 's1', createdAt: Date.now() });
+ * const edges = store.outgoing('s1', 'thought-1');
+ * ```
  */
-export interface IToolRegistry {
-	addTool(tool: unknown): void;
-	getTool(name: string): unknown;
-	listTools(): unknown[];
-	discover(): void;
-	discoverAsync(): Promise<number>;
-}
+export interface IEdgeStore {
+	/**
+	 * Add a directed edge to the store.
+	 * Rejects self-edges (from === to) by throwing InvalidEdgeError.
+	 * Deduplicates identical (from, to, kind, sessionId) tuples silently.
+	 *
+	 * @param edge - The edge to add
+	 * @throws {InvalidEdgeError} When from === to
+	 */
+	addEdge(edge: Edge): void;
 
-/**
- * Skill registry interface for managing Claude skills.
- *
- * Defines the contract for skill registration and discovery.
- */
-export interface ISkillRegistry {
-	addSkill(skill: unknown): void;
-	getSkill(name: string): unknown;
-	listSkills(): unknown[];
-	discover(): void;
-	discoverAsync(): Promise<number>;
+	/**
+	 * Retrieve a specific edge by its id.
+	 *
+	 * @param id - The edge's unique identifier
+	 * @returns The edge, or undefined if not found
+	 */
+	getEdge(id: string): Edge | undefined;
+
+	/**
+	 * Get all outgoing edges from a thought, sorted by createdAt ascending.
+	 *
+	 * @param sessionId - Session to query within
+	 * @param from - Source thought id
+	 * @returns Array of outgoing edges (may be empty)
+	 */
+	outgoing(sessionId: string, from: string): readonly Edge[];
+
+	/**
+	 * Get all incoming edges to a thought, sorted by createdAt ascending.
+	 *
+	 * @param sessionId - Session to query within
+	 * @param to - Target thought id
+	 * @returns Array of incoming edges (may be empty)
+	 */
+	incoming(sessionId: string, to: string): readonly Edge[];
+
+	/**
+	 * Get all edges in a session.
+	 *
+	 * @param sessionId - Session to query
+	 * @returns All edges in the session (may be empty)
+	 */
+	edgesForSession(sessionId: string): readonly Edge[];
+
+	/**
+	 * Clear all edges for a specific session.
+	 * Other sessions are unaffected.
+	 *
+	 * @param sessionId - Session to clear
+	 */
+	clearSession(sessionId: string): void;
+
+	/**
+	 * Count edges.
+	 *
+	 * @param sessionId - If provided, count for that session only
+	 * @returns Total edge count (across all sessions if no sessionId provided)
+	 */
+	size(sessionId?: string): number;
 }

@@ -200,6 +200,26 @@ export class ThoughtFormatter {
 					icon = chalk.gray('🧠');
 					label = 'Meta';
 					break;
+				case 'tool_call':
+					icon = chalk.yellow('🔧');
+					label = 'Tool Call';
+					break;
+				case 'tool_observation':
+					icon = chalk.yellow('👁️');
+					label = 'Tool Observation';
+					break;
+				case 'assumption':
+					icon = chalk.yellow('💡');
+					label = 'Assumption';
+					break;
+				case 'decomposition':
+					icon = chalk.cyan('🧩');
+					label = 'Decomposition';
+					break;
+				case 'backtrack':
+					icon = chalk.red('↩️');
+					label = 'Backtrack';
+					break;
 				default:
 					icon = chalk.blue('💭');
 					break;
@@ -219,6 +239,11 @@ export class ThoughtFormatter {
 		if (current_step) {
 			const recommendation = this.formatRecommendation(current_step);
 			lines.push(`  ${recommendation}`);
+		}
+
+		// Add id if present (for DAG debugging)
+		if (thoughtData.id) {
+			lines.push(`  ${chalk.gray(`🆔 ${thoughtData.id}`)}`);
 		}
 
 		// Add meta observation if present

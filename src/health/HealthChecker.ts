@@ -9,6 +9,7 @@
 
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
+import { getErrorMessage } from '../errors.js';
 
 /**
  * Health status of an individual component.
@@ -147,13 +148,13 @@ export class HealthChecker {
 			};
 		} catch (error) {
 			this._logger.error('Persistence health check failed', {
-				error: error instanceof Error ? error.message : String(error),
+				error: getErrorMessage(error),
 			});
 			return {
 				name: 'persistence',
 				healthy: false,
 				latencyMs: Date.now() - start,
-				details: `Health check error: ${error instanceof Error ? error.message : String(error)}`,
+				details: `Health check error: ${getErrorMessage(error)}`,
 			};
 		}
 	}

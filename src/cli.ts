@@ -13,6 +13,7 @@ import { McpServer } from 'tmcp';
 import type { ToolAwareSequentialThinkingServer } from './lib.js';
 import { initializeServer } from './lib.js';
 import { StructuredLogger } from './logger/StructuredLogger.js';
+import { getErrorMessage } from './errors.js';
 import { Metrics } from './metrics/metrics.impl.js';
 import { SEQUENTIAL_THINKING_TOOL, SequentialThinkingSchema } from './schema.js';
 
@@ -157,7 +158,7 @@ async function startStdioTransport(server: McpServer, thinkingServer: ToolAwareS
             process.exit(0);
         } catch (error) {
             thinkingServer['_logger'].error('Error during shutdown', {
-                error: error instanceof Error ? error.message : String(error),
+                error: getErrorMessage(error),
             });
             process.exit(1);
         }
@@ -189,7 +190,7 @@ main().catch((error) => {
         pretty: true,
     });
     logger.error('Fatal error running server', {
-        error: error instanceof Error ? error.message : String(error),
+        error: getErrorMessage(error),
     });
     process.exit(1);
 });

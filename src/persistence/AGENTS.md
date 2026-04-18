@@ -1,7 +1,7 @@
 # PERSISTENCE MODULE
 
-**Updated:** 2026-04-02
-**Commit:** 4d84f2e
+**Updated:** 2026-04-18
+**Commit:** 906f363
 
 ## OVERVIEW
 
@@ -15,7 +15,8 @@ src/persistence/
 ├── PersistenceFactory.ts   # Factory function (47L)
 ├── FilePersistence.ts     # JSON file storage (dev) (236L)
 ├── SqlitePersistence.ts   # SQLite storage (prod) (265L)
-└── MemoryPersistence.ts   # In-memory storage (default) (112L)
+├── MemoryPersistence.ts   # In-memory storage (default) (112L)
+└── better-sqlite3.d.ts    # Type declarations for better-sqlite3
 ```
 
 ## INTERFACE
@@ -24,7 +25,9 @@ All backends implement `PersistenceBackend`:
 
 - `saveThought(thought): Promise<void>`
 - `saveBranch(branchId, thoughts): Promise<void>`
+- `saveEdges(edges): Promise<void>`
 - `loadHistory(): Promise<ThoughtData[]>`
+- `loadEdges(): Promise<Edge[]>`
 - `clear(): Promise<void>`
 - `healthy(): Promise<boolean>`
 

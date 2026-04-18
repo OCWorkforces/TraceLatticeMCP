@@ -10,12 +10,45 @@
 
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
+import type { IEdgeStore } from '../contracts/interfaces.js';
+import type { ISuspensionStore, SuspensionRecord } from '../contracts/suspension.js';
+import type { IReasoningStrategy, StrategyDecision } from '../contracts/strategy.js';
+import type { FeatureFlags } from '../ServerConfig.js';
+import {
+	InvalidBacktrackError,
+	InvalidToolCallError,
+	SuspensionExpiredError,
+	SuspensionNotFoundError,
+	ValidationError,
+} from '../errors.js';
+import { getErrorMessage } from '../errors.js';
+import { GraphView } from './graph/GraphView.js';
 import type { IHistoryManager } from './IHistoryManager.js';
 import { normalizeInput } from './InputNormalizer.js';
 import type { ThoughtData } from './thought.js';
 import type { ThoughtEvaluator } from './ThoughtEvaluator.js';
 import { ThoughtFormatter } from './ThoughtFormatter.js';
 import type { PatternSignal } from './reasoning.js';
+import { SequentialStrategy } from './reasoning/strategies/SequentialStrategy.js';
+import type { CompressionService } from './compression/CompressionService.js';
+
+/**
+ * Internal extension to ThoughtData carrying resume metadata.
+ * Attached by `_handleToolObservation` so downstream consumers (e.g. edge
+ * emission) can correlate the observation with the suspended `tool_call`.
+ */
+type ResumableThought = ThoughtData & { _resumedFrom?: number };
+
+/** Default feature flags used when none are supplied to ThoughtProcessor. */
+const DEFAULT_FEATURES: FeatureFlags = {
+	dagEdges: false,
+	reasoningStrategy: 'sequential',
+	calibration: false,
+	compression: false,
+	toolInterleave: false,
+	newThoughtTypes: false,
+	outcomeRecording: false,
+};
 
 /**
  * The return type expected by MCP tool invocations.
@@ -49,48 +82,16 @@ export interface CallToolResult {
 /**
  * Core processor for sequential thinking requests.
  *
- * This class handles the main processing pipeline for thought requests,
- * coordinating between history management, validation, and response formatting.
- * It serves as the central entry point for the sequential thinking tool.
+ * Pipeline: validate → normalize → add to history → format → evaluate signals
+ * → run reasoning strategy → return structured response.
  *
- * @remarks
- * **Processing Pipeline:**
- * 1. Validate and normalize the input thought
- * 2. Add the thought to history (triggers auto-trimming if needed)
- * 3. Format the thought for logging/display
- * 4. Compute quality signals via ThoughtEvaluator
- * 5. Return structured response with metadata and reasoning enrichment
- *
- * **Validation Rules:**
- * - `thought_number` must be >= 1
- * - `total_thoughts` must be >= 1
- * - If `thought_number > total_thoughts`, `total_thoughts` is auto-adjusted
- *
- * **Error Handling:**
- * All errors are caught and returned as formatted error responses
- * with `isError: true` set, preventing crashes from malformed input.
+ * Auto-adjusts `total_thoughts` if `thought_number` exceeds it. All errors are
+ * caught and returned as formatted error responses with `isError: true`.
  *
  * @example
  * ```typescript
  * const processor = new ThoughtProcessor(historyManager, formatter, new ThoughtEvaluator());
- *
- * const result = await processor.process({
- *   thought: 'I need to analyze the codebase structure',
- *   thought_number: 1,
- *   total_thoughts: 5,
- *   next_thought_needed: true,
- *   available_mcp_tools: ['Read', 'Grep', 'Glob'],
- *   current_step: {
- *     step_description: 'Analyze codebase structure',
- *     recommended_tools: [{
- *       tool_name: 'Glob',
- *       confidence: 0.9,
- *       rationale: 'Best for finding files by pattern',
- *       priority: 1
- *     }],
- *     expected_outcome: 'List of all TypeScript files'
- *   }
- * });
+ * const result = await processor.process({ thought: '...', thought_number: 1, total_thoughts: 5, next_thought_needed: true });
  * ```
  */
 export class ThoughtProcessor {
@@ -109,26 +110,22 @@ export class ThoughtProcessor {
 	/**
 	 * Creates a new ThoughtProcessor instance.
 	 *
-	 * @param historyManager - The history manager for storing thoughts
-	 * @param thoughtFormatter - The formatter for output formatting
+	 * @param historyManager - History manager for storing thoughts
+	 * @param thoughtFormatter - Formatter for output formatting
 	 * @param thoughtEvaluator - Evaluator for quality signal computation
 	 * @param logger - Optional logger for diagnostics (defaults to NullLogger)
-	 *
-	 * @example
-	 * ```typescript
-	 * const processor = new ThoughtProcessor(
-	 *   historyManager,
-	 *   new ThoughtFormatter(),
-	 *   new ThoughtEvaluator(),
-	 *   logger,
-	 * );
-	 * ```
+	 * @param strategy - Reasoning strategy controlling next-action decisions (defaults to SequentialStrategy)
+	 * @param compressionService - Optional compression service for auto-compression on terminate
 	 */
 	constructor(
 		private historyManager: IHistoryManager,
 		private thoughtFormatter: ThoughtFormatter,
 		thoughtEvaluator: ThoughtEvaluator,
-		logger?: Logger
+		logger?: Logger,
+		private readonly strategy: IReasoningStrategy = new SequentialStrategy(),
+		private readonly _compressionService?: CompressionService,
+		private readonly _suspensionStore?: ISuspensionStore,
+		private readonly _features: FeatureFlags = DEFAULT_FEATURES
 	) {
 		this._thoughtEvaluator = thoughtEvaluator;
 		this._logger = logger ?? new NullLogger();
@@ -251,6 +248,21 @@ export class ThoughtProcessor {
 				this._validateCrossReferences(validatedInput, sessionId);
 			const allWarnings = [...validateWarnings, ...refWarnings];
 
+			// Validate new thought types and tool-interleave invariants.
+			this._validateNewTypes(checkedInput);
+
+			// Tool-interleave suspend path: persist the tool_call thought, then return
+			// a `suspended` envelope without running strategy/evaluator.
+			if (checkedInput.thought_type === 'tool_call' && this._suspensionStore) {
+				return this._handleToolCall(checkedInput, sessionId);
+			}
+
+			// Tool-interleave resume path: consume the suspension and continue the
+			// normal pipeline (addThought → format → evaluate → strategy).
+			if (checkedInput.thought_type === 'tool_observation' && this._suspensionStore) {
+				this._handleToolObservation(checkedInput, sessionId);
+			}
+
 			this.historyManager.addThought(checkedInput);
 
 			const formattedThought = this.thoughtFormatter.formatThought(checkedInput);
@@ -280,6 +292,10 @@ export class ThoughtProcessor {
 				sessionId
 			);
 
+			// Strategy decision — pluggable reasoning policy hook.
+			// Built after history/stats so strategies see the latest state.
+			const decision = this._runStrategy(checkedInput, history, reasoningStats, sessionId);
+
 			return {
 				content: [
 					{
@@ -304,6 +320,7 @@ export class ThoughtProcessor {
 							confidence_signals: confidenceSignals,
 							reasoning_stats: reasoningStats,
 							...(reasoningHints.length > 0 && { reasoning_hints: reasoningHints }),
+							...(decision.action !== 'continue' && { strategy_hint: decision }),
 							...(allWarnings.length > 0 && { warnings: allWarnings }),
 							...(sessionId ? { session_id: sessionId } : {}),
 						},
@@ -320,7 +337,7 @@ export class ThoughtProcessor {
 						type: 'text' as const,
 						text: JSON.stringify(
 							{
-								error: error instanceof Error ? error.message : String(error),
+								error: getErrorMessage(error),
 								status: 'failed',
 							},
 							null,
@@ -331,6 +348,85 @@ export class ThoughtProcessor {
 				isError: true,
 			};
 		}
+	}
+
+	/**
+	 * Run the configured reasoning strategy and return its decision.
+	 * Strategy errors degrade to `{ action: 'continue' }`.
+	 * @private
+	 */
+	private _runStrategy(
+		currentThought: ThoughtData,
+		history: ThoughtData[],
+		stats: ReturnType<ThoughtEvaluator['computeReasoningStats']>,
+		sessionId?: string
+	): StrategyDecision {
+		let decision: StrategyDecision;
+		try {
+			const edgeStore = this._getEdgeStore();
+			const graph = edgeStore ? new GraphView(edgeStore) : (undefined as unknown as GraphView);
+			decision = this.strategy.decide({
+				sessionId: sessionId ?? '__global__',
+				history,
+				graph,
+				stats,
+				currentThought,
+			});
+		} catch (error) {
+			this._logger.warn('Reasoning strategy threw — defaulting to continue', {
+				strategy: this.strategy.name,
+				error: getErrorMessage(error),
+			});
+			decision = { action: 'continue' };
+		}
+
+		// Auto-compression trigger: when strategy terminates a branch and
+		// compression is enabled, summarize the branch subtree. Compression
+		// failures must NEVER break the thought pipeline.
+		if (
+			decision.action === 'terminate' &&
+			this._compressionService &&
+			currentThought.branch_id
+		) {
+			try {
+				const sid = sessionId ?? '__global__';
+				const branchRoot = this._findBranchRoot(sid, currentThought.branch_id);
+				if (branchRoot) {
+					this._compressionService.compressBranch(sid, currentThought.branch_id, branchRoot);
+				}
+			} catch (err) {
+				this._logger.debug('Compression auto-trigger failed', {
+					error: getErrorMessage(err),
+				});
+			}
+		}
+
+		return decision;
+	}
+
+	/**
+	 * Locate the root thought id for a branch.
+	 * Prefers GraphView.branchThoughts() when an EdgeStore is available;
+	 * falls back to historyManager.getBranches()[branchId][0].id.
+	 * @private
+	 */
+	private _findBranchRoot(sessionId: string, branchId: string): string | undefined {
+		const edgeStore = this._getEdgeStore();
+		const branches = this.historyManager.getBranches(sessionId);
+		const branchList = branches[branchId];
+		const firstId = branchList?.[0]?.id;
+		if (edgeStore && firstId) {
+			const graph = new GraphView(edgeStore);
+			const ids = graph.branchThoughts(sessionId, firstId);
+			if (ids.length > 0) return ids[0];
+		}
+		return firstId;
+	}
+
+	/** Best-effort access to the EdgeStore via duck typing. @private */
+	private _getEdgeStore(): IEdgeStore | undefined {
+		const hm = this.historyManager as { getEdgeStore?: () => IEdgeStore | undefined };
+		return typeof hm.getEdgeStore === 'function' ? hm.getEdgeStore() : undefined;
 	}
 
 	/**
@@ -487,5 +583,98 @@ export class ThoughtProcessor {
 		}
 
 		return { result: input, warnings };
+	}
+
+	/**
+	 * Validate new thought-type invariants behind feature flags.
+	 * @private
+	 */
+	private _validateNewTypes(input: ThoughtData): void {
+		const t = input.thought_type;
+		if ((t === 'tool_call' || t === 'tool_observation') && !this._features.toolInterleave) {
+			throw new ValidationError('thought_type', t + ' requires toolInterleave feature flag');
+		}
+		if (
+			(t === 'assumption' || t === 'decomposition' || t === 'backtrack') &&
+			!this._features.newThoughtTypes
+		) {
+			throw new ValidationError('thought_type', t + ' requires newThoughtTypes feature flag');
+		}
+		if (t === 'tool_call' && !input.tool_name) {
+			throw new InvalidToolCallError(
+				'tool_call thought ' + input.thought_number + ' missing required tool_name'
+			);
+		}
+		if (t === 'tool_observation' && !input.continuation_token) {
+			throw new ValidationError(
+				'continuation_token',
+				'tool_observation thought ' + input.thought_number + ' missing continuation_token'
+			);
+		}
+		if (
+			t === 'backtrack' &&
+			input.backtrack_target !== undefined &&
+			input.backtrack_target > input.thought_number
+		) {
+			throw new InvalidBacktrackError(
+				'backtrack_target ' + input.backtrack_target + ' must be <= thought_number ' + input.thought_number
+			);
+		}
+	}
+
+	/**
+	 * Persist a tool_call thought and return a `suspended` envelope.
+	 * Strategy/evaluator are intentionally skipped.
+	 * @private
+	 */
+	private _handleToolCall(input: ThoughtData, sessionId?: string): CallToolResult {
+		this.historyManager.addThought(input);
+		const record: SuspensionRecord = this._suspensionStore!.suspend({
+			sessionId: sessionId ?? '__global__',
+			toolCallThoughtNumber: input.thought_number,
+			toolName: input.tool_name!,
+			toolArguments: input.tool_arguments ?? {},
+			ttlMs: 5 * 60_000,
+			expiresAt: 0,
+		});
+		return {
+			content: [
+				{
+					type: 'text' as const,
+					text: JSON.stringify(
+						{
+							status: 'suspended',
+							continuation_token: record.token,
+							tool_name: record.toolName,
+							tool_arguments: record.toolArguments,
+							expires_at: record.expiresAt,
+							thought_number: input.thought_number,
+							total_thoughts: input.total_thoughts,
+							...(sessionId ? { session_id: sessionId } : {}),
+						},
+						null,
+						2
+					),
+				},
+			],
+		};
+	}
+
+	/**
+	 * Resume from a tool_observation, consuming the suspension record.
+	 * Distinguishes missing vs expired via peek().
+	 * @private
+	 */
+	private _handleToolObservation(input: ThoughtData, _sessionId?: string): void {
+		const token = input.continuation_token!;
+		const peeked = this._suspensionStore!.peek(token);
+		if (peeked && peeked.expiresAt <= Date.now()) {
+			throw new SuspensionExpiredError('Suspension token expired: ' + token);
+		}
+		const record = this._suspensionStore!.resume(token);
+		if (!record) {
+			throw new SuspensionNotFoundError('Suspension token not found: ' + token);
+		}
+		(input as ResumableThought)._resumedFrom = record.toolCallThoughtNumber;
 	}
 }

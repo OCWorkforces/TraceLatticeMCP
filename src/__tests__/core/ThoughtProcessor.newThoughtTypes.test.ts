@@ -1,0 +1,168 @@
+import { describe, it, expect } from 'vitest';
+import { ThoughtProcessor } from '../../core/ThoughtProcessor.js';
+import { ThoughtFormatter } from '../../core/ThoughtFormatter.js';
+import { ThoughtEvaluator } from '../../core/ThoughtEvaluator.js';
+import { InMemorySuspensionStore } from '../../core/tools/InMemorySuspensionStore.js';
+import { SequentialStrategy } from '../../core/reasoning/strategies/SequentialStrategy.js';
+import { MockHistoryManager } from '../helpers/factories.js';
+import type { FeatureFlags } from '../../ServerConfig.js';
+
+function makeFeatures(overrides: Partial<FeatureFlags> = {}): FeatureFlags {
+	return {
+		dagEdges: false,
+		reasoningStrategy: 'sequential',
+		calibration: false,
+		compression: false,
+		toolInterleave: false,
+		newThoughtTypes: false,
+		outcomeRecording: false,
+		...overrides,
+	};
+}
+
+function makeProcessor(features: FeatureFlags): ThoughtProcessor {
+	return new ThoughtProcessor(
+		new MockHistoryManager(),
+		new ThoughtFormatter(),
+		new ThoughtEvaluator(),
+		undefined,
+		new SequentialStrategy(),
+		undefined,
+		new InMemorySuspensionStore(),
+		features,
+	);
+}
+
+describe('ThoughtProcessor — new thought type validation', () => {
+	it('rejects tool_call when toolInterleave flag is OFF', async () => {
+		const proc = makeProcessor(makeFeatures({ toolInterleave: false }));
+		const result = await proc.process({
+			thought: 'x',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			thought_type: 'tool_call',
+			tool_name: 'search',
+			tool_arguments: {},
+		});
+		expect(result.isError).toBe(true);
+		const payload = JSON.parse(result.content[0]!.text);
+		expect(payload.error).toMatch(/tool_call requires toolInterleave feature flag/);
+	});
+
+	it('rejects tool_observation when toolInterleave flag is OFF', async () => {
+		const proc = makeProcessor(makeFeatures({ toolInterleave: false }));
+		const result = await proc.process({
+			thought: 'x',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			thought_type: 'tool_observation',
+			continuation_token: 'tok',
+		});
+		expect(result.isError).toBe(true);
+		const payload = JSON.parse(result.content[0]!.text);
+		expect(payload.error).toMatch(/tool_observation requires toolInterleave feature flag/);
+	});
+
+	it('rejects assumption when newThoughtTypes flag is OFF', async () => {
+		const proc = makeProcessor(makeFeatures({ newThoughtTypes: false }));
+		const result = await proc.process({
+			thought: 'x',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			thought_type: 'assumption',
+		});
+		expect(result.isError).toBe(true);
+		const payload = JSON.parse(result.content[0]!.text);
+		expect(payload.error).toMatch(/assumption requires newThoughtTypes feature flag/);
+	});
+
+	it('rejects decomposition when newThoughtTypes flag is OFF', async () => {
+		const proc = makeProcessor(makeFeatures({ newThoughtTypes: false }));
+		const result = await proc.process({
+			thought: 'x',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			thought_type: 'decomposition',
+		});
+		expect(result.isError).toBe(true);
+		const payload = JSON.parse(result.content[0]!.text);
+		expect(payload.error).toMatch(/decomposition requires newThoughtTypes feature flag/);
+	});
+
+	it('rejects backtrack when newThoughtTypes flag is OFF', async () => {
+		const proc = makeProcessor(makeFeatures({ newThoughtTypes: false }));
+		const result = await proc.process({
+			thought: 'x',
+			thought_number: 1,
+			total_thoughts: 1,
+			next_thought_needed: false,
+			thought_type: 'backtrack',
+		});
+		expect(result.isError).toBe(true);
+		const payload = JSON.parse(result.content[0]!.text);
+		expect(payload.error).toMatch(/backtrack requires newThoughtTypes feature flag/);
+	});
+
+	it('rejects tool_call without tool_name (InvalidToolCallError)', async () => {
+		const proc = makeProcessor(makeFeatures({ toolInterleave: true }));
+		const result = await proc.process({
+			thought: 'x',
+			thought_number: 5,
+			total_thoughts: 5,
+			next_thought_needed: false,
+			thought_type: 'tool_call',
+			tool_arguments: {},
+		});
+		expect(result.isError).toBe(true);
+		const payload = JSON.parse(result.content[0]!.text);
+		expect(payload.error).toMatch(/tool_call thought 5 missing required tool_name/);
+	});
+
+	it('rejects tool_observation without continuation_token (ValidationError)', async () => {
+		const proc = makeProcessor(makeFeatures({ toolInterleave: true }));
+		const result = await proc.process({
+			thought: 'x',
+			thought_number: 6,
+			total_thoughts: 6,
+			next_thought_needed: false,
+			thought_type: 'tool_observation',
+		});
+		expect(result.isError).toBe(true);
+		const payload = JSON.parse(result.content[0]!.text);
+		expect(payload.error).toMatch(/tool_observation thought 6 missing continuation_token/);
+	});
+
+	it('rejects backtrack with backtrack_target greater than thought_number', async () => {
+		const proc = makeProcessor(makeFeatures({ newThoughtTypes: true }));
+		const result = await proc.process({
+			thought: 'x',
+			thought_number: 3,
+			total_thoughts: 5,
+			next_thought_needed: true,
+			thought_type: 'backtrack',
+			backtrack_target: 5,
+		});
+		expect(result.isError).toBe(true);
+		const payload = JSON.parse(result.content[0]!.text);
+		expect(payload.error).toMatch(/backtrack_target 5 must be <= thought_number 3/);
+	});
+
+	it('accepts backtrack with backtrack_target less than or equal to thought_number', async () => {
+		const proc = makeProcessor(makeFeatures({ newThoughtTypes: true }));
+		const result = await proc.process({
+			thought: 'going back',
+			thought_number: 5,
+			total_thoughts: 8,
+			next_thought_needed: true,
+			thought_type: 'backtrack',
+			backtrack_target: 2,
+		});
+		expect(result.isError).toBeFalsy();
+		const payload = JSON.parse(result.content[0]!.text);
+		expect(payload.thought_number).toBe(5);
+	});
+});

@@ -5,7 +5,6 @@ import {
 	sendJsonRpcResponse,
 	readRequestBody,
 	sendCorsPreflight,
-	sendNotFound,
 } from '../transport/HttpHelpers.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { EventEmitter } from 'node:events';
@@ -137,20 +136,6 @@ describe('HttpHelpers', () => {
 		});
 	});
 
-	describe('sendNotFound', () => {
-		it('should send 404 with default message', () => {
-			const res = createMockRes();
-			sendNotFound(res);
-			expect(res.writeHead).toHaveBeenCalledWith(404, { 'Content-Type': 'text/plain' });
-			expect(res.end).toHaveBeenCalledWith('Not Found');
-		});
-
-		it('should send 404 with custom message', () => {
-			const res = createMockRes();
-			sendNotFound(res, 'Custom Not Found');
-			expect(res.end).toHaveBeenCalledWith('Custom Not Found');
-		});
-	});
 
 	describe('readRequestBody with string chunks', () => {
 		function createStringChunkMessage(chunks: string[]): IncomingMessage {

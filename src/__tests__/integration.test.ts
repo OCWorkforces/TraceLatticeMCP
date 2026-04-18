@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ToolAwareSequentialThinkingServer } from '../index.js';
+import { ToolAwareSequentialThinkingServer, createServer } from '../index.js';
 
 describe('ToolAwareSequentialThinkingServer Integration', () => {
 	let server: ToolAwareSequentialThinkingServer;
 
-	beforeEach(() => {
-		server = new ToolAwareSequentialThinkingServer({ maxHistorySize: 10 });
+	beforeEach(async () => {
+		server = await createServer({ maxHistorySize: 10 });
 	});
 
 	it('should process complete thought sequence', async () => {
@@ -91,7 +91,7 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 	});
 
 	it('should limit history size', async () => {
-		const smallServer = new ToolAwareSequentialThinkingServer({ maxHistorySize: 3 });
+		const smallServer = await createServer({ maxHistorySize: 3 });
 
 		// Add 5 thoughts
 		for (let i = 1; i <= 5; i++) {

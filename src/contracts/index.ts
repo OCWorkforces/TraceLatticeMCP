@@ -11,9 +11,15 @@ export {
 	type DiscoveryCacheOptions,
 	type IDiscoveryCache,
 	type IMetrics,
-	type IServerConfig,
-	type ISkillRegistry,
-	type IThoughtProcessor,
-	type IToolRegistry,
+	type IOutcomeRecorder,
+	type VerificationOutcome,
 } from './interfaces.js';
+
+export type { StrategyContext, StrategyDecision, IReasoningStrategy } from './strategy.js';
+
+export type { CalibrationMetrics, CalibrationResult, ICalibrator } from './calibrator.js';
+
+export type { Summary, ISummaryStore } from './summary.js';
+
+export type { SuspensionRecord, ISuspensionStore } from './suspension.js';
 

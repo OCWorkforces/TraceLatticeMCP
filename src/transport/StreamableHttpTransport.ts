@@ -27,8 +27,10 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { McpServer } from 'tmcp';
 import { safeParse } from 'valibot';
 import type { IMetrics } from '../contracts/index.js';
+import { getErrorMessage } from '../errors.js';
 import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
+import { readRequestBody } from './HttpHelpers.js';
 
 /**
  * MCP Streamable HTTP transport options extending base TransportOptions.
@@ -311,7 +313,7 @@ export class StreamableHttpTransport extends BaseTransport {
 
 		try {
 			// Read request body with size limit
-			const body = await this._readRequestBody(req);
+			const body = await readRequestBody(req, this._bodySizeLimitEnabled ? this._maxBodySize : 0);
 			if (body === null) {
 				clearTimeout(timeout);
 				this._activeRequests--;
@@ -380,7 +382,7 @@ export class StreamableHttpTransport extends BaseTransport {
 			clearTimeout(timeout);
 			this._activeRequests--;
 			this._sendJsonRpcError(res, 200, -32603, 'Internal error', null, {
-				data: error instanceof Error ? error.message : String(error),
+				data: getErrorMessage(error),
 			});
 		}
 	}
@@ -530,28 +532,6 @@ export class StreamableHttpTransport extends BaseTransport {
 		return undefined;
 	}
 
-	/**
-	 * Read the request body with optional size limit enforcement.
-	 *
-	 * @returns Body string, or null if the body exceeds the size limit.
-	 */
-	private async _readRequestBody(req: IncomingMessage): Promise<string | null> {
-		let body = '';
-		let bodySize = 0;
-
-		for await (const chunk of req) {
-			const chunkStr = typeof chunk === 'string' ? chunk : (chunk as Buffer).toString();
-			bodySize += chunkStr.length;
-
-			if (this._bodySizeLimitEnabled && bodySize > this._maxBodySize) {
-				return null;
-			}
-
-			body += chunkStr;
-		}
-
-		return body;
-	}
 
 	/**
 	 * Send an SSE event to a specific client response stream.

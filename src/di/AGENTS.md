@@ -1,7 +1,7 @@
 # DEPENDENCY INJECTION MODULE
 
-**Updated:** 2026-04-02
-**Commit:** 4d84f2e
+**Updated:** 2026-04-18
+**Commit:** 906f363
 
 ## OVERVIEW
 
@@ -12,7 +12,7 @@ Lightweight DI container for managing service dependencies and testability.
 ```
 src/di/
 ├── Container.ts        # DIContainer class (singleton/transient/lazy) (363L)
-└── ServiceRegistry.ts # Typed service key interface (11 keys)
+└── ServiceRegistry.ts # Typed service key interface (18 keys)
 ```
 
 ## USAGE
@@ -33,4 +33,4 @@ const history = container.resolve<HistoryManager>('HistoryManager');
 
 ## ServiceRegistry
 
-`ServiceRegistry` interface defines typed keys: `Logger`, `Config`, `FileConfig`, `HistoryManager`, `ThoughtProcessor`, `ThoughtFormatter`, `ThoughtEvaluator`, `Metrics`, `ToolRegistry`, `SkillRegistry`, `Persistence`.
+`ServiceRegistry` interface defines typed keys (18 total): `Logger`, `Config`, `FileConfig`, `HistoryManager`, `ThoughtProcessor`, `ThoughtFormatter`, `ThoughtEvaluator`, `Metrics`, `ToolRegistry`, `SkillRegistry`, `Persistence`, `EdgeStore`, `reasoningStrategy`, `outcomeRecorder`, `Calibrator`, `summaryStore`, `compressionService`, `suspensionStore`.

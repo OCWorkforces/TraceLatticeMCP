@@ -32,6 +32,7 @@
 
 import * as v from 'valibot';
 import type { Tool } from './types/tool.js';
+import type { Edge, EdgeKind } from './core/graph/Edge.js';
 /**
  * Detailed description for the sequential thinking tool.
  *
@@ -449,6 +450,14 @@ export const SequentialThinkingSchema = v.object({
 		)
 	),
 	thought: v.pipe(v.string(), v.description('Your current thinking step')),
+	id: v.optional(
+		v.pipe(
+			v.string(),
+			v.minLength(1),
+			v.maxLength(30),
+			v.description('Unique identifier for this thought. Auto-generated if not provided.')
+		)
+	),
 	next_thought_needed: v.optional(
 		v.pipe(
 			v.boolean(),
@@ -501,7 +510,7 @@ export const SequentialThinkingSchema = v.object({
 	),
 	thought_type: v.optional(
 		v.pipe(
-			v.picklist(['regular', 'hypothesis', 'verification', 'critique', 'synthesis', 'meta']),
+			v.picklist(['regular', 'hypothesis', 'verification', 'critique', 'synthesis', 'meta', 'tool_call', 'tool_observation', 'assumption', 'decomposition', 'backtrack']),
 			v.description(
 				'Classified purpose: regular, hypothesis, verification, critique, synthesis, meta'
 			)
@@ -591,6 +600,12 @@ export const SequentialThinkingSchema = v.object({
 			)
 		)
 	),
+	tool_name: v.optional(v.pipe(v.string(), v.minLength(1), v.description('Name of the tool being invoked (for tool_call thoughts)'))),
+	tool_arguments: v.optional(v.pipe(v.record(v.string(), v.unknown()), v.description('Arguments passed to the tool (for tool_call thoughts)'))),
+	tool_result: v.optional(v.pipe(v.unknown(), v.description('Result returned by the tool (for tool_observation thoughts)'))),
+	continuation_token: v.optional(v.pipe(v.string(), v.minLength(1), v.description('Token for resuming long-running tool invocations'))),
+	decomposition_children: v.optional(v.pipe(v.array(v.string()), v.description('Child thought IDs produced by decomposition'))),
+	backtrack_target: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description('Thought number to backtrack to'))),
 });
 
 /**
@@ -660,3 +675,30 @@ export const JsonRpcRequestSchema = v.object({
 		)
 	),
 });
+
+/**
+ * Schema for {@link EdgeKind} — the semantic relationship between two thoughts.
+ */
+export const EdgeKindSchema = v.union([
+	v.literal('sequence'),
+	v.literal('branch'),
+	v.literal('merge'),
+	v.literal('verifies'),
+	v.literal('critiques'),
+	v.literal('derives_from'),
+	v.literal('tool_invocation'),
+	v.literal('revises'),
+]) satisfies v.GenericSchema<EdgeKind>;
+
+/**
+ * Schema for {@link Edge} — a directed edge in the thought DAG.
+ */
+export const EdgeSchema = v.object({
+	id: v.pipe(v.string(), v.minLength(1), v.maxLength(30)),
+	from: v.pipe(v.string(), v.minLength(1), v.maxLength(30)),
+	to: v.pipe(v.string(), v.minLength(1), v.maxLength(30)),
+	kind: EdgeKindSchema,
+	sessionId: v.pipe(v.string(), v.minLength(1)),
+	createdAt: v.number(),
+	metadata: v.optional(v.record(v.string(), v.unknown())),
+}) satisfies v.GenericSchema<Edge>;

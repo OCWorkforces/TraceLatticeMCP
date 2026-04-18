@@ -7,13 +7,23 @@ import * as v from 'valibot';
 import { ThoughtData } from './core/thought.js';
 import { SEQUENTIAL_THINKING_TOOL, SequentialThinkingSchema } from './schema.js';
 import { IDisposable } from './types/disposable.js';
+import { getErrorMessage } from './errors.js';
 
 // New component imports
 import { DiscoveryCache } from './cache/DiscoveryCache.js';
 import type { ConfigFileOptions } from './config/ConfigLoader.js';
 import { ConfigLoader } from './config/ConfigLoader.js';
 import { HistoryManager } from './core/HistoryManager.js';
+import { EdgeStore } from './core/graph/EdgeStore.js';
+import { InMemorySummaryStore } from './core/compression/InMemorySummaryStore.js';
+import { CompressionService } from './core/compression/CompressionService.js';
+import type { ISummaryStore } from './contracts/summary.js';
+import { InMemorySuspensionStore } from './core/tools/InMemorySuspensionStore.js';
+import type { ISuspensionStore } from './contracts/suspension.js';
 import { ThoughtEvaluator } from './core/ThoughtEvaluator.js';
+import { Calibrator } from './core/evaluator/Calibrator.js';
+import { OutcomeRecorder } from './core/reasoning/OutcomeRecorder.js';
+import { createReasoningStrategy } from './core/reasoning/strategies/StrategyFactory.js';
 import { ThoughtFormatter } from './core/ThoughtFormatter.js';
 import { ThoughtProcessor } from './core/ThoughtProcessor.js';
 import { Container } from './di/Container.js';
@@ -27,6 +37,7 @@ import { ServerConfig } from './ServerConfig.js';
 import type { SseTransportOptions } from './transport/SseTransport.js';
 import { SkillWatcher } from './watchers/SkillWatcher.js';
 import { ToolWatcher } from './watchers/ToolWatcher.js';
+import type { IReasoningStrategy } from './contracts/strategy.js';
 
 export interface ServerOptions {
 	maxHistorySize?: number;
@@ -171,7 +182,10 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 	constructor(options: ServerOptions = {}) {
 		// Use provided container or create a new one
 		super();
-		this._container = options.container ?? this._createContainerSync(options);
+		if (!options.container) {
+			throw new Error('Container is required. Use createServer() or provide a container.');
+		}
+		this._container = options.container;
 
 		// Resolve dependencies from container
 		this._logger = this._container.resolve<StructuredLogger>('Logger');
@@ -192,13 +206,6 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 		// Always include the sequential thinking tool
 		this.tools.addTool(SEQUENTIAL_THINKING_TOOL);
 
-		// Note: For async discovery, users should call discoverSkillsAsync() after construction
-		if (options.autoDiscover !== false && !options.lazyDiscovery) {
-			// Synchronous discovery has been removed - use discoverSkillsAsync() instead
-			// TODO: Update to use await this.skills.discoverAsync() instead
-			// For now, comment out to prevent breaking
-			// this.skills.discover();
-		}
 
 		// Initialize watchers if enabled
 		if (options.enableWatcher) {
@@ -269,12 +276,46 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 				})
 		);
 
+		// Register EdgeStore as a lazy singleton (always registered; flag gates writes)
+		container.register('EdgeStore', () => new EdgeStore());
+
+		// Register SummaryStore as a lazy singleton (always registered; flag gates writes)
+		container.register('summaryStore', () => new InMemorySummaryStore());
+
+		// Register SuspensionStore as a lazy singleton (only when toolInterleave flag is on)
+		if (config.features.toolInterleave) {
+			container.register('suspensionStore', () => {
+				const store = new InMemorySuspensionStore({
+					ttlMs: config.toolInterleaveTtlMs,
+					sweepIntervalMs: config.toolInterleaveSweepMs,
+					logger,
+				});
+				store.start();
+				return store;
+			});
+		}
+
+		// Register CompressionService as a lazy singleton (always registered; flag gates invocation)
+		container.register('compressionService', () => {
+			const historyManager = container.resolve<HistoryManager>('HistoryManager');
+			const edgeStore = container.resolve<EdgeStore>('EdgeStore');
+			const summaryStore = container.resolve<ISummaryStore>('summaryStore');
+			const log = container.resolve<StructuredLogger>('Logger');
+			return new CompressionService({ historyManager, edgeStore, summaryStore, logger: log });
+		});
+
+		// Register ReasoningStrategy as a lazy singleton (selected via feature flag)
+		container.register('reasoningStrategy', () =>
+			createReasoningStrategy(config.features.reasoningStrategy),
+		);
+
 		// Register HistoryManager with lazy initialization
 		container.register('HistoryManager', () => {
 			const cfg = container.resolve<ServerConfig>('Config');
 			const log = container.resolve<StructuredLogger>('Logger');
 			const pers = container.resolve('Persistence') as PersistenceBackend | null;
 			const componentMetrics = container.resolve<Metrics>('Metrics');
+			const edgeStore = container.resolve<EdgeStore>('EdgeStore');
 			return new HistoryManager({
 				maxHistorySize: cfg.maxHistorySize,
 				maxBranches: cfg.maxBranches,
@@ -285,14 +326,34 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 				persistenceBufferSize: cfg.persistenceBufferSize,
 				persistenceFlushInterval: cfg.persistenceFlushInterval,
 				persistenceMaxRetries: cfg.persistenceMaxRetries,
+				edgeStore,
 			});
 		});
 
 		// Register ThoughtFormatter (can be transient)
 		container.registerFactory('ThoughtFormatter', () => new ThoughtFormatter());
 
-		// Register ThoughtEvaluator (stateless, transient)
-		container.registerFactory('ThoughtEvaluator', () => new ThoughtEvaluator());
+		// Register OutcomeRecorder as a lazy singleton (gated by feature flag)
+		container.register(
+			'outcomeRecorder',
+			() => new OutcomeRecorder({ enabled: config.features.outcomeRecording ?? false }),
+		);
+
+		// Register Calibrator as a lazy singleton (gated by feature flag)
+		container.register(
+			'calibrator',
+			() =>
+				new Calibrator(
+					container.resolve('outcomeRecorder'),
+					config.features.calibration ?? false,
+				),
+		);
+
+		// Register ThoughtEvaluator (stateless, transient) with injected calibrator
+		container.registerFactory(
+			'ThoughtEvaluator',
+			() => new ThoughtEvaluator(container.resolve('calibrator')),
+		);
 
 		// Register ThoughtProcessor
 		container.register('ThoughtProcessor', () => {
@@ -300,22 +361,28 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 			const formatter = container.resolve<ThoughtFormatter>('ThoughtFormatter');
 			const evaluator = container.resolve<ThoughtEvaluator>('ThoughtEvaluator');
 			const log = container.resolve<StructuredLogger>('Logger');
-			return new ThoughtProcessor(history, formatter, evaluator, log);
+			const strategy = container.resolve<IReasoningStrategy>('reasoningStrategy');
+			const compressionService = config.features.compression
+				? container.resolve<CompressionService>('compressionService')
+				: undefined;
+			const suspensionStore = config.features.toolInterleave
+				? container.resolve<ISuspensionStore>('suspensionStore')
+				: undefined;
+			return new ThoughtProcessor(
+				history,
+				formatter,
+				evaluator,
+				log,
+				strategy,
+				compressionService,
+				suspensionStore,
+				config.features,
+			);
 		});
 
 		return container;
 	}
 
-	/**
-	 * Create and configure the DI container synchronously (without persistence)
-	 * This is used for backward compatibility when createServer is not used.
-	 */
-	private _createContainerSync(options: ServerOptions): Container {
-		const configLoader = new ConfigLoader();
-		const fileConfig = configLoader.load();
-
-		return ToolAwareSequentialThinkingServer._createContainerCore(options, fileConfig, null);
-	}
 
 	/**
 	 * Create and configure the DI container with async persistence initialization.
@@ -381,12 +448,24 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 		this._skillWatcher?.stop();
 		this._toolWatcher?.stop();
 
+		// Stop suspension store sweeper if registered
+		if (this._config.features.toolInterleave && this._container.has('suspensionStore')) {
+			try {
+				const suspensionStore = this._container.resolve<ISuspensionStore>('suspensionStore');
+				suspensionStore.stop();
+			} catch (error) {
+				this._logger.error('Error stopping suspension store', {
+					error: getErrorMessage(error),
+				});
+			}
+		}
+
 		// Flush any buffered writes before closing persistence
 		try {
 			await this._historyManager.shutdown();
 		} catch (error) {
 			this._logger.error('Error flushing write buffer during shutdown', {
-				error: error instanceof Error ? error.message : String(error),
+				error: getErrorMessage(error),
 			});
 		}
 
@@ -398,7 +477,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 				this._logger.info('Persistence backend closed');
 			} catch (error) {
 				this._logger.error('Error closing persistence backend', {
-					error: error instanceof Error ? error.message : String(error),
+					error: getErrorMessage(error),
 				});
 			}
 		}

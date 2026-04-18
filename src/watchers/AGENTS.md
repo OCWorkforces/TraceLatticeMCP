@@ -1,8 +1,8 @@
-**Updated:** 2026-04-02
+**Updated:** 2026-04-18
 # WATCHERS MODULE
 
 ## OVERVIEW
-**Commit:** 4d84f2e
+**Commit:** 906f363
 
 Chokidar-backed watchers keep tool/skill registries in sync with filesystem changes.
 

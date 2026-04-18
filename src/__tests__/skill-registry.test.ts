@@ -386,11 +386,11 @@ describe('SkillRegistry', () => {
 
 		describe('_createNotFoundError', () => {
 			it('throws SkillNotFoundError when removing non-existent skill', () => {
-				expect(() => registry.removeSkillByName('ghost')).toThrow(SkillNotFoundError);
+				expect(() => registry.remove('ghost')).toThrow(SkillNotFoundError);
 			});
 
 			it('includes skill name and action in error message', () => {
-				expect(() => registry.removeSkillByName('ghost')).toThrow(
+				expect(() => registry.remove('ghost')).toThrow(
 					"Skill 'ghost' not found, cannot remove"
 				);
 			});
@@ -409,7 +409,7 @@ describe('SkillRegistry', () => {
 
 			it('has correct error code', () => {
 				try {
-					registry.removeSkillByName('ghost');
+					registry.remove('ghost');
 				} catch (e) {
 					expect(e).toBeInstanceOf(SkillNotFoundError);
 					expect((e as SkillNotFoundError).code).toBe('SKILL_NOT_FOUND');
@@ -439,20 +439,6 @@ describe('SkillRegistry', () => {
 			});
 		});
 
-		describe('removeSkillByName()', () => {
-			it('removes a skill from the registry', () => {
-				registry.addSkill(makeSkill('to-remove'));
-				registry.removeSkillByName('to-remove');
-				expect(registry.has('to-remove')).toBe(false);
-			});
-
-			it('delegates to remove()', () => {
-				registry.addSkill(makeSkill('to-remove'));
-				const spy = vi.spyOn(registry, 'remove');
-				registry.removeSkillByName('to-remove');
-				expect(spy).toHaveBeenCalledWith('to-remove');
-			});
-		});
 
 		describe('updateSkill()', () => {
 			it('updates a skill in the registry', () => {
@@ -736,7 +722,7 @@ describe('SkillRegistry', () => {
 			registry = new SkillRegistry({ skillDirs: [tmpDir] });
 			await registry.discoverAsync();
 
-			registry.removeSkillByName('removable');
+			registry.remove('removable');
 			expect(registry.hasSkill('removable')).toBe(false);
 		});
 
@@ -755,7 +741,7 @@ describe('SkillRegistry', () => {
 		it('add then remove then add same skill via aliases', () => {
 			registry = new SkillRegistry({ skillDirs: [tmpDir] });
 			registry.addSkill(makeSkill('recycle'));
-			registry.removeSkillByName('recycle');
+			registry.remove('recycle');
 			registry.addSkill(makeSkill('recycle', { description: 'New' }));
 			expect(registry.getSkill('recycle')?.description).toBe('New');
 		});

@@ -13,6 +13,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { PersistenceConfig } from '../persistence/PersistenceBackend.js';
+import { getErrorMessage } from '../errors.js';
+import type { FeatureFlags } from '../ServerConfig.js';
 
 /**
  * Configuration options loaded from config files.
@@ -97,6 +99,24 @@ export interface ConfigFileOptions {
 	 * Persistence configuration for storing history and state.
 	 */
 	persistence?: PersistenceConfig;
+
+	/**
+	 * Feature flag overrides. Each field can be set independently.
+	 * Can be overridden by `TRACELATTICE_FEATURES_*` environment variables.
+	 */
+	features?: Partial<FeatureFlags>;
+
+	/**
+	 * TTL in milliseconds for suspended tool-interleave entries.
+	 * Can be overridden by `TRACELATTICE_TOOL_INTERLEAVE_TTL_MS` environment variable.
+	 */
+	toolInterleaveTtlMs?: number;
+
+	/**
+	 * Sweep interval in milliseconds for SuspensionStore expiration cleanup.
+	 * Can be overridden by `TRACELATTICE_TOOL_INTERLEAVE_SWEEP_MS` environment variable.
+	 */
+	toolInterleaveSweepMs?: number;
 }
 
 /**
@@ -204,7 +224,7 @@ export class ConfigLoader {
 				} catch (error) {
 					console.error(
 						`Failed to load config from ${configPath}:`,
-						error instanceof Error ? error.message : String(error)
+						getErrorMessage(error)
 					);
 				}
 			}
@@ -276,8 +296,84 @@ export class ConfigLoader {
 				result.discoveryCache.maxSize = parsed;
 			}
 		}
+		if (process.env.TRACELATTICE_TOOL_INTERLEAVE_TTL_MS) {
+			const parsed = parseInt(process.env.TRACELATTICE_TOOL_INTERLEAVE_TTL_MS, 10);
+			if (Number.isFinite(parsed)) {
+				result.toolInterleaveTtlMs = parsed;
+			}
+		}
+		if (process.env.TRACELATTICE_TOOL_INTERLEAVE_SWEEP_MS) {
+			const parsed = parseInt(process.env.TRACELATTICE_TOOL_INTERLEAVE_SWEEP_MS, 10);
+			if (Number.isFinite(parsed)) {
+				result.toolInterleaveSweepMs = parsed;
+			}
+		}
+
+		this.applyFeatureFlagOverrides(result);
 
 		return result;
+	}
+
+	/**
+	 * Applies TRACELATTICE_FEATURES_* environment variable overrides for feature flags.
+	 * Booleans accept 'true'/'false'/'1'/'0' (case-insensitive).
+	 * Invalid reasoningStrategy values are warned and ignored (fall back to default).
+	 *
+	 * @param result - Configuration object to mutate with feature flag overrides
+	 * @private
+	 */
+	private applyFeatureFlagOverrides(result: ConfigFileOptions): void {
+		const boolMap: Record<string, keyof FeatureFlags> = {
+			TRACELATTICE_FEATURES_DAG_EDGES: 'dagEdges',
+			TRACELATTICE_FEATURES_CALIBRATION: 'calibration',
+			TRACELATTICE_FEATURES_COMPRESSION: 'compression',
+			TRACELATTICE_FEATURES_TOOL_INTERLEAVE: 'toolInterleave',
+			TRACELATTICE_FEATURES_NEW_THOUGHT_TYPES: 'newThoughtTypes',
+			TRACELATTICE_FEATURES_OUTCOME_RECORDING: 'outcomeRecording',
+		};
+		for (const [envVar, key] of Object.entries(boolMap)) {
+			const raw = process.env[envVar];
+			if (raw === undefined) continue;
+			const parsed = this.parseBoolean(raw);
+			if (parsed === undefined) {
+				console.warn(
+					`Invalid boolean value for ${envVar}: "${raw}" (expected true/false/1/0). Ignoring.`
+				);
+				continue;
+			}
+			result.features = result.features || {};
+			(result.features as Record<string, unknown>)[key] = parsed;
+		}
+
+		const strategyRaw = process.env.TRACELATTICE_FEATURES_REASONING_STRATEGY;
+		if (strategyRaw !== undefined) {
+			const allowed = ['sequential', 'tot'] as const;
+			if ((allowed as readonly string[]).includes(strategyRaw)) {
+				result.features = result.features || {};
+				result.features.reasoningStrategy =
+					strategyRaw as FeatureFlags['reasoningStrategy'];
+			} else {
+				console.warn(
+					`Invalid value for TRACELATTICE_FEATURES_REASONING_STRATEGY: "${strategyRaw}" ` +
+						`(expected one of ${allowed.join(', ')}). Falling back to 'sequential'.`
+				);
+			}
+		}
+	}
+
+	/**
+	 * Parses a boolean from an environment variable string.
+	 * Accepts 'true'/'false'/'1'/'0' case-insensitively.
+	 *
+	 * @param raw - Raw environment variable string
+	 * @returns Parsed boolean, or undefined if the value is invalid
+	 * @private
+	 */
+	private parseBoolean(raw: string): boolean | undefined {
+		const v = raw.trim().toLowerCase();
+		if (v === 'true' || v === '1') return true;
+		if (v === 'false' || v === '0') return false;
+		return undefined;
 	}
 
 	/**
@@ -325,11 +421,17 @@ export class ConfigLoader {
 		maxHistorySize?: number;
 		maxBranches?: number;
 		maxBranchSize?: number;
+		features?: Partial<FeatureFlags>;
+		toolInterleaveTtlMs?: number;
+		toolInterleaveSweepMs?: number;
 	} {
 		return {
 			maxHistorySize: config.maxHistorySize,
 			maxBranches: config.maxBranches,
 			maxBranchSize: config.maxBranchSize,
+			features: config.features,
+			toolInterleaveTtlMs: config.toolInterleaveTtlMs,
+			toolInterleaveSweepMs: config.toolInterleaveSweepMs,
 		};
 	}
 }

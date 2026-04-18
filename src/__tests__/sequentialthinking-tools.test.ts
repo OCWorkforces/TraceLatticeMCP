@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { StepRecommendation } from '../core/step.js';
 import type { ThoughtData } from '../core/thought.js';
-import { ToolAwareSequentialThinkingServer } from '../index.js';
+import { ToolAwareSequentialThinkingServer, createServer } from '../index.js';
 import type { SkillRecommendation } from '../types/skill.js';
 import type { ToolRecommendation } from '../types/tool.js';
 
@@ -80,8 +80,8 @@ function parseProcessThoughtResult(result: unknown): {
 describe('tracelattice MCP Tool', () => {
 	let server: ToolAwareSequentialThinkingServer;
 
-	beforeEach(() => {
-		server = new ToolAwareSequentialThinkingServer({ maxHistorySize: 10 });
+	beforeEach(async () => {
+		server = await createServer({ maxHistorySize: 10 });
 	});
 
 	describe('1. Basic Functionality Tests', () => {
@@ -360,7 +360,7 @@ describe('tracelattice MCP Tool', () => {
 		});
 
 		it('3.2 History Size Limit - should validate history trimming when exceeding maxHistorySize', async () => {
-			const smallServer = new ToolAwareSequentialThinkingServer({ maxHistorySize: 3 });
+			const smallServer = await createServer({ maxHistorySize: 3 });
 
 			// Add 5 thoughts
 			for (let i = 1; i <= 5; i++) {
@@ -962,8 +962,8 @@ describe('tracelattice MCP Tool', () => {
 
 		it('8.2 Concurrent Session Isolation - should validate separate server instances maintain separate state', async () => {
 			// Create two separate server instances
-			const server1 = new ToolAwareSequentialThinkingServer({ maxHistorySize: 10 });
-			const server2 = new ToolAwareSequentialThinkingServer({ maxHistorySize: 10 });
+			const server1 = await createServer({ maxHistorySize: 10 });
+			const server2 = await createServer({ maxHistorySize: 10 });
 
 			// Process thoughts on both servers
 			await server1.processThought(
@@ -1109,8 +1109,8 @@ describe('tracelattice MCP Tool', () => {
 
 		let server: ToolAwareSequentialThinkingServer;
 
-		beforeEach(() => {
-			server = new ToolAwareSequentialThinkingServer({ maxHistorySize: 100 });
+		beforeEach(async () => {
+			server = await createServer({ maxHistorySize: 100 });
 		});
 
 		it('9.1 Chain B does not inherit Chain A thought_history_length', async () => {

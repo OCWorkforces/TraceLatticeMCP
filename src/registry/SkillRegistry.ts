@@ -53,7 +53,7 @@ export interface SkillRegistryOptions {
  * Registry for managing Claude Code skill operations.
  *
  * Extends `BaseRegistry<Skill>` with skill-specific frontmatter parsing
- * and backward-compatible aliases (`addSkill`, `removeSkillByName`, etc.).
+ * and backward-compatible aliases (`addSkill`, etc.).
  */
 export class SkillRegistry extends BaseRegistry<Skill> {
 	protected override readonly _fileExtensions = ['.md', '.yml', '.yaml'];

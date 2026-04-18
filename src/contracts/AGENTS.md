@@ -1,7 +1,7 @@
 # CONTRACTS MODULE
 
-**Updated:** 2026-04-02
-**Commit:** 4d84f2e
+**Updated:** 2026-04-18
+**Commit:** 906f363
 ## OVERVIEW
 
 Shared interface contracts centralizing cross-module type dependencies. Single coupling point — modules depend on these interfaces (not concrete implementations) to reduce lateral coupling. The only allowed barrel re-export outside `src/index.ts`.
@@ -10,8 +10,12 @@ Shared interface contracts centralizing cross-module type dependencies. Single c
 
 ```
 src/contracts/
-├── interfaces.ts  # Interface definitions (IMetrics, IDiscoveryCache, etc.)
-└── index.ts       # Module barrel (intentional — single coupling point)
+├── interfaces.ts   # Core interfaces (IMetrics, IDiscoveryCache, IEdgeStore, etc.)
+├── strategy.ts     # IReasoningStrategy contract + StrategyDecision type
+├── calibrator.ts   # ICalibrator, CalibrationMetrics, CalibrationResult
+├── summary.ts      # ISummaryStore contract for branch rollup summaries
+├── suspension.ts   # ISuspensionStore, SuspensionRecord contract for tool interleave
+└── index.ts        # Module barrel (intentional — single coupling point)
 ```
 
 ## INTERFACES
@@ -21,15 +25,18 @@ src/contracts/
 | `IMetrics`              | Metrics abstraction (counter, gauge, histogram) | `counter()`, `gauge()`, `histogram()`, `inc()`, `dec()`, `export()` |
 | `IDiscoveryCache`       | Discovery result caching                        | `get()`, `set()`, `has()`, `invalidate()`, `clear()`                |
 | `DiscoveryCacheOptions` | Cache configuration                             | `ttl`, `maxSize`, `cleanupInterval`                                 |
-| `IThoughtProcessor`     | Thought processing contract                     | `process()`                                                         |
-| `IServerConfig`         | Server configuration shape                      | `maxHistorySize`, `maxBranches`, `persistence`, `skillDirs`         |
-| `IToolRegistry`         | Tool registry contract                          | `addTool()`, `getTool()`, `discover()`, `listTools()`               |
-| `ISkillRegistry`        | Skill registry contract                         | `addSkill()`, `getSkill()`, `discover()`, `listSkills()`            |
+| `IEdgeStore`            | DAG edge storage contract                       | `addEdge()`, `getEdge()`, `outgoing()`, `incoming()`, `edgesForSession()`, `clearSession()`, `size()` |
+| `IReasoningStrategy`    | Strategy contract for thought dispatch          | `decideNext(ctx)` → `StrategyDecision`                              |
+| `ICalibrator`           | Confidence calibration contract                 | `calibrate()`, `getMetrics()`                                       |
+| `CalibrationMetrics`    | Calibration data types                          | Brier score, ECE                                                    |
+| `ISummaryStore`         | Branch rollup summary storage                   | `add()`, `get()`, `listForBranch()`, `clearSession()`               |
+| `ISuspensionStore`      | Tool suspension storage                         | `suspend()`, `resume()`, `peek()`, `expire()`, `clearSession()`, `size()`, `start()`, `stop()` |
+| `SuspensionRecord`      | Suspension data type                            | token, sessionId, toolCallThoughtNumber, toolName, toolArguments, timestamps |
 
 
 ## CONVENTIONS
 
 - This is the **single coupling point** — cross-module type imports come through here.
-- `IHistoryManager` moved to `src/core/IHistoryManager.ts` (the real interface with 8+ methods).
+- `IHistoryManager` remains in `src/core/IHistoryManager.ts` (not in this module) — the real interface with 8+ methods.
 - Interfaces are defined here; implementations live in their respective modules.
 - `IMetrics` and `IDiscoveryCache` are the most widely used (10+ consumer files each).
