@@ -21,6 +21,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
 import type { HealthChecker } from '../health/HealthChecker.js';
 import type { Logger, LogLevel } from '../logger/StructuredLogger.js';
+import { SESSION_ID_PATTERN, MAX_SESSION_ID_LENGTH } from '../core/ids.js';
 
 /**
  * No-op logger that does nothing. Used when no logger is provided.
@@ -45,43 +46,13 @@ class NoopLogger implements Logger {
  */
 const ALLOWED_QUERY_PARAMS = new Set(['session', 'sessionId', 'client', 'clientId']);
 
-/**
- * Maximum session ID length.
- */
-const MAX_SESSION_ID_LENGTH = 64;
 
-/**
- * Session ID validation pattern (alphanumeric, hyphens, underscores).
- */
-const SESSION_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 /**
  * Rate limit settings (requests per minute per IP).
  */
 const RATE_LIMIT_REQUESTS = 100;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
-
-/**
- * Transport interface contract for MCP server communication.
- * All transport implementations must implement this interface.
- */
-export interface ITransport {
-	/**
-	 * Connect the transport to an MCP server.
-	 */
-	connect(mcpServer: unknown): Promise<void>;
-
-	/**
-	 * Stop the transport with graceful shutdown.
-	 * @param timeout - Maximum time to wait for in-flight requests (default: 30s)
-	 */
-	stop(timeout?: number): Promise<void>;
-
-	/**
-	 * Number of currently connected clients.
-	 */
-	readonly clientCount: number;
-}
 
 export interface TransportOptions {
 	port?: number;
@@ -95,7 +66,7 @@ export interface TransportOptions {
 	healthChecker?: HealthChecker;
 }
 
-export abstract class BaseTransport implements ITransport {
+export abstract class BaseTransport {
 	protected _port: number;
 	protected _host: string;
 	protected _corsOrigin: string;

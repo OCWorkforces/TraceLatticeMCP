@@ -13,6 +13,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { SkillRegistry } from '../registry/SkillRegistry.js';
+import { getErrorMessage } from '../errors.js';
 
 /**
  * File system watcher for skill directories with registry integration.
@@ -146,11 +147,11 @@ export class SkillWatcher {
 		const skillName = this.extractSkillNameFromPath(skillPath);
 		if (skillName) {
 			try {
-				this.skillRegistry.removeSkillByName(skillName);
+				this.skillRegistry.remove(skillName);
 			} catch (error) {
 				console.error(
 					`Failed to remove skill ${skillName}:`,
-					error instanceof Error ? error.message : String(error)
+					getErrorMessage(error)
 				);
 			}
 		}

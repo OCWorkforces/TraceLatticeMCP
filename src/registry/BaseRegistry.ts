@@ -16,6 +16,7 @@ import { parse as parseYaml } from 'yaml';
 import { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
+import { getErrorMessage } from '../errors.js';
 
 /**
  * Configuration options for creating a `BaseRegistry` instance.
@@ -334,14 +335,14 @@ export abstract class BaseRegistry<T extends { name: string }> {
 							}
 						} catch (readError) {
 							this.log(`Failed to read ${this._entityName} file ${entry.name}`, {
-								error: readError instanceof Error ? readError.message : String(readError),
+								error: getErrorMessage(readError),
 							});
 						}
 					}
 				}
 			} catch (error) {
 				this.log(`Failed to scan ${this._entityName} directory: ${dir}`, {
-					error: error instanceof Error ? error.message : String(error),
+					error: getErrorMessage(error),
 				});
 			}
 		}
@@ -385,7 +386,7 @@ export abstract class BaseRegistry<T extends { name: string }> {
 			} catch (error) {
 				this.log(`Error adding ${this._entityName} '${item.name}':`, {
 					[`${this._entityName}Name`]: item.name,
-					error: error instanceof Error ? error.message : String(error),
+					error: getErrorMessage(error),
 				});
 			}
 		}

@@ -13,6 +13,7 @@ import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { ToolRegistry } from '../registry/ToolRegistry.js';
+import { getErrorMessage } from '../errors.js';
 
 /**
  * File system watcher for tool directories.
@@ -153,7 +154,7 @@ export class ToolWatcher {
 				this._toolRegistry.removeTool(toolName);
 			} catch (error) {
 				this._logger.error(
-					`Tool '${toolName}' not registered: ${error instanceof Error ? error.message : String(error)}`
+					`Tool '${toolName}' not registered: ${getErrorMessage(error)}`
 				);
 			}
 		}

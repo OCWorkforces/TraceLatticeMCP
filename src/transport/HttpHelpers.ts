@@ -108,13 +108,3 @@ export async function readRequestBody(
 	return body;
 }
 
-/**
- * Send a plain text 404 Not Found response.
- *
- * @param res - The server response to write to
- * @param message - Optional custom message (default: 'Not Found')
- */
-export function sendNotFound(res: ServerResponse, message: string = 'Not Found'): void {
-	res.writeHead(404, { 'Content-Type': 'text/plain' });
-	res.end(message);
-}

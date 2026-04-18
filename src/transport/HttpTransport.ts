@@ -18,6 +18,7 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import type { McpServer } from 'tmcp';
 import { safeParse } from 'valibot';
 import type { IMetrics } from '../contracts/index.js';
+import { getErrorMessage } from '../errors.js';
 import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 import {
@@ -299,7 +300,7 @@ export class HttpTransport extends BaseTransport {
 				-32603,
 				'Internal error',
 				null,
-				error instanceof Error ? error.message : String(error)
+				getErrorMessage(error)
 			);
 		}
 	}
