@@ -1,7 +1,7 @@
 # SOURCE MODULE
 
-**Updated:** 2026-04-02
-**Commit:** 4d84f2e
+**Updated:** 2026-04-18
+**Commit:** 906f363
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW
@@ -17,8 +17,9 @@ src/
 │   ├── index.ts          # 1-line re-export to lib.js (public API)
 │   ├── core/             # Core domain logic (see core/AGENTS.md)
 │   ├── ServerConfig.ts   # Config validation
-│   ├── errors.ts         # Error class hierarchy (13 types)
+│   ├── errors.ts         # Error class hierarchy (20 subclasses + ValidationError with field)
 │   ├── schema.ts         # Valibot validation schemas
+│   ├── sanitize.ts       # Input sanitization utilities
 │   └── cli.ts            # CLI entry point
 ├── Infrastructure
 │   ├── di/               # DI container (see di/AGENTS.md)
@@ -27,16 +28,14 @@ src/
 │   ├── cache/            # LRU Cache (see cache/AGENTS.md)
 │   ├── config/           # Config loading (see config/AGENTS.md)
 │   ├── logger/           # Structured logging (see logger/AGENTS.md)
-│   ├── context/          # Request context via AsyncLocalStorage (see context/AGENTS.md)
+│   ├── context/          # Request context via AsyncLocalStorage — getRequestId only (see context/AGENTS.md)
 │   ├── persistence/      # State backends (see persistence/AGENTS.md)
 │   ├── transport/        # MCP transports (see transport/AGENTS.md)
 │   ├── registry/         # Tool/Skill registries (see registry/AGENTS.md)
-│   ├── cluster/          # Worker pool (see cluster/AGENTS.md)
 │   ├── pool/             # Session pooling (see pool/AGENTS.md)
 │   ├── health/           # Aggregate health checking (see health/AGENTS.md)
 │   ├── watchers/         # File watchers (see watchers/AGENTS.md)
-│   ├── metrics/          # Prometheus metrics (see metrics/AGENTS.md)
-│   └── telemetry/        # OpenTelemetry tracing (see telemetry/AGENTS.md)
+│   └── metrics/          # Prometheus metrics (see metrics/AGENTS.md)
 └── Quality
     └── __tests__/        # Test suite (see __tests__/AGENTS.md)
 ```

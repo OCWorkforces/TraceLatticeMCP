@@ -1,7 +1,7 @@
 # CONTEXT MODULE
 
-**Updated:** 2026-04-02
-**Commit:** 4d84f2e
+**Updated:** 2026-04-18
+**Commit:** 906f363
 
 ## OVERVIEW
 
@@ -11,26 +11,23 @@ Request context management using Node.js `AsyncLocalStorage` for zero-cost corre
 
 ```
 src/context/
-└── RequestContext.ts   # AsyncLocalStorage wrapper for requestId (85L)
+└── RequestContext.ts   # AsyncLocalStorage wrapper for requestId — `getRequestId` only (34L)
 ```
 
 ## KEY SYMBOLS
 
 | Symbol           | Type     | Location            | Role                                                      |
 | ---------------- | -------- | ------------------- | --------------------------------------------------------- |
-| `runWithContext` | function | `RequestContext.ts` | Run a function within a request context (requestId)       |
 | `getRequestId`   | function | `RequestContext.ts` | Get current requestId from async context                  |
-| `withRequestId`  | function | `RequestContext.ts` | Generate UUID and run function within new request context |
 
 ## WHERE TO LOOK
 
 | Task                    | Location            | Notes                                  |
 | ----------------------- | ------------------- | -------------------------------------- |
 | **Request correlation** | `RequestContext.ts` | requestId propagation across async ops |
-| **Context creation**    | `RequestContext.ts` | `withRequestId()` auto-generates UUID  |
 
 ## CONVENTIONS
 
 - Uses `AsyncLocalStorage` from `node:async_hooks` — no explicit parameter passing.
-- `withRequestId()` generates a UUID via `node:crypto`.
-- All functions are re-exported from `src/context/RequestContext.ts`.
+- Only `getRequestId()` is exported; context is established by transport-layer wrappers.
+- Imported from `src/context/RequestContext.ts`.

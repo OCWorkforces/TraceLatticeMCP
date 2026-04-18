@@ -1,7 +1,7 @@
 # TRANSPORT MODULE
 
-**Updated:** 2026-04-02
-**Commit:** 4d84f2e
+**Updated:** 2026-04-18
+**Commit:** 906f363
 ## OVERVIEW
 
 MCP transport implementations providing communication channels between the MCP server and clients. Supports SSE (Server-Sent Events) for real-time streaming and HTTP for request-response patterns.
@@ -13,7 +13,7 @@ src/transport/
 ├── BaseTransport.ts          # Abstract base (security, rate limiting, CORS) (439L)
 ├── SseTransport.ts           # Server-Sent Events (multi-user, streaming) (476L)
 ├── HttpTransport.ts          # HTTP JSON-RPC (stateless, request-response) (344L)
-├── HttpHelpers.ts            # HTTP utility functions (120L)
+├── HttpHelpers.ts            # HTTP utility functions (109L)
 └── StreamableHttpTransport.ts # MCP Streamable HTTP transport (724L)
 ```
 
@@ -30,7 +30,7 @@ Multi-connection SSE with `Set<ServerResponse>`, message queue for late joiners,
 Stateless JSON-RPC 2.0 over HTTP. Pipeline: rate limit → CORS → body size → schema validation → delegate to MCP server. Body limit 10MB, timeout 30s.
 
 ### StreamableHttpTransport
-MCP Streamable HTTP transport (724L). Full MCP protocol support with session management, request streaming, and graceful shutdown.
+MCP Streamable HTTP transport (724L). Full MCP protocol support with session management, request streaming, and graceful shutdown. Uses shared `readRequestBody` from `HttpHelpers`.
 
 ## CONVENTIONS
 

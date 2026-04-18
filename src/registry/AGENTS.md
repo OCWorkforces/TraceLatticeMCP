@@ -1,7 +1,7 @@
 # REGISTRY MODULE
 
-**Updated:** 2026-04-02
-**Commit:** 4d84f2e
+**Updated:** 2026-04-18
+**Commit:** 906f363
 
 ## OVERVIEW
 
@@ -13,7 +13,7 @@ Manages discovery and lifecycle of MCP tools and Claude Code skills via `BaseReg
 src/registry/
 ├── BaseRegistry.ts    # Generic CRUD + discovery + LRU cache + frontmatter parsing (396L)
 ├── ToolRegistry.ts    # MCP tool management (extends BaseRegistry) (165L)
-└── SkillRegistry.ts   # Claude Skill management (extends BaseRegistry) (158L)
+└── SkillRegistry.ts   # Claude Skill management (extends BaseRegistry) (148L). `removeSkillByName` removed; use base `remove()`.
 ```
 
 ## BASE REGISTRY
