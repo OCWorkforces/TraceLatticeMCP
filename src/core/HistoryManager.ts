@@ -4,15 +4,18 @@
  * This module provides the `HistoryManager` class which manages thought history,
  * branching, and optional persistence with per-session state isolation.
  *
+ * Internally delegates to three focused collaborators:
+ * - `EdgeEmitter` — DAG edge emission
+ * - `PersistenceBuffer` — buffered persistence + retry/backoff
+ * - `SessionManager` — session lifecycle (TTL/LRU eviction)
+ *
  * @module HistoryManager
  */
 
 import type { IMetrics } from '../contracts/index.js';
-import { getErrorMessage } from '../errors.js';
+import { ValidationError, getErrorMessage } from '../errors.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
 import type { ISummaryStore } from '../contracts/summary.js';
-import type { Edge, EdgeKind } from './graph/Edge.js';
-import { generateUlid } from './ids.js';
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
@@ -23,24 +26,15 @@ import {
 	type DehydrationOptions,
 	type HydratedEntry,
 } from './compression/DehydrationPolicy.js';
+import { EdgeEmitter } from './graph/EdgeEmitter.js';
+import { PersistenceBuffer, type PersistenceEventEmitter } from './PersistenceBuffer.js';
+import { SessionManager } from './SessionManager.js';
 
-/**
- * Absolute maximum history size. Cannot be overridden by configuration.
- * Prevents unbounded memory growth from misconfiguration.
- * At ~2KB per thought, 10K thoughts ≈ ~20MB — reasonable for server-side.
- * @constant
- */
+export type { PersistenceEventEmitter } from './PersistenceBuffer.js';
+
+/** Absolute maximum history size (~20MB at 2KB/thought). Cannot be overridden. */
 export const ABSOLUTE_MAX_HISTORY_SIZE = 10_000;
 
-/**
- * Interface for emitting persistence error events.
- * Compatible with EventEmitter's emit method signature.
- */
-export interface PersistenceEventEmitter {
-	emit(event: 'persistenceError', payload: { operation: string; error: Error }): boolean;
-}
-
-/** Internal state container for a single session's data. */
 interface SessionState {
 	thought_history: ThoughtData[];
 	branches: Record<string, ThoughtData[]>;
@@ -48,237 +42,63 @@ interface SessionState {
 	availableSkills: string[] | undefined;
 	writeBuffer: ThoughtData[];
 	lastAccessedAt: number;
+	registeredBranches: Set<string>;
 }
 
-/**
- * Configuration options for creating a `HistoryManager` instance.
- *
- * @example
- * ```typescript
- * const config: HistoryManagerConfig = {
- *   maxHistorySize: 500,
- *   maxBranches: 25,
- *   maxBranchSize: 50,
- *   logger: new StructuredLogger(),
- *   persistence: filePersistence
- * };
- * ```
- */
 export interface HistoryManagerConfig {
-	/**
-	 * Maximum number of thoughts to keep in main history.
-	 * @default 1000
-	 */
+	/** Maximum number of thoughts to keep in main history. @default 1000 */
 	maxHistorySize?: number;
-
-	/**
-	 * Maximum number of branches to maintain.
-	 * @default 50
-	 */
+	/** Maximum number of branches to maintain. @default 50 */
 	maxBranches?: number;
-
-	/**
-	 * Maximum size of each branch.
-	 * @default 100
-	 */
+	/** Maximum size of each branch. @default 100 */
 	maxBranchSize?: number;
-
-	/** Optional logger for diagnostics. */
 	logger?: Logger;
-
-	/** Optional persistence backend for saving/loading history. */
 	persistence?: PersistenceBackend | null;
 	metrics?: IMetrics;
-
-	/**
-	 * Maximum number of thoughts to buffer before flushing to persistence.
-	 * @default 100
-	 */
+	/** Maximum number of thoughts to buffer before flushing. @default 100 */
 	persistenceBufferSize?: number;
-
-	/**
-	 * Interval in milliseconds between periodic persistence flushes.
-	 * @default 1000
-	 */
+	/** Periodic flush interval in ms. @default 1000 */
 	persistenceFlushInterval?: number;
-
-	/**
-	 * Maximum number of retries for failed persistence flushes.
-	 * @default 3
-	 */
+	/** Max retries for failed persistence flushes. @default 3 */
 	persistenceMaxRetries?: number;
-
-	/**
-	 * Event emitter for persistence error events.
-	 * When provided, persistenceError events are emitted on persistent failures.
-	 */
 	eventEmitter?: PersistenceEventEmitter;
-
-	/**
-	 * Optional EdgeStore for capturing thought DAG edges.
-	 * When provided, edge emission strategies can record relationships between thoughts.
-	 * @default undefined
-	 */
 	edgeStore?: IEdgeStore;
-
-	/**
-	 * Optional summary store for dehydrated history views.
-	 * When provided alongside the `dagEdges` flag, `getHistoryHydrated()`
-	 * uses it to replace cold thoughts with summary references.
-	 * @default undefined
-	 */
 	summaryStore?: ISummaryStore;
-
-	/**
-	 * Whether to emit DAG edges when an EdgeStore is provided.
-	 * When false (default), no edges are emitted even if edgeStore is set.
-	 * Gated independently from edgeStore so that EdgeStore can be registered
-	 * unconditionally in DI while writes remain feature-flagged.
-	 * @default false
-	 */
+	/** Whether to emit DAG edges (gated independently of edgeStore). @default false */
 	dagEdges?: boolean;
 }
 
 /**
  * Manages thought history and branching for sequential thinking.
  *
- * This class is the central component for managing the state of sequential thinking
- * operations. It handles thought storage, branch management, and optional persistence
- * for state recovery. State is isolated per session via a `Map<string, SessionState>`.
- *
- * @remarks
- * **History Management:**
- * - Thoughts are stored in a linear history array per session
- * - Auto-trimming occurs when `maxHistorySize` is exceeded
- * - Oldest thoughts are removed first (FIFO eviction)
- *
- * **Session Isolation:**
- * - Each session maintains its own thought history, branches, and cached tools/skills
- * - Sessions are identified by optional `session_id` on ThoughtData
- * - Default (undefined) session_id maps to `__global__`
- * - TTL-based cleanup prevents unbounded memory growth
- * - LRU eviction when MAX_SESSIONS exceeded
- *
- * **Branch Management:**
- * - Branches allow exploring alternative reasoning paths
- * - Each branch has its own thought array within a session
- * - Branches are created when `branch_from_thought` and `branch_id` are set
- * - Branch count and size are limited by `maxBranches` and `maxBranchSize`
- *
- * **Persistence:**
- * - Optional persistence backend for saving/loading state
- * - Persists thoughts and branches asynchronously (fire-and-forget)
- * - Does not block on persistence failures
- *
- * @example
- * ```typescript
- * const manager = new HistoryManager({
- *   maxHistorySize: 500,
- *   maxBranches: 25,
- *   logger: new StructuredLogger({ context: 'History' })
- * });
- *
- * // Add a thought
- * manager.addThought({
- *   thought: 'I need to analyze the problem',
- *   thought_number: 1,
- *   total_thoughts: 5,
- *   next_thought_needed: true
- * });
- *
- * // Get history
- * const history = manager.getHistory();
- * console.log(`Thoughts: ${history.length}`);
- *
- * // Get branches
- * const branches = manager.getBranches();
- * console.log(`Branches: ${Object.keys(branches).length}`);
- *
- * // Clear all state
- * manager.clear();
- * ```
+ * Owns the per-session `Map<string, SessionState>`. Delegates DAG edge emission,
+ * buffered persistence, and session TTL/LRU eviction to focused collaborators while
+ * preserving test-coupled private member names (`_flushTimer`, `_startFlushTimer`,
+ * `_flushBuffer`, `_sessions`).
  */
 export class HistoryManager implements IHistoryManager {
-	/** Default session key for backward-compatible global state. */
 	private static readonly DEFAULT_SESSION = '__global__';
-
-	/** TTL for inactive sessions in milliseconds (default: 30 minutes). */
 	private static readonly SESSION_TTL_MS = 30 * 60 * 1000;
-
-	/** Maximum number of concurrent sessions before eviction. */
 	private static readonly MAX_SESSIONS = 100;
-
-	/** Session state storage. */
 	private _sessions: Map<string, SessionState> = new Map();
-
-	/** Timer for periodic session cleanup. */
-	private _sessionCleanupTimer: ReturnType<typeof setInterval> | null = null;
-
-	/** Maximum history size before auto-trimming. */
 	private _maxHistorySize: number;
-
-	/** Maximum number of branches before cleanup. */
 	private _maxBranches: number;
-
-	/** Maximum size of each branch. */
 	private _maxBranchSize: number;
-
-	/** Logger for diagnostics. */
 	private _logger: Logger;
-
-	/** Persistence backend for saving/loading state. */
 	private _persistence: PersistenceBackend | null;
-
-	/** Whether persistence is enabled. */
 	private _persistenceEnabled: boolean;
-
 	private _metrics?: IMetrics;
 
-	/** Timer for periodic buffer flushes. */
-	private _flushTimer: ReturnType<typeof setInterval> | null = null;
-
-	/** Guard to prevent concurrent flushes. */
-	private _isFlushing: boolean = false;
-
-	/** Tracks consecutive flush failures for backoff. */
-	private _flushRetryCount: number = 0;
-
-	/** Maximum buffer size before triggering immediate flush. */
-	private _persistenceBufferSize: number;
-
-	/** Interval in milliseconds between periodic flushes. */
-	private _persistenceFlushInterval: number;
-
-	/** Maximum number of retries for failed flushes. */
-	private _persistenceMaxRetries: number;
-
-	/** Event emitter for persistence error events. */
-	private _eventEmitter: PersistenceEventEmitter | null;
-
-	/** Optional EdgeStore for capturing thought DAG edges. */
 	private _edgeStore?: IEdgeStore;
-
-	/** Optional SummaryStore used by getHistoryHydrated(). */
 	private _summaryStore?: ISummaryStore;
-
-	/** Whether to emit DAG edges (gated by features.dagEdges flag). */
 	private _dagEdges: boolean;
 
-	/**
-	 * Creates a new HistoryManager instance.
-	 *
-	 * @param config - Configuration options for the history manager
-	 *
-	 * @example
-	 * ```typescript
-	 * const manager = new HistoryManager({
-	 *   maxHistorySize: 500,
-	 *   maxBranches: 25,
-	 *   logger: new StructuredLogger(),
-	 *   persistence: filePersistence
-	 * });
-	 * ```
-	 */
+	private _eventEmitter: PersistenceEventEmitter | null;
+
+	private readonly _edgeEmitter: EdgeEmitter;
+	private _persistenceBuffer: PersistenceBuffer<SessionState> | null;
+	private readonly _sessionManager: SessionManager<SessionState>;
+
 	constructor(config: HistoryManagerConfig = {}) {
 		this._logger = config.logger ?? new NullLogger();
 		const requestedMaxSize = config.maxHistorySize ?? 1000;
@@ -294,51 +114,77 @@ export class HistoryManager implements IHistoryManager {
 		this._persistence = config.persistence ?? null;
 		this._persistenceEnabled = this._persistence !== null;
 		this._metrics = config.metrics;
-		this._persistenceBufferSize = config.persistenceBufferSize ?? 100;
-		this._persistenceFlushInterval = config.persistenceFlushInterval ?? 1000;
-		this._persistenceMaxRetries = config.persistenceMaxRetries ?? 3;
 		this._eventEmitter = config.eventEmitter ?? null;
 		this._edgeStore = config.edgeStore;
 		this._summaryStore = config.summaryStore;
 		this._dagEdges = config.dagEdges ?? false;
 
-		// Start the periodic flush timer if persistence is enabled
-		if (this._persistenceEnabled) {
+		// Wire delegates
+		this._edgeEmitter = new EdgeEmitter({
+			edgeStore: this._edgeStore,
+			dagEdges: this._dagEdges,
+			defaultSessionId: HistoryManager.DEFAULT_SESSION,
+			logger: this._logger,
+		});
+
+		this._sessionManager = new SessionManager<SessionState>({
+			defaultSessionId: HistoryManager.DEFAULT_SESSION,
+			sessionTtlMs: HistoryManager.SESSION_TTL_MS,
+			cleanupIntervalMs: 5 * 60 * 1000,
+			getMaxSessions: () => HistoryManager.MAX_SESSIONS,
+			logger: this._logger,
+		});
+
+		this._persistenceBuffer = null;
+		if (this._persistenceEnabled && this._persistence) {
+			this._persistenceBuffer = new PersistenceBuffer<SessionState>({
+				persistence: this._persistence,
+				bufferSize: config.persistenceBufferSize ?? 100,
+				flushInterval: config.persistenceFlushInterval ?? 1000,
+				maxRetries: config.persistenceMaxRetries ?? 3,
+				defaultSessionId: HistoryManager.DEFAULT_SESSION,
+				getSessions: () => this._sessions,
+				getDefaultSession: () => this._getSession(),
+				edgeStore: this._edgeStore,
+				eventEmitter: this._eventEmitter,
+				logger: this._logger,
+			});
 			this._startFlushTimer();
 		}
 
-		// Start the periodic session cleanup timer
-		this._startSessionCleanupTimer();
+		this._sessionManager.startCleanupTimer(this._sessions);
 	}
 
-	/**
-	 * Get the EdgeStore instance, if configured.
-	 * Returns undefined when no EdgeStore was injected.
-	 * @public Used by ThoughtProcessor to build StrategyContext for reasoning strategies.
-	 */
+	// Test-coupled accessors: these private member names must remain reachable
+	// via `manager as unknown as { _flushTimer; _startFlushTimer }`.
+	private get _flushTimer(): ReturnType<typeof setInterval> | null {
+		return this._persistenceBuffer?.timer ?? null;
+	}
+
+	private _startFlushTimer(): void {
+		this._persistenceBuffer?.startFlushTimer();
+	}
+
+	private _stopFlushTimer(): void {
+		if (this._flushTimer === null) return;
+		this._persistenceBuffer?.stopFlushTimer();
+	}
+
+	/** @internal Public for backward-compatible test coupling. */
+	public async _flushBuffer(): Promise<void> {
+		await this._persistenceBuffer?.flush();
+	}
+
+	/** EdgeStore instance, if configured. Used by ThoughtProcessor for StrategyContext. */
 	public getEdgeStore(): IEdgeStore | undefined {
 		return this._edgeStore;
 	}
 
-	/**
-	 * Internal logging method.
-	 * @param message - The message to log
-	 * @param meta - Optional metadata
-	 * @private
-	 */
 	private log(message: string, meta?: Record<string, unknown>): void {
 		this._logger.info(message, meta);
 	}
 
-	/**
-	 * Gets or creates the session state for a given session ID.
-	 * Creates a new SessionState if one doesn't exist.
-	 * Updates lastAccessedAt on every access.
-	 *
-	 * @param sessionId - Optional session ID (defaults to `__global__`)
-	 * @returns The session state
-	 * @private
-	 */
+	/** Gets or creates session state; updates lastAccessedAt. */
 	private _getSession(sessionId?: string): SessionState {
 		const key = sessionId ?? HistoryManager.DEFAULT_SESSION;
 		let session = this._sessions.get(key);
@@ -350,34 +196,18 @@ export class HistoryManager implements IHistoryManager {
 				availableSkills: undefined,
 				writeBuffer: [],
 				lastAccessedAt: Date.now(),
+				registeredBranches: new Set<string>(),
 			};
 			this._sessions.set(key, session);
-			this._evictExcessSessions();
+			this._sessionManager.evictExcessSessions(this._sessions);
 		}
 		session.lastAccessedAt = Date.now();
 		return session;
 	}
 
 	/**
-	 * Adds a thought to the history.
-	 *
-	 * The thought is appended to the session's history array. If history exceeds
-	 * `maxHistorySize`, the oldest thoughts are removed. If the thought
-	 * has `branch_from_thought` and `branch_id` set, it's also added to
-	 * the appropriate branch. The thought is persisted asynchronously if
-	 * persistence is enabled.
-	 *
-	 * @param thought - The thought data to add
-	 *
-	 * @example
-	 * ```typescript
-	 * manager.addThought({
-	 *   thought: 'I should read the README file',
-	 *   thought_number: 1,
-	 *   total_thoughts: 3,
-	 *   next_thought_needed: true
-	 * });
-	 * ```
+	 * Adds a thought to the history. Routes per-session, applies retraction for backtrack,
+	 * caches tools/skills, trims, branches, emits DAG edges, and buffers for persistence.
 	 */
 	public addThought(thought: ThoughtData): void {
 		const session = this._getSession(thought.session_id);
@@ -389,6 +219,12 @@ export class HistoryManager implements IHistoryManager {
 		);
 
 		session.thought_history.push(thought);
+
+		// Logical retraction: when a backtrack thought is added, mark its target
+		// as retracted (append-only — target remains in history).
+		if (thought.thought_type === 'backtrack' && thought.backtrack_target !== undefined) {
+			this._applyRetraction(session, thought.backtrack_target);
+		}
 
 		// Cache available_mcp_tools/available_skills for cross-call persistence
 		if (thought.available_mcp_tools) {
@@ -420,206 +256,32 @@ export class HistoryManager implements IHistoryManager {
 		}
 
 		// Emit DAG edges (no-op unless edgeStore + dagEdges flag both enabled)
-		this._emitEdgesForThought(session, thought);
+		this._edgeEmitter.emitEdgesForThought(session, thought);
 
-		// Buffer thought for persistence instead of fire-and-forget
-		this._bufferForPersistence(session, thought);
-	}
-
-	/**
-	 * Emits DAG edges for a thought based on its metadata fields.
-	 *
-	 * Edge kinds (in priority order):
-	 * - branch: branch_from_thought + branch_id → parent.id → current.id
-	 * - merge: merge_from_thoughts → source.id → current.id (per source)
-	 * - verifies: verification_target + thought_type=verification → current.id → target.id
-	 * - critiques: verification_target + thought_type=critique → current.id → target.id
-	 * - derives_from: synthesis_sources → source.id → current.id (per source)
-	 * - revises: revises_thought → current.id → target.id
-	 * - sequence: default chronological link from previous thought (if none of the above)
-	 *
-	 * No-op when edgeStore is absent, dagEdges flag is off, or thought has no id.
-	 * @param session - The session state
-	 * @param thought - The current thought being added
-	 * @private
-	 */
-	private _emitEdgesForThought(session: SessionState, thought: ThoughtData): void {
-		if (!this._edgeStore || !this._dagEdges) return;
-		if (!thought.id) return;
-
-		const sessionId = thought.session_id ?? HistoryManager.DEFAULT_SESSION;
-		let emittedRelational = false;
-
-		if (thought.branch_from_thought !== undefined && thought.branch_id) {
-			const parentId = this._resolveThoughtId(session, thought.branch_from_thought);
-			if (this._addEdgeIfValid(parentId, thought.id, 'branch', sessionId)) {
-				emittedRelational = true;
-			}
-		}
-
-		if (thought.merge_from_thoughts?.length) {
-			for (const src of thought.merge_from_thoughts) {
-				const srcId = this._resolveThoughtId(session, src);
-				if (this._addEdgeIfValid(srcId, thought.id, 'merge', sessionId)) {
-					emittedRelational = true;
-				}
-			}
-		}
-
-		if (thought.verification_target !== undefined && thought.thought_type === 'verification') {
-			const targetId = this._resolveThoughtId(session, thought.verification_target);
-			if (this._addEdgeIfValid(thought.id, targetId, 'verifies', sessionId)) {
-				emittedRelational = true;
-			}
-		}
-
-		if (thought.verification_target !== undefined && thought.thought_type === 'critique') {
-			const targetId = this._resolveThoughtId(session, thought.verification_target);
-			if (this._addEdgeIfValid(thought.id, targetId, 'critiques', sessionId)) {
-				emittedRelational = true;
-			}
-		}
-
-		if (thought.synthesis_sources?.length) {
-			for (const src of thought.synthesis_sources) {
-				const srcId = this._resolveThoughtId(session, src);
-				if (this._addEdgeIfValid(srcId, thought.id, 'derives_from', sessionId)) {
-					emittedRelational = true;
-				}
-			}
-		}
-
-		if (thought.revises_thought !== undefined) {
-			const targetId = this._resolveThoughtId(session, thought.revises_thought);
-			if (this._addEdgeIfValid(thought.id, targetId, 'revises', sessionId)) {
-				emittedRelational = true;
-			}
-		}
-
-		// tool_invocation edge: tool_call → tool_observation
-		if (thought.thought_type === 'tool_observation' && thought._resumedFrom !== undefined) {
-			const toolCallId = this._resolveThoughtId(session, thought._resumedFrom);
-			const meta: Record<string, unknown> = {};
-			if (thought.tool_name !== undefined) meta.tool_name = thought.tool_name;
-			if (
-				this._addEdgeIfValid(
-					toolCallId,
-					thought.id,
-					'tool_invocation',
-					sessionId,
-					Object.keys(meta).length > 0 ? meta : undefined
-				)
-			) {
-				emittedRelational = true;
-			}
-		}
-
-		if (!emittedRelational) {
-			// Default: chronological sequence from previous thought (the one before current).
-			// current was just pushed, so prev is at length - 2.
-			const history = session.thought_history;
-			if (history.length >= 2) {
-				const prev = history[history.length - 2]!;
-				if (prev.id) {
-					this._addEdgeIfValid(prev.id, thought.id, 'sequence', sessionId);
-				}
-			}
+		// Buffer thought for persistence (no-op when persistence disabled)
+		if (this._persistenceBuffer) {
+			this._persistenceBuffer.bufferThought(session, thought);
 		}
 	}
 
-	/**
-	 * Resolves a thought_number to its stable id within the given session.
-	 * @param session - The session state to search
-	 * @param thoughtNumber - The thought_number to look up
-	 * @returns The thought's id if found and non-empty, undefined otherwise
-	 * @private
-	 */
-	private _resolveThoughtId(
-		session: SessionState,
-		thoughtNumber: number
-	): string | undefined {
+	/** Marks the thought as retracted within the session (append-only). */
+	private _applyRetraction(session: SessionState, targetNumber: number): void {
 		for (const t of session.thought_history) {
-			if (t.thought_number === thoughtNumber && typeof t.id === 'string' && t.id.length > 0) {
-				return t.id;
+			if (t.thought_number === targetNumber) {
+				t.retracted = true;
+				return;
 			}
 		}
-		return undefined;
-	}
-
-	/**
-	 * Adds an edge to the edge store if both endpoints are non-empty strings.
-	 * Returns true if added, false if skipped (missing endpoint).
-	 * Failures (e.g. self-edge) are caught and logged.
-	 * @private
-	 */
-	private _addEdgeIfValid(
-		from: string | undefined,
-		to: string | undefined,
-		kind: EdgeKind,
-		sessionId: string,
-		metadata?: Record<string, unknown>
-	): boolean {
-		if (!from || !to) {
-			this._logger.debug('Skipping edge: unresolved endpoint', {
-				kind,
-				from: from ?? null,
-				to: to ?? null,
-			});
-			return false;
-		}
-		const edge: Edge = {
-			id: generateUlid(),
-			from,
-			to,
-			kind,
-			sessionId,
-			createdAt: Date.now(),
-			...(metadata !== undefined ? { metadata } : {}),
-		};
-		try {
-			this._edgeStore!.addEdge(edge);
-			return true;
-		} catch (err) {
-			this.log('Failed to add DAG edge', {
-				kind,
-				error: getErrorMessage(err),
-			});
-			return false;
+		for (const branchThoughts of Object.values(session.branches)) {
+			for (const t of branchThoughts) {
+				if (t.thought_number === targetNumber) {
+					t.retracted = true;
+					return;
+				}
+			}
 		}
 	}
 
-	/**
-	 * Buffers a thought for persistence if enabled.
-	 * @param session - The session state to buffer into
-	 * @param thought - The thought to buffer
-	 * @private
-	 */
-	private _bufferForPersistence(session: SessionState, thought: ThoughtData): void {
-		if (!this._persistenceEnabled || !this._persistence) return;
-
-		// Backpressure: if buffer is full and flush is failing, log warning
-		if (session.writeBuffer.length >= this._persistenceBufferSize && this._isFlushing) {
-			this.log('Write buffer full and flush in progress, applying backpressure', {
-				bufferSize: session.writeBuffer.length,
-				maxSize: this._persistenceBufferSize,
-			});
-		}
-
-		session.writeBuffer.push(thought);
-
-		// Trigger immediate flush if buffer is at capacity
-		if (session.writeBuffer.length >= this._persistenceBufferSize) {
-			void this._flushBuffer();
-		}
-	}
-
-	/**
-	 * Adds a thought to a branch within a specific session.
-	 * @param session - The session state
-	 * @param branchId - The branch identifier
-	 * @param thought - The thought data to add
-	 * @private
-	 */
 	private _addToSessionBranch(session: SessionState, branchId: string, thought: ThoughtData): void {
 		if (!session.branches[branchId]) {
 			session.branches[branchId] = [];
@@ -642,11 +304,6 @@ export class HistoryManager implements IHistoryManager {
 		}
 	}
 
-	/**
-	 * Removes old branches when count exceeds maxBranches within a session.
-	 * @param session - The session state
-	 * @private
-	 */
 	private _cleanupSessionBranches(session: SessionState): void {
 		const branchCount = Object.keys(session.branches).length;
 		if (branchCount > this._maxBranches) {
@@ -661,12 +318,6 @@ export class HistoryManager implements IHistoryManager {
 		}
 	}
 
-	/**
-	 * Trims a branch to maxBranchSize within a session.
-	 * @param session - The session state
-	 * @param branchId - The branch identifier to trim
-	 * @private
-	 */
 	private _trimSessionBranchSize(session: SessionState, branchId: string): void {
 		if ((session.branches[branchId] ?? []).length > this._maxBranchSize) {
 			const removed = session.branches[branchId]!.length - this._maxBranchSize;
@@ -678,38 +329,13 @@ export class HistoryManager implements IHistoryManager {
 		}
 	}
 
-	/**
-	 * Gets the complete thought history.
-	 *
-	 * @param sessionId - Optional session ID for session-scoped results
-	 * @returns An array of all thoughts in chronological order
-	 *
-	 * @example
-	 * ```typescript
-	 * const history = manager.getHistory();
-	 * history.forEach(thought => {
-	 *   console.log(`${thought.thought_number}: ${thought.thought}`);
-	 * });
-	 * ```
-	 */
 	public getHistory(sessionId?: string): ThoughtData[] {
 		return this._getSession(sessionId).thought_history;
 	}
 
 	/**
-	 * Gets the thought history with optional sliding-window dehydration applied.
-	 *
-	 * Non-mutating view: the underlying history is never modified. When the
-	 * `dagEdges` feature flag is off OR no `ISummaryStore` is configured, this
-	 * method returns the same `ThoughtData[]` as {@link getHistory}. Otherwise,
-	 * a {@link DehydrationPolicy} is applied that replaces older thoughts (cold
-	 * prefix beyond `keepLastK`) with {@link SummaryRef} placeholders pointing
-	 * at existing summaries in the store.
-	 *
-	 * @param sessionId - Optional session ID for session-scoped results
-	 * @param opts - Optional dehydration options (e.g. `keepLastK`)
-	 * @returns Mixed array of original thoughts and summary refs (or the raw
-	 *   history when dehydration is disabled)
+	 * Returns history with optional sliding-window dehydration. Non-mutating: when
+	 * `dagEdges` is off OR no `ISummaryStore` is configured, returns same as getHistory.
 	 */
 	public getHistoryHydrated(
 		sessionId?: string,
@@ -724,121 +350,52 @@ export class HistoryManager implements IHistoryManager {
 		return policy.apply(history, sid, opts);
 	}
 
-	/**
-	 * Gets the current length of the thought history.
-	 *
-	 * @param sessionId - Optional session ID for session-scoped results
-	 * @returns The number of thoughts in history
-	 *
-	 * @example
-	 * ```typescript
-	 * console.log(`Total thoughts: ${manager.getHistoryLength()}`);
-	 * ```
-	 */
 	public getHistoryLength(sessionId?: string): number {
 		return this._getSession(sessionId).thought_history.length;
 	}
 
-	/**
-	 * Gets all branches.
-	 *
-	 * @param sessionId - Optional session ID for session-scoped results
-	 * @returns A record mapping branch IDs to their thought arrays
-	 *
-	 * @example
-	 * ```typescript
-	 * const branches = manager.getBranches();
-	 * for (const [branchId, thoughts] of Object.entries(branches)) {
-	 *   console.log(`Branch ${branchId}: ${thoughts.length} thoughts`);
-	 * }
-	 * ```
-	 */
 	public getBranches(sessionId?: string): Record<string, ThoughtData[]> {
 		return this._getSession(sessionId).branches;
 	}
 
-	/**
-	 * Gets all branch IDs.
-	 *
-	 * @param sessionId - Optional session ID for session-scoped results
-	 * @returns An array of branch identifiers
-	 *
-	 * @example
-	 * ```typescript
-	 * const branchIds = manager.getBranchIds();
-	 * console.log(`Active branches: ${branchIds.join(', ')}`);
-	 * ```
-	 */
 	public getBranchIds(sessionId?: string): string[] {
-		return Object.keys(this._getSession(sessionId).branches);
+		const session = this._getSession(sessionId);
+		const ids = new Set<string>(Object.keys(session.branches));
+		for (const id of session.registeredBranches) ids.add(id);
+		return Array.from(ids);
 	}
 
-	/**
-	 * Gets the most recently available MCP tools from the session.
-	 *
-	 * @param sessionId - Optional session ID for session-scoped results
-	 * @returns The last-seen array of MCP tool names, or undefined if never set
-	 *
-	 * @example
-	 * ```typescript
-	 * const tools = manager.getAvailableMcpTools();
-	 * // ['Read', 'Grep', 'Glob'] or undefined
-	 * ```
-	 */
+	/** @throws {ValidationError} If branchId is empty or already exists. */
+	public registerBranch(sessionId: string | undefined, branchId: string): void {
+		if (typeof branchId !== 'string' || branchId.length === 0) {
+			throw new ValidationError('branch_id', 'branch_id must be a non-empty string');
+		}
+		const session = this._getSession(sessionId);
+		if (branchId in session.branches || session.registeredBranches.has(branchId)) {
+			throw new ValidationError('branch_id', `Branch already exists: ${branchId}`);
+		}
+		session.registeredBranches.add(branchId);
+		this.log('Registered branch', { branchId, sessionId: sessionId ?? null });
+	}
+
+	public branchExists(sessionId: string | undefined, branchId: string): boolean {
+		const session = this._getSession(sessionId);
+		return branchId in session.branches || session.registeredBranches.has(branchId);
+	}
+
 	public getAvailableMcpTools(sessionId?: string): string[] | undefined {
 		return this._getSession(sessionId).availableMcpTools;
 	}
 
-	/**
-	 * Gets the most recently available skills from the session.
-	 *
-	 * @param sessionId - Optional session ID for session-scoped results
-	 * @returns The last-seen array of skill names, or undefined if never set
-	 *
-	 * @example
-	 * ```typescript
-	 * const skills = manager.getAvailableSkills();
-	 * // ['commit', 'review-pr'] or undefined
-	 * ```
-	 */
 	public getAvailableSkills(sessionId?: string): string[] | undefined {
 		return this._getSession(sessionId).availableSkills;
 	}
 
-	/**
-	 * Gets a specific branch by ID.
-	 *
-	 * @param branchId - The branch identifier
-	 * @param sessionId - Optional session ID for session-scoped results
-	 * @returns The branch's thought array, or undefined if not found
-	 *
-	 * @example
-	 * ```typescript
-	 * const branch = manager.getBranch('alternative-approach');
-	 * if (branch) {
-	 *   console.log(`Branch has ${branch.length} thoughts`);
-	 * } else {
-	 *   console.log('Branch not found');
-	 * }
-	 * ```
-	 */
 	public getBranch(branchId: string, sessionId?: string): ThoughtData[] | undefined {
 		return this._getSession(sessionId).branches[branchId];
 	}
 
-	/**
-	 * Clears history and branches.
-	 * If sessionId is provided, clears only that session.
-	 * If omitted, clears all sessions.
-	 *
-	 * @param sessionId - Optional session ID to clear
-	 *
-	 * @example
-	 * ```typescript
-	 * manager.clear();
-	 * console.log('All history and branches cleared');
-	 * ```
-	 */
+	/** Clears history and branches. If sessionId provided, clears only that session. */
 	public clear(sessionId?: string): void {
 		// Clear edges from EdgeStore (before session map mutation so keys are still available)
 		if (this._edgeStore) {
@@ -854,11 +411,9 @@ export class HistoryManager implements IHistoryManager {
 		}
 
 		if (sessionId !== undefined) {
-			// Clear specific session
 			this._sessions.delete(sessionId);
 			this.log('Session cleared', { sessionId });
 		} else {
-			// Clear all sessions
 			this._sessions.clear();
 			this.log('History cleared (all sessions)');
 		}
@@ -873,43 +428,25 @@ export class HistoryManager implements IHistoryManager {
 		}
 	}
 
-	/** Clears state for a specific session. Alias for clear(sessionId). */
 	public clearSession(sessionId: string): void {
 		this.clear(sessionId);
 	}
 
-	/** Gets all active session IDs. */
 	public getSessionIds(): string[] {
 		return Array.from(this._sessions.keys());
 	}
 
-	/** Gets the number of active sessions. */
 	public getSessionCount(): number {
 		return this._sessions.size;
 	}
 
-	/**
-	 * Loads history from the persistence backend.
-	 *
-	 * This should be called during initialization to restore previous state.
-	 * Only loads if persistence is enabled and the backend is healthy.
-	 * Loads into the global session.
-	 *
-	 * @returns Promise that resolves when loading is complete
-	 *
-	 * @example
-	 * ```typescript
-	 * await manager.loadFromPersistence();
-	 * console.log(`Loaded ${manager.getHistoryLength()} thoughts`);
-	 * ```
-	 */
+	/** Loads history from persistence into the global session. Call at init. */
 	public async loadFromPersistence(): Promise<void> {
 		if (!this._persistenceEnabled || !this._persistence) {
 			return;
 		}
 
 		try {
-			// Check backend health
 			const isHealthy = await this._persistence.healthy();
 			if (!isHealthy) {
 				this.log('Persistence backend not healthy, skipping load');
@@ -918,14 +455,12 @@ export class HistoryManager implements IHistoryManager {
 
 			const globalSession = this._getSession();
 
-			// Load history
 			const history = await this._persistence.loadHistory();
 			if (history.length > 0) {
 				globalSession.thought_history = history.slice(-this._maxHistorySize);
 				this.log(`Loaded ${globalSession.thought_history.length} thoughts from persistence`);
 			}
 
-			// Load branches
 			const branchIds = await this._persistence.listBranches();
 			for (const branchId of branchIds) {
 				const branchData = await this._persistence.loadBranch(branchId);
@@ -935,21 +470,29 @@ export class HistoryManager implements IHistoryManager {
 			}
 			this.log(`Loaded ${Object.keys(globalSession.branches).length} branches from persistence`);
 
-			// Load edges if EdgeStore is configured (DEFAULT_SESSION only — multi-session is additive later)
+			// Load edges if EdgeStore is configured — restore for ALL persisted sessions
 			if (this._edgeStore) {
 				try {
-					const globalEdges = await this._persistence.loadEdges(HistoryManager.DEFAULT_SESSION);
-					for (const edge of globalEdges) {
-						try {
-							this._edgeStore.addEdge(edge);
-						} catch (edgeErr) {
-							this.log('Failed to restore edge', {
-								edgeId: edge.id,
-								error: getErrorMessage(edgeErr),
-							});
+					const edgeSessions = await this._persistence.listEdgeSessions();
+					let totalEdges = 0;
+					for (const sessionId of edgeSessions) {
+						const edges = await this._persistence.loadEdges(sessionId);
+						for (const edge of edges) {
+							try {
+								this._edgeStore.addEdge(edge);
+								totalEdges++;
+							} catch (edgeErr) {
+								this.log('Failed to restore edge', {
+									edgeId: edge.id,
+									sessionId,
+									error: getErrorMessage(edgeErr),
+								});
+							}
 						}
 					}
-					this.log(`Loaded ${globalEdges.length} edges for global session from persistence`);
+					this.log(
+						`Loaded ${totalEdges} edges across ${edgeSessions.length} sessions from persistence`,
+					);
 				} catch (edgeError) {
 					this.log('Failed to load edges from persistence', {
 						error: getErrorMessage(edgeError),
@@ -963,314 +506,28 @@ export class HistoryManager implements IHistoryManager {
 		}
 	}
 
-	/**
-	 * Checks if persistence is enabled.
-	 *
-	 * @returns true if persistence is enabled, false otherwise
-	 *
-	 * @example
-	 * ```typescript
-	 * if (manager.isPersistenceEnabled()) {
-	 *   console.log('Persistence is active');
-	 * }
-	 * ```
-	 */
 	public isPersistenceEnabled(): boolean {
 		return this._persistenceEnabled;
 	}
 
-	/**
-	 * Gets the persistence backend instance.
-	 *
-	 * @returns The persistence backend, or null if not configured
-	 *
-	 * @example
-	 * ```typescript
-	 * const backend = manager.getPersistenceBackend();
-	 * if (backend) {
-	 *   await backend.healthy();
-	 * }
-	 * ```
-	 */
 	public getPersistenceBackend(): PersistenceBackend | null {
 		return this._persistence;
 	}
 
-	/**
-	 * Sets the event emitter for persistence error events.
-	 * This allows wiring up the event emitter after construction
-	 * (e.g., when the server instance is the emitter).
-	 *
-	 * @param emitter - The event emitter to use for persistence error events
-	 */
+	/** Sets the event emitter for persistence error events (post-construction wiring). */
 	public setEventEmitter(emitter: PersistenceEventEmitter): void {
 		this._eventEmitter = emitter;
+		this._persistenceBuffer?.setEventEmitter(emitter);
 	}
 
-	/**
-	 * Gracefully shuts down the write buffer and session cleanup.
-	 * Stops the periodic flush timer and session cleanup timer,
-	 * then flushes any remaining buffered writes.
-	 * Should be called during server shutdown before closing the persistence backend.
-	 */
+	/** Stops timers and flushes any remaining buffered writes. */
 	public async shutdown(): Promise<void> {
 		this._stopFlushTimer();
-		this._stopSessionCleanupTimer();
+		this._sessionManager.stopCleanupTimer();
 		await this._flushBuffer();
 	}
 
-	/**
-	 * Starts the periodic flush timer for the write buffer.
-	 * @private
-	 */
-	private _startFlushTimer(): void {
-		if (this._flushTimer !== null) {
-			return;
-		}
-		this._flushTimer = setInterval(() => {
-			void this._flushBuffer();
-		}, this._persistenceFlushInterval);
-		// Allow the process to exit even if the timer is still running
-		if (this._flushTimer && typeof this._flushTimer === 'object' && 'unref' in this._flushTimer) {
-			this._flushTimer.unref();
-		}
-	}
-
-	/**
-	 * Stops the periodic flush timer.
-	 * @private
-	 */
-	private _stopFlushTimer(): void {
-		if (this._flushTimer !== null) {
-			clearInterval(this._flushTimer);
-			this._flushTimer = null;
-		}
-	}
-
-	/**
-	 * Starts the periodic session cleanup timer.
-	 * Runs every 5 minutes to evict sessions that exceeded TTL.
-	 * @private
-	 */
-	private _startSessionCleanupTimer(): void {
-		if (this._sessionCleanupTimer !== null) return;
-		this._sessionCleanupTimer = setInterval(
-			() => {
-				this._cleanupStaleSessions();
-			},
-			5 * 60 * 1000
-		);
-		if (
-			this._sessionCleanupTimer &&
-			typeof this._sessionCleanupTimer === 'object' &&
-			'unref' in this._sessionCleanupTimer
-		) {
-			this._sessionCleanupTimer.unref();
-		}
-	}
-
-	/**
-	 * Stops the periodic session cleanup timer.
-	 * @private
-	 */
-	private _stopSessionCleanupTimer(): void {
-		if (this._sessionCleanupTimer !== null) {
-			clearInterval(this._sessionCleanupTimer);
-			this._sessionCleanupTimer = null;
-		}
-	}
-
-	/**
-	 * Evicts sessions that have been inactive longer than SESSION_TTL_MS.
-	 * The global session is never evicted.
-	 * @private
-	 */
-	private _cleanupStaleSessions(): void {
-		const now = Date.now();
-		for (const [key, session] of this._sessions) {
-			// Never evict the global session
-			if (key === HistoryManager.DEFAULT_SESSION) continue;
-			if (now - session.lastAccessedAt > HistoryManager.SESSION_TTL_MS) {
-				this._sessions.delete(key);
-				this.log('Evicted stale session', { sessionId: key });
-			}
-		}
-	}
-
-	/**
-	 * Evicts oldest sessions when MAX_SESSIONS is exceeded (LRU).
-	 * The global session is never evicted.
-	 * @private
-	 */
-	private _evictExcessSessions(): void {
-		while (this._sessions.size > HistoryManager.MAX_SESSIONS) {
-			let oldestKey: string | null = null;
-			let oldestTime = Infinity;
-			for (const [key, session] of this._sessions) {
-				if (key === HistoryManager.DEFAULT_SESSION) continue;
-				if (session.lastAccessedAt < oldestTime) {
-					oldestTime = session.lastAccessedAt;
-					oldestKey = key;
-				}
-			}
-			if (oldestKey !== null) {
-				this._sessions.delete(oldestKey);
-				this.log('Evicted oldest session (LRU)', { sessionId: oldestKey });
-			} else {
-				break;
-			}
-		}
-	}
-
-	/**
-	 * Flushes the write buffer to the persistence backend.
-	 *
-	 * Collects all buffered thoughts across all sessions and saves them
-	 * individually with retry logic. On persistent failure (all retries exhausted),
-	 * emits a `persistenceError` event and re-queues failed items.
-	 *
-	 * This method is safe to call concurrently — duplicate calls are skipped.
-	 * @internal
-	 */
-	public async _flushBuffer(): Promise<void> {
-		if (this._isFlushing || !this._persistence) {
-			return;
-		}
-
-		// Collect all pending writes from all sessions
-		const allPending: ThoughtData[] = [];
-		for (const session of this._sessions.values()) {
-			if (session.writeBuffer.length > 0) {
-				allPending.push(...session.writeBuffer.splice(0));
-			}
-		}
-
-		if (allPending.length === 0) return;
-
-		this._isFlushing = true;
-		const failedItems: ThoughtData[] = [];
-
-		try {
-			for (const thought of allPending) {
-				const saved = await this._flushSingleThought(thought);
-				if (!saved) {
-					failedItems.push(thought);
-				}
-			}
-
-			this._handleFlushResult(failedItems, allPending.length);
-
-			// Flush edges for sessions when EdgeStore is configured
-			if (this._edgeStore) {
-				await this._flushEdges();
-			}
-		} finally {
-			this._isFlushing = false;
-		}
-	}
-
-	/**
-	 * Flushes edges for all known sessions to the persistence backend.
-	 * No-op when EdgeStore or persistence is unavailable.
-	 * @private
-	 */
-	private async _flushEdges(): Promise<void> {
-		if (!this._edgeStore || !this._persistence) return;
-		const sessionKeys = new Set<string>(this._sessions.keys());
-		sessionKeys.add(HistoryManager.DEFAULT_SESSION);
-		for (const sessionId of sessionKeys) {
-			const edges = this._edgeStore.edgesForSession(sessionId);
-			if (edges.length === 0) continue;
-			try {
-				await this._persistence.saveEdges(sessionId, edges);
-			} catch (err) {
-				this.log('Failed to persist edges for session', {
-					sessionId,
-					error: getErrorMessage(err),
-				});
-			}
-		}
-	}
-
-	/**
-	 * Flushes a single thought to persistence with retry logic.
-	 * @param thought - The thought to flush
-	 * @returns true if saved successfully, false otherwise
-	 * @private
-	 */
-	private async _flushSingleThought(thought: ThoughtData): Promise<boolean> {
-		const backoffDelays = [100, 500, 2000];
-
-		for (let attempt = 0; attempt <= this._persistenceMaxRetries; attempt++) {
-			try {
-				await this._persistence!.saveThought(thought);
-				return true;
-			} catch (err) {
-				if (attempt < this._persistenceMaxRetries) {
-					const delay = backoffDelays[attempt] ?? backoffDelays[backoffDelays.length - 1]!;
-					this.log(`Persistence retry ${attempt + 1}/${this._persistenceMaxRetries}`, {
-						thoughtNumber: thought.thought_number,
-						delay,
-						error: getErrorMessage(err),
-					});
-					await this._delay(delay);
-				} else {
-					this.log('All persistence retries exhausted for thought', {
-						thoughtNumber: thought.thought_number,
-						error: getErrorMessage(err),
-					});
-				}
-			}
-		}
-
-		return false;
-	}
-
-	/**
-	 * Handles the result of a flush operation, re-queuing failures.
-	 * @param failedItems - Thoughts that failed to persist
-	 * @param totalCount - Total number of thoughts attempted
-	 * @private
-	 */
-	private _handleFlushResult(failedItems: ThoughtData[], totalCount: number): void {
-		if (failedItems.length > 0) {
-			// Put failed items back in the global session's buffer
-			const globalSession = this._getSession();
-			globalSession.writeBuffer.unshift(...failedItems);
-			this._flushRetryCount++;
-
-			const error = new Error(
-				`Failed to persist ${failedItems.length} thoughts after ${this._persistenceMaxRetries} retries`
-			);
-			this._eventEmitter?.emit('persistenceError', {
-				operation: 'flushBuffer',
-				error,
-			});
-
-			this.log('Flush completed with failures', {
-				failed: failedItems.length,
-				total: totalCount,
-				consecutiveFailures: this._flushRetryCount,
-			});
-		} else {
-			// Reset retry count on full success
-			this._flushRetryCount = 0;
-		}
-	}
-
-	/**
-	 * Returns a promise that resolves after the specified delay.
-	 * @param ms - Delay in milliseconds
-	 * @private
-	 */
-	private _delay(ms: number): Promise<void> {
-		return new Promise((resolve) => setTimeout(resolve, ms));
-	}
-
-	/**
-	 * Gets the current write buffer length across all sessions.
-	 * Useful for monitoring and testing.
-	 */
+	/** Total write buffer length across all sessions. */
 	public getWriteBufferLength(): number {
 		let total = 0;
 		for (const session of this._sessions.values()) {
