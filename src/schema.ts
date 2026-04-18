@@ -100,7 +100,7 @@ Parameters explained:
 - remaining_steps: High-level descriptions of upcoming steps
 
 Reasoning Enhancement Parameters:
-- thought_type: Thought purpose: 'regular' (default), 'hypothesis', 'verification', 'critique', 'synthesis', 'meta'
+- thought_type: Thought purpose: 'regular' (default), 'hypothesis', 'verification', 'critique', 'synthesis', 'meta', 'tool_call' (requires toolInterleave flag), 'tool_observation' (requires toolInterleave flag), 'assumption' (requires newThoughtTypes flag), 'decomposition' (requires newThoughtTypes flag), 'backtrack' (requires newThoughtTypes flag; logically retracts the thought referenced by backtrack_target - the target remains in history but is excluded from quality calculations)
 - quality_score: Self-assessed quality of this thought (0-1)
 - confidence: Confidence in this thought's correctness (0-1)
 - hypothesis_id: Links hypothesis to verification (alphanumeric, hyphens, underscores)
@@ -115,10 +115,10 @@ Reasoning Enhancement Parameters:
 
 Response Enrichment:
 - When reasoning fields are set, response includes confidence_signals (depth, revision/branch count, type distribution, avg confidence, structural_quality, quality_components) and reasoning_stats (hypothesis tracking)
-- confidence_signals.structural_quality: Composite 0-1 score — weighted geometric mean of type_diversity (0.3), verification_coverage (0.3), depth_efficiency (0.2), confidence_stability (0.2). All components floored at 0.01 to prevent collapse.
-- confidence_signals.quality_components: Individual metrics — type_diversity (Shannon entropy/log₂(6)), verification_coverage (verified/total hypotheses, 1.0 if none), depth_efficiency (max(chain_depth, branch_count+1)/total, branching rewarded), confidence_stability (1 - stddev(confidence), default 0.5)
-- reasoning_hints: (Conditional) Array of actionable hint strings from cross-thought pattern analysis. Only warning-severity patterns produce hints. Max 3 hints per response, with 3-thought cooldown per pattern per session. Present only when warnings are detected.
-- Detected patterns (internal, not in response): consecutive_without_verification (3+ regular thoughts without verification), unverified_hypothesis (hypothesis without verification within 3 thoughts), no_alternatives_explored (5+ thoughts with no critique/branches), monotonic_type (4+ consecutive same type), confidence_drift (3+ consecutive decreasing confidence), healthy_verification (hypothesis verified within 3 thoughts — info only)
+- confidence_signals.structural_quality: Composite 0-1 score — weighted geometric mean of type_diversity (0.3), verification_coverage (0.3), depth_efficiency (0.2), confidence_stability (0.2). Weights: type_diversity=0.3, verification_coverage=0.3, depth_efficiency=0.2, confidence_stability=0.2 (weighted geometric mean). All components floored at 0.01 to prevent collapse.
+- confidence_signals.quality_components: Individual metrics — type_diversity (Shannon entropy/log₂(6)), verification_coverage (verified/total hypotheses, 1.0 if none), depth_efficiency (max(chain_depth, branch_count+1)/total, branching rewarded), confidence_stability (1 - stddev(confidence), default 0.5, null when fewer than 2 confidence values)
+- reasoning_hints: (Conditional) Array of actionable hint strings from cross-thought pattern analysis. Only warning-severity patterns produce hints. Max 3 hints per response, with 3-thought cooldown per pattern per session. Hints are prioritized: confidence_drift > unverified_hypothesis > no_alternatives_explored > consecutive_without_verification, so the most actionable patterns fill the cap first. Present only when warnings are detected.
+- Detected patterns (internal, not in response): consecutive_without_verification (3+ regular thoughts without verification), unverified_hypothesis (hypothesis without verification within 3 thoughts after it), no_alternatives_explored (5+ thoughts with no critique/branches), monotonic_type (5+ consecutive same type), confidence_drift (3+ consecutive decreasing confidence), healthy_verification (hypothesis verified within 3 thoughts — info only)
 You should:
 1. Start with an initial estimate of needed thoughts, but be ready to adjust
 2. Feel free to question or revise previous thoughts
@@ -512,7 +512,7 @@ export const SequentialThinkingSchema = v.object({
 		v.pipe(
 			v.picklist(['regular', 'hypothesis', 'verification', 'critique', 'synthesis', 'meta', 'tool_call', 'tool_observation', 'assumption', 'decomposition', 'backtrack']),
 			v.description(
-				'Classified purpose: regular, hypothesis, verification, critique, synthesis, meta'
+				'Classified purpose: regular (default), hypothesis, verification, critique, synthesis, meta, tool_call (requires toolInterleave), tool_observation (requires toolInterleave), assumption (requires newThoughtTypes), decomposition (requires newThoughtTypes), backtrack (requires newThoughtTypes)'
 			)
 		)
 	),
@@ -605,7 +605,21 @@ export const SequentialThinkingSchema = v.object({
 	tool_result: v.optional(v.pipe(v.unknown(), v.description('Result returned by the tool (for tool_observation thoughts)'))),
 	continuation_token: v.optional(v.pipe(v.string(), v.minLength(1), v.description('Token for resuming long-running tool invocations'))),
 	decomposition_children: v.optional(v.pipe(v.array(v.string()), v.description('Child thought IDs produced by decomposition'))),
-	backtrack_target: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description('Thought number to backtrack to'))),
+	backtrack_target: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1), v.description('Thought number to backtrack to. When the parent thought has thought_type=backtrack, this thought is logically retracted: it remains in history but is excluded from quality signals and reasoning stats.'))),
+	register_branch_id: v.optional(
+		v.pipe(
+			v.string(),
+			v.regex(
+				/^[a-zA-Z0-9_-]+$/,
+				'register_branch_id must contain only letters, numbers, hyphens, and underscores'
+			),
+			v.minLength(1),
+			v.maxLength(50),
+			v.description(
+				'Pre-declares a branch ID for this session before any thoughts reference it. Useful so that subsequent thoughts using merge_branch_ids can target a branch that has not yet received any thoughts.'
+			)
+		)
+	),
 });
 
 /**

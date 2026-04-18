@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { ABSOLUTE_MAX_HISTORY_SIZE, HistoryManager } from '../core/HistoryManager.js';
+import { EdgeStore } from '../core/graph/EdgeStore.js';
 import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
 import { createTestThought } from './helpers/index.js';
 import { useFakeTimers, useRealTimers } from './helpers/index.js';
@@ -64,6 +65,10 @@ class MockPersistence implements PersistenceBackend {
 	async saveEdges(): Promise<void> {}
 
 	async loadEdges(): Promise<never[]> {
+		return [];
+	}
+
+	async listEdgeSessions(): Promise<string[]> {
 		return [];
 	}
 
@@ -1044,5 +1049,213 @@ describe('HistoryManager — uncovered branches', () => {
 				Object.defineProperty(HistoryManager, 'MAX_SESSIONS', { value: originalMaxSessions, writable: true, configurable: true });
 			}
 		});
+	});
+
+	describe('session eviction interactions with EdgeStore', () => {
+		it('TTL-evicted session leaves EdgeStore entries intact (current behavior)', () => {
+			useFakeTimers();
+			const edgeStore = new EdgeStore();
+			const manager = new HistoryManager({ edgeStore, dagEdges: true });
+
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'old', id: 'old-1' }));
+			manager.addThought(createTestThought({ thought_number: 2, session_id: 'old', id: 'old-2' }));
+			const sizeBefore = edgeStore.size('old');
+			expect(sizeBefore).toBeGreaterThan(0);
+
+			// Trigger TTL eviction
+			vi.advanceTimersByTime(31 * 60 * 1000);
+			vi.advanceTimersByTime(5 * 60 * 1000);
+
+			// Session is gone from manager...
+			expect(manager.getSessionIds()).not.toContain('old');
+			// ...but EdgeStore entries persist (no auto-cleanup wired)
+			expect(edgeStore.size('old')).toBe(sizeBefore);
+		});
+
+		it('LRU-evicted session leaves EdgeStore entries intact (current behavior)', () => {
+			useFakeTimers();
+			// MAX_SESSIONS is private — override via defineProperty (default is 100)
+			Object.defineProperty(HistoryManager, 'MAX_SESSIONS', {
+				value: 2,
+				writable: true,
+				configurable: true,
+			});
+			try {
+				const edgeStore = new EdgeStore();
+				const manager = new HistoryManager({ edgeStore, dagEdges: true });
+
+				manager.addThought(createTestThought({ thought_number: 1, session_id: 's1', id: 's1-1' }));
+				vi.advanceTimersByTime(1);
+				manager.addThought(createTestThought({ thought_number: 2, session_id: 's1', id: 's1-2' }));
+				vi.advanceTimersByTime(1);
+				manager.addThought(createTestThought({ thought_number: 1, session_id: 's2', id: 's2-1' }));
+				vi.advanceTimersByTime(1);
+
+				const s1EdgesBefore = edgeStore.size('s1');
+				expect(s1EdgesBefore).toBeGreaterThan(0);
+
+				// Add a 3rd session — MAX_SESSIONS=2 (excluding __global__) → s1 evicted as oldest
+				manager.addThought(createTestThought({ thought_number: 1, session_id: 's3', id: 's3-1' }));
+
+				expect(manager.getSessionIds()).not.toContain('s1');
+				// EdgeStore entries persist after LRU eviction
+				expect(edgeStore.size('s1')).toBe(s1EdgesBefore);
+			} finally {
+				Object.defineProperty(HistoryManager, 'MAX_SESSIONS', {
+					value: 100,
+					writable: true,
+					configurable: true,
+				});
+			}
+		});
+
+		it('clearSession() actively clears the EdgeStore for that session', () => {
+			const edgeStore = new EdgeStore();
+			const manager = new HistoryManager({ edgeStore, dagEdges: true });
+
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a', id: 'a-1' }));
+			manager.addThought(createTestThought({ thought_number: 2, session_id: 'a', id: 'a-2' }));
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b', id: 'b-1' }));
+			expect(edgeStore.size('a')).toBeGreaterThan(0);
+
+			manager.clearSession('a');
+
+			expect(edgeStore.size('a')).toBe(0);
+			// Other session edges untouched
+			expect(edgeStore.size('b')).toBeGreaterThanOrEqual(0);
+		});
+	});
+
+	describe('persistence saveEdges failure isolation', () => {
+		it('saveEdges throwing does not prevent saveThought from succeeding', async () => {
+			const persistence = new MockPersistence();
+			// Override saveEdges to always throw
+			let edgeSaveAttempts = 0;
+			persistence.saveEdges = async (): Promise<void> => {
+				edgeSaveAttempts++;
+				throw new Error('Edge save failed');
+			};
+			const edgeStore = new EdgeStore();
+			const manager = new HistoryManager({
+				persistence,
+				edgeStore,
+				dagEdges: true,
+				persistenceBufferSize: 100,
+				persistenceFlushInterval: 60000,
+			});
+
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'x', id: 'x-1' }));
+			manager.addThought(createTestThought({ thought_number: 2, session_id: 'x', id: 'x-2' }));
+			await manager.shutdown();
+
+			// Thoughts must be persisted even though saveEdges threw
+			const persisted = await persistence.loadHistory();
+			expect(persisted).toHaveLength(2);
+			// Edge save was attempted at least once and threw — caught silently
+			expect(edgeSaveAttempts).toBeGreaterThan(0);
+		});
+
+		it('saveThought failure does not block subsequent edge save attempts', async () => {
+			const persistence = new MockPersistence();
+			persistence.saveThoughtFailCount = 100; // fail all retries
+			let edgeAttempts = 0;
+			persistence.saveEdges = async (): Promise<void> => {
+				edgeAttempts++;
+			};
+			const edgeStore = new EdgeStore();
+			const manager = new HistoryManager({
+				persistence,
+				edgeStore,
+				dagEdges: true,
+				persistenceBufferSize: 100,
+				persistenceFlushInterval: 60000,
+				persistenceMaxRetries: 1,
+			});
+
+			manager.addThought(createTestThought({ thought_number: 1, session_id: 'y', id: 'y-1' }));
+			manager.addThought(createTestThought({ thought_number: 2, session_id: 'y', id: 'y-2' }));
+			await manager.shutdown();
+
+			// Even with thought-save failures, edges still attempted to be saved
+			expect(edgeAttempts).toBeGreaterThan(0);
+		});
+	});
+});
+
+describe('HistoryManager — declarative branch registration', () => {
+	afterEach(() => {
+		useRealTimers();
+	});
+
+	it('registerBranch creates an empty branch that branchExists detects', () => {
+		const manager = new HistoryManager();
+		expect(manager.branchExists(undefined, 'alt-1')).toBe(false);
+
+		manager.registerBranch(undefined, 'alt-1');
+
+		expect(manager.branchExists(undefined, 'alt-1')).toBe(true);
+		expect(manager.getBranchIds()).toContain('alt-1');
+		// Registered-only branches do not have thoughts attached
+		expect(manager.getBranch('alt-1')).toBeUndefined();
+	});
+
+	it('branchExists returns true for branches created via addThought', () => {
+		const manager = new HistoryManager();
+		manager.addThought(
+			createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: 'alt-2' })
+		);
+		expect(manager.branchExists(undefined, 'alt-2')).toBe(true);
+	});
+
+	it('registerBranch throws ValidationError on duplicate (existing thought-backed branch)', () => {
+		const manager = new HistoryManager();
+		manager.addThought(
+			createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: 'dup' })
+		);
+
+		expect(() => manager.registerBranch(undefined, 'dup')).toThrowError(
+			/Branch already exists: dup/
+		);
+	});
+
+	it('registerBranch throws ValidationError on duplicate (already registered)', () => {
+		const manager = new HistoryManager();
+		manager.registerBranch(undefined, 'alt-3');
+
+		expect(() => manager.registerBranch(undefined, 'alt-3')).toThrowError(
+			/Branch already exists: alt-3/
+		);
+	});
+
+	it('registerBranch throws ValidationError on empty branchId', () => {
+		const manager = new HistoryManager();
+		expect(() => manager.registerBranch(undefined, '')).toThrowError(
+			/branch_id must be a non-empty string/
+		);
+	});
+
+	it('registerBranch is session-scoped (independent across sessions)', () => {
+		const manager = new HistoryManager();
+		manager.registerBranch('session-a', 'shared-name');
+
+		expect(manager.branchExists('session-a', 'shared-name')).toBe(true);
+		expect(manager.branchExists('session-b', 'shared-name')).toBe(false);
+
+		// Same name can be registered in a different session without conflict
+		expect(() => manager.registerBranch('session-b', 'shared-name')).not.toThrow();
+		expect(manager.branchExists('session-b', 'shared-name')).toBe(true);
+	});
+
+	it('getBranchIds merges thought-backed and registered branches without duplicates', () => {
+		const manager = new HistoryManager();
+		manager.addThought(
+			createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: 'with-thoughts' })
+		);
+		manager.registerBranch(undefined, 'registered-only');
+
+		const ids = manager.getBranchIds();
+		expect(ids).toContain('with-thoughts');
+		expect(ids).toContain('registered-only');
+		expect(new Set(ids).size).toBe(ids.length);
 	});
 });

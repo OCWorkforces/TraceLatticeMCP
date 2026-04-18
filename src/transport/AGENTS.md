@@ -1,39 +1,46 @@
 # TRANSPORT MODULE
 
 **Updated:** 2026-04-18
-**Commit:** 906f363
+**Parent:** ../AGENTS.md
+
 ## OVERVIEW
 
-MCP transport implementations providing communication channels between the MCP server and clients. Supports SSE (Server-Sent Events) for real-time streaming and HTTP for request-response patterns.
+MCP transport implementations: 3 transport types + shared base. Communication channels between MCP server and clients. Factory pattern, async lifecycle, security baked in.
 
 ## STRUCTURE
 
 ```
 src/transport/
-├── BaseTransport.ts          # Abstract base (security, rate limiting, CORS) (439L)
-├── SseTransport.ts           # Server-Sent Events (multi-user, streaming) (476L)
-├── HttpTransport.ts          # HTTP JSON-RPC (stateless, request-response) (344L)
-├── HttpHelpers.ts            # HTTP utility functions (109L)
-└── StreamableHttpTransport.ts # MCP Streamable HTTP transport (724L)
+├── BaseTransport.ts            # 410L  Abstract base: rate limiting, CORS, validation
+├── StreamableHttpTransport.ts  # 704L  MCP Streamable HTTP (stateful/stateless)
+├── SseTransport.ts             # 476L  Server-Sent Events (multi-user streaming)
+├── HttpTransport.ts            # 344L  HTTP JSON-RPC (stateless)
+└── HttpHelpers.ts              # 109L  readRequestBody + shared utils
 ```
 
+## TRANSPORTS
 
-## PATTERNS
-
-### BaseTransport
-Shared security: session ID validation, query sanitization, rate limiting (100 req/min), CORS, IP extraction via `X-Forwarded-For`.
+### StreamableHttpTransport (most complex)
+Full MCP Streamable HTTP. Dual mode: stateful (per-client `SessionState` keyed by `Mcp-Session-Id` header) or stateless. Request streaming, graceful shutdown, session reaper.
 
 ### SseTransport
-Multi-connection SSE with `Set<ServerResponse>`, message queue for late joiners, auto-generated client IDs. Endpoints: `GET {path}` (SSE), `POST {path}/message`, `GET /health`.
+Server-Sent Events for multi-user streaming. `Set<ServerResponse>` connection pool, message queue for late joiners, auto client IDs. Endpoints: `GET {path}` (SSE), `POST {path}/message`, `GET /health`.
 
-### HttpTransport
-Stateless JSON-RPC 2.0 over HTTP. Pipeline: rate limit → CORS → body size → schema validation → delegate to MCP server. Body limit 10MB, timeout 30s.
+### HttpTransport (simplest)
+Stateless JSON-RPC 2.0 over HTTP. Pipeline: rate limit → CORS → body size → schema → delegate. Body limit 10MB, 30s timeout.
 
-### StreamableHttpTransport
-MCP Streamable HTTP transport (724L). Full MCP protocol support with session management, request streaming, and graceful shutdown. Uses shared `readRequestBody` from `HttpHelpers`.
+## SHARED BASE
 
-## CONVENTIONS
+`BaseTransport` provides cross-cutting security:
+- Rate limiting (100 req/min per-IP, `X-Forwarded-For` aware)
+- CORS preflight + headers
+- Session ID validation, query sanitization
+- Path traversal prevention, request size caps
 
-- All transports provide `create*Transport()` factory functions.
-- `stop()` method with Promise-based cleanup for graceful shutdown.
-- `HealthChecker` integration for `/health` endpoints.
+## NOTES
+
+- Factories: `createStreamableHttpTransport()`, `createSseTransport()`, `createHttpTransport()`
+- All expose `start()` / `stop()` (Promise-based graceful shutdown)
+- `HealthChecker` integration for `/health`
+- `Mcp-Session-Id` header is the stateful StreamableHTTP session key
+- `HttpHelpers.readRequestBody` shared across HTTP variants, never duplicate

@@ -352,6 +352,18 @@ export class SqlitePersistence implements PersistenceBackend {
 	}
 
 	/**
+	 * List all session IDs that have persisted edges in the database.
+	 *
+	 * @returns Array of distinct session identifiers from the edges table
+	 */
+	public async listEdgeSessions(): Promise<string[]> {
+		const rows = this._db
+			.prepare('SELECT DISTINCT session_id FROM edges')
+			.all() as { session_id: string }[];
+		return rows.map((r) => r.session_id);
+	}
+
+	/**
 	 * Persist summaries for a session using replace semantics: deletes any
 	 * existing summaries for the session, then inserts the provided summaries
 	 * within a transaction.

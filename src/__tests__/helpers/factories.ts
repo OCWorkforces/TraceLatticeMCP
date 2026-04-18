@@ -168,6 +168,14 @@ export class MockHistoryManager implements IHistoryManager {
 		return Object.keys(this._getSession(sessionId).branches);
 	}
 
+	registerBranch(_sessionId: string | undefined, _branchId: string): void {
+		/* no-op for mock */
+	}
+
+	branchExists(sessionId: string | undefined, branchId: string): boolean {
+		return branchId in this._getSession(sessionId).branches;
+	}
+
 	clear(sessionId?: string): void {
 		const key = sessionId ?? MockHistoryManager.DEFAULT;
 		this._sessions.delete(key);

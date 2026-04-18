@@ -123,6 +123,15 @@ export class MemoryPersistence implements PersistenceBackend {
 	}
 
 	/**
+	 * List all session IDs that have persisted edges in memory.
+	 *
+	 * @returns Array of session identifiers with persisted edges
+	 */
+	public async listEdgeSessions(): Promise<string[]> {
+		return Array.from(this._edges.keys());
+	}
+
+	/**
 	 * Save summaries for a session, replacing any previously saved summaries.
 	 *
 	 * @param sessionId - The session whose summaries to persist

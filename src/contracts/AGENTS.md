@@ -1,42 +1,32 @@
 # CONTRACTS MODULE
 
 **Updated:** 2026-04-18
-**Commit:** 906f363
+**Parent:** ../AGENTS.md
+
 ## OVERVIEW
 
-Shared interface contracts centralizing cross-module type dependencies. Single coupling point — modules depend on these interfaces (not concrete implementations) to reduce lateral coupling. The only allowed barrel re-export outside `src/index.ts`.
-
-## STRUCTURE
-
-```
-src/contracts/
-├── interfaces.ts   # Core interfaces (IMetrics, IDiscoveryCache, IEdgeStore, etc.)
-├── strategy.ts     # IReasoningStrategy contract + StrategyDecision type
-├── calibrator.ts   # ICalibrator, CalibrationMetrics, CalibrationResult
-├── summary.ts      # ISummaryStore contract for branch rollup summaries
-├── suspension.ts   # ISuspensionStore, SuspensionRecord contract for tool interleave
-└── index.ts        # Module barrel (intentional — single coupling point)
-```
+Shared interface contracts. Single coupling point for cross-module type imports (sentrux-enforced). `index.ts` is one of only 2 allowed barrels in the project.
 
 ## INTERFACES
 
-| Interface               | Purpose                                         | Key Methods                                                         |
-| ----------------------- | ----------------------------------------------- | ------------------------------------------------------------------- |
-| `IMetrics`              | Metrics abstraction (counter, gauge, histogram) | `counter()`, `gauge()`, `histogram()`, `inc()`, `dec()`, `export()` |
-| `IDiscoveryCache`       | Discovery result caching                        | `get()`, `set()`, `has()`, `invalidate()`, `clear()`                |
-| `DiscoveryCacheOptions` | Cache configuration                             | `ttl`, `maxSize`, `cleanupInterval`                                 |
-| `IEdgeStore`            | DAG edge storage contract                       | `addEdge()`, `getEdge()`, `outgoing()`, `incoming()`, `edgesForSession()`, `clearSession()`, `size()` |
-| `IReasoningStrategy`    | Strategy contract for thought dispatch          | `decideNext(ctx)` → `StrategyDecision`                              |
-| `ICalibrator`           | Confidence calibration contract                 | `calibrate()`, `getMetrics()`                                       |
-| `CalibrationMetrics`    | Calibration data types                          | Brier score, ECE                                                    |
-| `ISummaryStore`         | Branch rollup summary storage                   | `add()`, `get()`, `listForBranch()`, `clearSession()`               |
-| `ISuspensionStore`      | Tool suspension storage                         | `suspend()`, `resume()`, `peek()`, `expire()`, `clearSession()`, `size()`, `start()`, `stop()` |
-| `SuspensionRecord`      | Suspension data type                            | token, sessionId, toolCallThoughtNumber, toolName, toolArguments, timestamps |
+| File | Exports |
+|------|---------|
+| `interfaces.ts` | `IMetrics`, `IDiscoveryCache`, `DiscoveryCacheOptions`, `IEdgeStore`, `IPersistenceBackend` |
+| `strategy.ts` | `IReasoningStrategy`, `StrategyContext`, `StrategyDecision` |
+| `summary.ts` | `ISummaryStore`, `Summary` |
+| `calibrator.ts` | `ICalibrator`, `CalibrationMetrics`, `CalibrationResult` |
+| `suspension.ts` | `ISuspensionStore`, `SuspensionRecord` |
+| `index.ts` | Barrel re-export (allowed) |
 
+Key contracts:
+- `IEdgeStore` (7 methods): `addEdge`, `getEdge`, `outgoing`, `incoming`, `edgesForSession`, `clearSession`, `size`
+- `IReasoningStrategy`: pure policy, `decideNext(ctx) → StrategyDecision`, no mutable state, no I/O
+- `ISuspensionStore` (8 methods): `suspend`, `resume`, `peek`, `expire`, `clearSession`, `size`, `start`, `stop`
 
-## CONVENTIONS
+## RULES
 
-- This is the **single coupling point** — cross-module type imports come through here.
-- `IHistoryManager` remains in `src/core/IHistoryManager.ts` (not in this module) — the real interface with 8+ methods.
-- Interfaces are defined here; implementations live in their respective modules.
-- `IMetrics` and `IDiscoveryCache` are the most widely used (10+ consumer files each).
+- ALL cross-module type imports MUST route through this directory.
+- Exception: `IHistoryManager` and `ThoughtData` live in `src/core/` (not here).
+- Define interface here, implement in owning module, never import implementations across modules.
+- `index.ts` barrel is intentional — re-export new contracts from it.
+- Adding a new shared interface? Drop it in the matching file (or new one) and update `index.ts`.

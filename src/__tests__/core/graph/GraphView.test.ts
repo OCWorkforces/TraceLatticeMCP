@@ -217,4 +217,63 @@ describe('GraphView', () => {
 			expect(view.descendants('s1', 'x')).toEqual([]);
 		});
 	});
+
+	describe('multi-node cycle detection', () => {
+		it('throws CycleDetectedError on 3-node cycle a->b->c->b', () => {
+			const edges = [
+				makeEdge('a', 'b', 100),
+				makeEdge('b', 'c', 200),
+				makeEdge('c', 'b', 300),
+			];
+			const view = setup(edges);
+			expect(() => view.topological(SESSION)).toThrow(CycleDetectedError);
+		});
+
+		it('throws CycleDetectedError on 4-node mixed-edge-kind cycle', () => {
+			const edges = [
+				makeEdge('a', 'b', 100, 'sequence'),
+				makeEdge('b', 'c', 200, 'derives_from'),
+				makeEdge('c', 'd', 300, 'verifies'),
+				makeEdge('d', 'a', 400, 'critiques'),
+			];
+			const view = setup(edges);
+			expect(() => view.topological(SESSION)).toThrow(CycleDetectedError);
+		});
+
+		it('throws CycleDetectedError on cycle formed by merge edges', () => {
+			const edges = [
+				makeEdge('a', 'b', 100, 'sequence'),
+				makeEdge('b', 'c', 200, 'merge'),
+				makeEdge('c', 'a', 300, 'merge'),
+			];
+			const view = setup(edges);
+			expect(() => view.topological(SESSION)).toThrow(CycleDetectedError);
+		});
+
+		it('descendants() terminates on 3-node cycle and visits each node at most once', () => {
+			const edges = [
+				makeEdge('a', 'b', 100),
+				makeEdge('b', 'c', 200),
+				makeEdge('c', 'b', 300),
+			];
+			const view = setup(edges);
+			const result = view.descendants(SESSION, 'a');
+			expect(result).toEqual(expect.arrayContaining(['b', 'c']));
+			expect(result).not.toContain('a');
+			// Each visited at most once: no duplicates
+			expect(new Set(result).size).toBe(result.length);
+		});
+
+		it('ancestors() terminates on 3-node cycle without infinite loop', () => {
+			const edges = [
+				makeEdge('a', 'b', 100),
+				makeEdge('b', 'c', 200),
+				makeEdge('c', 'b', 300),
+			];
+			const view = setup(edges);
+			const result = view.ancestors(SESSION, 'c');
+			expect(result).toEqual(expect.arrayContaining(['a', 'b']));
+			expect(new Set(result).size).toBe(result.length);
+		});
+	});
 });

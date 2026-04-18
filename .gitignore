@@ -218,3 +218,4 @@ skills-lock.json
 .rsbuild/
 # CocoIndex Code (ccc)
 /.cocoindex_code/
+.opencode/

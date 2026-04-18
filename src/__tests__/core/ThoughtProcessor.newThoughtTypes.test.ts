@@ -47,7 +47,7 @@ describe('ThoughtProcessor — new thought type validation', () => {
 		});
 		expect(result.isError).toBe(true);
 		const payload = JSON.parse(result.content[0]!.text);
-		expect(payload.error).toMatch(/tool_call requires toolInterleave feature flag/);
+		expect(payload.error).toMatch(/Type 'tool_call' requires the toolInterleave feature flag/);
 	});
 
 	it('rejects tool_observation when toolInterleave flag is OFF', async () => {
@@ -62,7 +62,7 @@ describe('ThoughtProcessor — new thought type validation', () => {
 		});
 		expect(result.isError).toBe(true);
 		const payload = JSON.parse(result.content[0]!.text);
-		expect(payload.error).toMatch(/tool_observation requires toolInterleave feature flag/);
+		expect(payload.error).toMatch(/Type 'tool_observation' requires the toolInterleave feature flag/);
 	});
 
 	it('rejects assumption when newThoughtTypes flag is OFF', async () => {
@@ -76,7 +76,7 @@ describe('ThoughtProcessor — new thought type validation', () => {
 		});
 		expect(result.isError).toBe(true);
 		const payload = JSON.parse(result.content[0]!.text);
-		expect(payload.error).toMatch(/assumption requires newThoughtTypes feature flag/);
+		expect(payload.error).toMatch(/Type 'assumption' requires the newThoughtTypes feature flag/);
 	});
 
 	it('rejects decomposition when newThoughtTypes flag is OFF', async () => {
@@ -90,7 +90,7 @@ describe('ThoughtProcessor — new thought type validation', () => {
 		});
 		expect(result.isError).toBe(true);
 		const payload = JSON.parse(result.content[0]!.text);
-		expect(payload.error).toMatch(/decomposition requires newThoughtTypes feature flag/);
+		expect(payload.error).toMatch(/Type 'decomposition' requires the newThoughtTypes feature flag/);
 	});
 
 	it('rejects backtrack when newThoughtTypes flag is OFF', async () => {
@@ -104,7 +104,7 @@ describe('ThoughtProcessor — new thought type validation', () => {
 		});
 		expect(result.isError).toBe(true);
 		const payload = JSON.parse(result.content[0]!.text);
-		expect(payload.error).toMatch(/backtrack requires newThoughtTypes feature flag/);
+		expect(payload.error).toMatch(/Type 'backtrack' requires the newThoughtTypes feature flag/);
 	});
 
 	it('rejects tool_call without tool_name (InvalidToolCallError)', async () => {
@@ -153,6 +153,19 @@ describe('ThoughtProcessor — new thought type validation', () => {
 
 	it('accepts backtrack with backtrack_target less than or equal to thought_number', async () => {
 		const proc = makeProcessor(makeFeatures({ newThoughtTypes: true }));
+		// Seed history so backtrack_target=2 refers to an existing thought.
+		await proc.process({
+			thought: 'first',
+			thought_number: 1,
+			total_thoughts: 8,
+			next_thought_needed: true,
+		});
+		await proc.process({
+			thought: 'second',
+			thought_number: 2,
+			total_thoughts: 8,
+			next_thought_needed: true,
+		});
 		const result = await proc.process({
 			thought: 'going back',
 			thought_number: 5,

@@ -84,6 +84,13 @@ export interface PersistenceBackend {
 	loadEdges(sessionId: string): Promise<Edge[]>;
 
 	/**
+	 * List all session IDs that have persisted edge data.
+	 *
+	 * @returns Array of session identifiers with persisted edges
+	 */
+	listEdgeSessions(): Promise<string[]>;
+
+	/**
 	 * Save summaries for a session, replacing any previously saved summaries.
 	 *
 	 * @param sessionId - The session whose summaries to persist

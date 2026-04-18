@@ -135,8 +135,24 @@ export interface ConfidenceSignals {
 		verification_coverage: number;
 		/** max(chain_depth, branch_count + 1) / total_thoughts, clamped to [0, 1]. Branching is desirable. */
 		depth_efficiency: number;
-		/** 1 - stddev(confidence values). Defaults to 0.5 if no confidence values. */
-		confidence_stability: number;
+		/** 1 - stddev(confidence values). Defaults to 0.5 if no confidence values. Null when fewer than 2 confidence values. */
+		confidence_stability: number | null;
+	};
+
+	/**
+	 * Raw (unfloored) quality components before the 0.01 floor is applied.
+	 * Only present when quality_components is present.
+	 * Useful for debugging quality score calculations.
+	 */
+	quality_components_raw?: {
+		/** Shannon entropy / log2(6) — may be below 0.01 floor. */
+		type_diversity: number;
+		/** verified / total hypotheses — may be below 0.01 floor. */
+		verification_coverage: number;
+		/** depth / total — may be below 0.01 floor. */
+		depth_efficiency: number;
+		/** 1 - stddev — may be below 0.01 floor. Null when fewer than 2 confidence values. */
+		confidence_stability: number | null;
 	};
 
 	/** Calibrated confidence score (post temperature scaling + prior shrinkage). Only present when features.calibration=true. */

@@ -105,4 +105,23 @@ export interface IHistoryManager {
 	 * @returns The last-seen array of skill names, or undefined if never set
 	 */
 	getAvailableSkills(sessionId?: string): string[] | undefined;
+
+	/**
+	 * Pre-declares a branch ID without adding any thoughts.
+	 * Allows merge_branch_ids to reference branches that have not yet received thoughts.
+	 *
+	 * @param sessionId - Optional session ID (defaults to global session)
+	 * @param branchId - The branch identifier to register
+	 * @throws ValidationError if branchId is empty or already exists
+	 */
+	registerBranch(sessionId: string | undefined, branchId: string): void;
+
+	/**
+	 * Checks whether a branch exists (has thoughts OR was pre-declared).
+	 *
+	 * @param sessionId - Optional session ID (defaults to global session)
+	 * @param branchId - The branch identifier to check
+	 * @returns true if the branch exists or has been registered
+	 */
+	branchExists(sessionId: string | undefined, branchId: string): boolean;
 }

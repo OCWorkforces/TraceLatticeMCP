@@ -25,7 +25,13 @@ interface StructuralQualityResult {
 		type_diversity: number;
 		verification_coverage: number;
 		depth_efficiency: number;
-		confidence_stability: number;
+		confidence_stability: number | null;
+	};
+	raw_components: {
+		type_diversity: number;
+		verification_coverage: number;
+		depth_efficiency: number;
+		confidence_stability: number | null;
 	};
 }
 
@@ -37,6 +43,51 @@ interface StructuralQualityResult {
  * Safe to register as singleton or transient in DI.
  */
 export class SignalComputer {
+	/**
+	 * Structural quality weight configuration.
+	 *
+	 * Weights reflect the relative importance of each quality dimension:
+	 * - type_diversity (0.3): Shannon entropy of thought types — rewards reasoning that uses
+	 *   multiple cognitive modes (hypothesis, verification, critique, synthesis) rather than
+	 *   monotonic sequences. Based on information theory: higher entropy = more information.
+	 *
+	 * - verification_coverage (0.3): Ratio of verified to total hypotheses — rewards scientific
+	 *   rigor. Hypotheses without verification are speculation; verification grounds reasoning.
+	 *   Equal weight with diversity because unverified reasoning is a common failure mode.
+	 *
+	 * - depth_efficiency (0.2): Ratio of structural depth to total thoughts — rewards efficient
+	 *   reasoning. Deep chains (many revisions/branches) are good; but only if proportionally
+	 *   dense. Padding with low-value thoughts penalizes this metric.
+	 *
+	 * - confidence_stability (0.2): Low variance in self-assessed confidence — rewards calibrated
+	 *   reasoning. Wildly fluctuating confidence suggests uncertainty about the approach.
+	 *   Lower weight because confidence values are LLM self-reports (inherently noisy).
+	 *
+	 * Design rationale:
+	 * - Diversity + Verification (0.6) > Depth + Stability (0.4): Structural properties of the
+	 *   reasoning DAG are more important than behavioral signals.
+	 * - All weights are positive (no dimension is penalizing).
+	 * - Weights sum to 1.0 for normalized scoring.
+	 * - When confidence_stability is unavailable (n<2), remaining weights redistribute
+	 *   proportionally: td→0.375, vc→0.375, de→0.25 (preserving relative ratios).
+	 */
+	private static readonly QUALITY_WEIGHTS = {
+		typeDiversity: 0.3,
+		verificationCoverage: 0.3,
+		depthEfficiency: 0.2,
+		confidenceStability: 0.2,
+	} as const;
+
+	/**
+	 * Redistributed weights when confidence_stability is excluded (n<2).
+	 * Preserves relative ratios of remaining components (sum = 1.0).
+	 */
+	private static readonly QUALITY_WEIGHTS_NO_CS = {
+		typeDiversity: 0.375,
+		verificationCoverage: 0.375,
+		depthEfficiency: 0.25,
+	} as const;
+
 	/**
 	 * Compute confidence signals from history context.
 	 *
@@ -75,6 +126,7 @@ export class SignalComputer {
 			...(structuralResult !== null && {
 				structural_quality: structuralResult.score,
 				quality_components: structuralResult.components,
+				quality_components_raw: structuralResult.raw_components,
 			}),
 		};
 	}
@@ -86,8 +138,12 @@ export class SignalComputer {
 	 * - `type_diversity` = Shannon entropy of thought_type distribution / log2(6)
 	 * - `verification_coverage` = verified_hypotheses / max(total_hypotheses, 1) (1.0 if none)
 	 * - `depth_efficiency` = max(chain_depth, branch_count + 1) / total_thoughts, clamped to 1.0
-	 * - `confidence_stability` = 1 - stddev(confidences), default 0.5 when empty
+	 * - `confidence_stability` = 1 - stddev(confidences), default 0.5 when empty, null when single value
 	 * - `structural_quality` = td^0.3 * vc^0.3 * de^0.2 * cs^0.2 (weighted geometric mean)
+	 *
+	 * Note: When confidence_stability is null (fewer than 2 confidence values), it is
+	 * excluded from the geometric mean and the remaining weights are redistributed
+	 * proportionally (td→0.375, vc→0.375, de→0.25).
 	 *
 	 * @returns Score + components, or `null` when history is empty
 	 */
@@ -109,7 +165,8 @@ export class SignalComputer {
 				entropy -= pk * Math.log2(pk);
 			}
 		}
-		const typeDiversity = Math.max(entropy / Math.log2(6), FLOOR);
+		const rawTypeDiversity = entropy / Math.log2(6);
+		const typeDiversity = Math.max(rawTypeDiversity, FLOOR);
 
 		// 2. verification_coverage: verified / total hypotheses (1.0 if none)
 		const hypotheses = history.filter((t) => t.thought_type === 'hypothesis');
@@ -119,56 +176,92 @@ export class SignalComputer {
 				.filter((t) => t.thought_type === 'verification' && t.hypothesis_id)
 				.map((t) => t.hypothesis_id)
 		);
-		const verificationCoverage =
+		const rawVerificationCoverage =
 			hypothesisIds.size === 0
 				? 1.0
-				: Math.max(
-						[...hypothesisIds].filter((id) => verifiedIds.has(id)).length / hypothesisIds.size,
-						FLOOR
-					);
+				: [...hypothesisIds].filter((id) => verifiedIds.has(id)).length / hypothesisIds.size;
+		const verificationCoverage = Math.max(rawVerificationCoverage, FLOOR);
 
 		// 3. depth_efficiency: max(chain_depth, branch_count + 1) / total_thoughts, clamped to 1.0
 		// NOTE (Metis H3): Branching is desirable — treat branches as depth-equivalent.
 		const chainDepth = _computeChainDepth(history);
 		const branchCount = Object.keys(branches).length;
 		const effectiveDepth = Math.max(chainDepth, branchCount + 1);
-		const depthEfficiency = Math.max(Math.min(effectiveDepth / total, 1.0), FLOOR);
+		const rawDepthEfficiency = Math.min(effectiveDepth / total, 1.0);
+		const depthEfficiency = Math.max(rawDepthEfficiency, FLOOR);
 
 		// 4. confidence_stability: 1 - stddev(confidences), default 0.5
 		const confidenceStability = this.computeConfidenceStability(confidences);
+		const rawConfidenceStability = this.computeRawConfidenceStability(confidences);
 
-		const components = {
+		const components: StructuralQualityResult['components'] = {
 			type_diversity: typeDiversity,
 			verification_coverage: verificationCoverage,
 			depth_efficiency: depthEfficiency,
 			confidence_stability: confidenceStability,
 		};
 
-		// Weighted geometric mean: td^0.3 * vc^0.3 * de^0.2 * cs^0.2
-		const score =
-			Math.pow(typeDiversity, 0.3) *
-			Math.pow(verificationCoverage, 0.3) *
-			Math.pow(depthEfficiency, 0.2) *
-			Math.pow(confidenceStability, 0.2);
+		const rawComponents: StructuralQualityResult['raw_components'] = {
+			type_diversity: rawTypeDiversity,
+			verification_coverage: rawVerificationCoverage,
+			depth_efficiency: rawDepthEfficiency,
+			confidence_stability: rawConfidenceStability,
+		};
 
-		return { score, components };
+		// Weighted geometric mean: td^0.3 * vc^0.3 * de^0.2 * cs^0.2
+		// When confidence_stability is null (n<2), exclude it from the geomean
+		// and redistribute its weight proportionally to remaining components
+		// (normalized td=0.375, vc=0.375, de=0.25)
+		let score: number;
+		if (confidenceStability !== null) {
+			const w = SignalComputer.QUALITY_WEIGHTS;
+			score =
+				Math.pow(typeDiversity, w.typeDiversity) *
+				Math.pow(verificationCoverage, w.verificationCoverage) *
+				Math.pow(depthEfficiency, w.depthEfficiency) *
+				Math.pow(confidenceStability, w.confidenceStability);
+		} else {
+			const w3 = SignalComputer.QUALITY_WEIGHTS_NO_CS;
+			score =
+				Math.pow(typeDiversity, w3.typeDiversity) *
+				Math.pow(verificationCoverage, w3.verificationCoverage) *
+				Math.pow(depthEfficiency, w3.depthEfficiency);
+		}
+
+		return { score, components, raw_components: rawComponents };
 	}
 
 	/**
 	 * Compute confidence stability: 1 - stddev(confidences).
 	 *
-	 * - Empty input → 0.5 (default neutral value, floored at {@link FLOOR})
-	 * - Single value → 1.0 (perfectly stable, floored at {@link FLOOR})
+	 * - Empty input → 0.5 (neutral default)
+	 * - Single value → null (insufficient data, excluded from structural quality)
 	 * - Otherwise → max(1 - stddev, FLOOR)
 	 */
-	public computeConfidenceStability(confidences: number[]): number {
-		if (confidences.length === 0) return Math.max(0.5, FLOOR);
-		if (confidences.length === 1) return Math.max(1.0, FLOOR);
+	public computeConfidenceStability(confidences: number[]): number | null {
+		if (confidences.length === 0) return 0.5;
+		if (confidences.length === 1) return null;
 
 		const mean = confidences.reduce((a, b) => a + b, 0) / confidences.length;
-		const variance =
-			confidences.reduce((sum, c) => sum + (c - mean) ** 2, 0) / confidences.length;
+		const variance = confidences.reduce((sum, c) => sum + (c - mean) ** 2, 0) / confidences.length;
 		const stddev = Math.sqrt(variance);
 		return Math.max(1 - stddev, FLOOR);
+	}
+
+	/**
+	 * Compute raw (unfloored) confidence stability: 1 - stddev(confidences).
+	 *
+	 * - Empty input → 0.5 (neutral default)
+	 * - Single value → null (insufficient data)
+	 * - Otherwise → 1 - stddev (may be below FLOOR)
+	 */
+	public computeRawConfidenceStability(confidences: number[]): number | null {
+		if (confidences.length === 0) return 0.5;
+		if (confidences.length === 1) return null;
+
+		const mean = confidences.reduce((a, b) => a + b, 0) / confidences.length;
+		const variance = confidences.reduce((sum, c) => sum + (c - mean) ** 2, 0) / confidences.length;
+		const stddev = Math.sqrt(variance);
+		return 1 - stddev;
 	}
 }

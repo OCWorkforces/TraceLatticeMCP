@@ -245,6 +245,14 @@ export interface ThoughtData {
 	backtrack_target?: number;
 
 	/**
+	 * When true, this thought has been logically retracted by a subsequent
+	 * `backtrack` thought. The thought remains in history (append-only,
+	 * event-sourcing) but is excluded from quality calculations.
+	 * Default: false.
+	 */
+	retracted?: boolean;
+
+	/**
 	 * Internal: thought_number of the tool_call this tool_observation resumes from.
 	 * Set transiently by ThoughtProcessor; not part of the public API.
 	 * Used by HistoryManager to emit `tool_invocation` DAG edges.

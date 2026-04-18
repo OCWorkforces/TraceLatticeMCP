@@ -142,8 +142,22 @@ export class ThoughtProcessor {
 	}
 
 	/**
+	 * Priority ordering for warning patterns (lower = higher priority).
+	 * Ensures the most actionable patterns fill the hint cap first.
+	 */
+	private static readonly _HINT_PRIORITY: Readonly<Record<string, number>> = {
+		confidence_drift: 1, // Most actionable — degrading confidence
+		unverified_hypothesis: 2, // Important for quality
+		no_alternatives_explored: 3, // Breadth gap
+		consecutive_without_verification: 4, // Routine pattern
+	};
+
+	/**
 	 * Generate actionable hints from pattern signals.
 	 * Rules: max 3 hints, warning-severity only, cooldown of 3 thoughts per pattern per session.
+	 *
+	 * Warning patterns are sorted by priority before selection (see _HINT_PRIORITY).
+	 * Higher-priority patterns (lower number) fill the hint cap first.
 	 *
 	 * @param patterns - Detected pattern signals
 	 * @param currentThoughtNumber - The current thought number being processed
@@ -157,6 +171,13 @@ export class ThoughtProcessor {
 	): string[] {
 		const warnings = patterns.filter((p) => p.severity === 'warning');
 		if (warnings.length === 0) return [];
+
+		// Sort by priority (lower number = higher priority)
+		warnings.sort((a, b) => {
+			const pa = ThoughtProcessor._HINT_PRIORITY[a.pattern] ?? 99;
+			const pb = ThoughtProcessor._HINT_PRIORITY[b.pattern] ?? 99;
+			return pa - pb;
+		});
 
 		const sessionKey = sessionId ?? '__global__';
 		if (!this._hintCooldowns.has(sessionKey)) {
@@ -249,7 +270,7 @@ export class ThoughtProcessor {
 			const allWarnings = [...validateWarnings, ...refWarnings];
 
 			// Validate new thought types and tool-interleave invariants.
-			this._validateNewTypes(checkedInput);
+			this._validateNewTypes(checkedInput, sessionId);
 
 			// Tool-interleave suspend path: persist the tool_call thought, then return
 			// a `suspended` envelope without running strategy/evaluator.
@@ -321,7 +342,7 @@ export class ThoughtProcessor {
 							reasoning_stats: reasoningStats,
 							...(reasoningHints.length > 0 && { reasoning_hints: reasoningHints }),
 							...(decision.action !== 'continue' && { strategy_hint: decision }),
-							...(allWarnings.length > 0 && { warnings: allWarnings }),
+							...(allWarnings.length > 0 && { warnings: allWarnings.slice(0, 3) }),
 							...(sessionId ? { session_id: sessionId } : {}),
 						},
 						null,
@@ -491,7 +512,6 @@ export class ThoughtProcessor {
 	} {
 		const warnings: string[] = [];
 		const historyLength = this.historyManager.getHistoryLength(sessionId);
-		const branchIds = new Set(this.historyManager.getBranchIds(sessionId));
 
 		// verification_target: must reference existing thought
 		if (input.verification_target !== undefined && input.verification_target > historyLength) {
@@ -565,18 +585,20 @@ export class ThoughtProcessor {
 			input.merge_from_thoughts = valid.length > 0 ? valid : undefined;
 		}
 
-		// merge_branch_ids: filter to existing branches only
+		// merge_branch_ids: filter to existing branches only (includes pre-registered)
 		if (input.merge_branch_ids?.length) {
-			const valid = input.merge_branch_ids.filter((id: string) => branchIds.has(id));
+			const valid = input.merge_branch_ids.filter((id: string) =>
+				this.historyManager.branchExists(sessionId, id)
+			);
 			if (valid.length < input.merge_branch_ids.length) {
 				const dropped = input.merge_branch_ids.filter(
-					(id: string) => !branchIds.has(id)
+					(id: string) => !this.historyManager.branchExists(sessionId, id)
 				);
 				warnings.push(`Filtered dangling merge_branch_ids: [${dropped.join(', ')}]`);
 				this._logger.warn('Filtered dangling merge_branch_ids', {
 					original: input.merge_branch_ids,
 					filtered: valid,
-					existingBranches: Array.from(branchIds),
+					existingBranches: this.historyManager.getBranchIds(sessionId),
 				});
 			}
 			input.merge_branch_ids = valid.length > 0 ? valid : undefined;
@@ -589,16 +611,22 @@ export class ThoughtProcessor {
 	 * Validate new thought-type invariants behind feature flags.
 	 * @private
 	 */
-	private _validateNewTypes(input: ThoughtData): void {
+	private _validateNewTypes(input: ThoughtData, sessionId?: string): void {
 		const t = input.thought_type;
 		if ((t === 'tool_call' || t === 'tool_observation') && !this._features.toolInterleave) {
-			throw new ValidationError('thought_type', t + ' requires toolInterleave feature flag');
+			throw new ValidationError(
+				'thought_type',
+				`Type '${t}' requires the toolInterleave feature flag. Set TRACELATTICE_FEATURES_TOOL_INTERLEAVE=true to enable it.`
+			);
 		}
 		if (
 			(t === 'assumption' || t === 'decomposition' || t === 'backtrack') &&
 			!this._features.newThoughtTypes
 		) {
-			throw new ValidationError('thought_type', t + ' requires newThoughtTypes feature flag');
+			throw new ValidationError(
+				'thought_type',
+				`Type '${t}' requires the newThoughtTypes feature flag. Set TRACELATTICE_FEATURES_NEW_THOUGHT_TYPES=true to enable it, or use '${ThoughtProcessor._getWorkaroundType(t)}' type as a workaround.`
+			);
 		}
 		if (t === 'tool_call' && !input.tool_name) {
 			throw new InvalidToolCallError(
@@ -611,14 +639,56 @@ export class ThoughtProcessor {
 				'tool_observation thought ' + input.thought_number + ' missing continuation_token'
 			);
 		}
-		if (
-			t === 'backtrack' &&
-			input.backtrack_target !== undefined &&
-			input.backtrack_target > input.thought_number
-		) {
-			throw new InvalidBacktrackError(
-				'backtrack_target ' + input.backtrack_target + ' must be <= thought_number ' + input.thought_number
-			);
+		if (t === 'backtrack') {
+			if (input.backtrack_target === undefined) {
+				throw new ValidationError(
+					'backtrack_target',
+					'backtrack thought ' + input.thought_number + ' requires backtrack_target'
+				);
+			}
+			if (input.backtrack_target > input.thought_number) {
+				throw new InvalidBacktrackError(
+					'backtrack_target ' + input.backtrack_target + ' must be <= thought_number ' + input.thought_number
+				);
+			}
+			if (!this._thoughtNumberExists(input.backtrack_target, sessionId)) {
+				throw new InvalidBacktrackError(
+					'backtrack_target ' + input.backtrack_target + ' does not exist in session history'
+				);
+			}
+		}
+	}
+
+	/**
+	 * Checks whether a given thought_number exists in the session history or any branch.
+	 * @private
+	 */
+	private _thoughtNumberExists(thoughtNumber: number, sessionId?: string): boolean {
+		const history = this.historyManager.getHistory(sessionId);
+		for (const t of history) {
+			if (t.thought_number === thoughtNumber) return true;
+		}
+		const branches = this.historyManager.getBranches(sessionId);
+		for (const branchThoughts of Object.values(branches)) {
+			for (const t of branchThoughts) {
+				if (t.thought_number === thoughtNumber) return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * Returns a workaround thought type for a feature-flagged type.
+	 * @private
+	 */
+	private static _getWorkaroundType(t: 'assumption' | 'decomposition' | 'backtrack'): string {
+		switch (t) {
+			case 'assumption':
+				return 'regular';
+			case 'decomposition':
+				return 'hypothesis';
+			case 'backtrack':
+				return 'regular';
 		}
 	}
 

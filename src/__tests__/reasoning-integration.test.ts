@@ -59,6 +59,12 @@ class BranchAwareMockHistoryManager implements IHistoryManager {
 		return Object.keys(this._branches);
 	}
 
+	registerBranch(): void {}
+
+	branchExists(_sessionId: string | undefined, branchId: string): boolean {
+		return branchId in this._branches;
+	}
+
 	clear(): void {
 		this._history = [];
 		this._branches = {};

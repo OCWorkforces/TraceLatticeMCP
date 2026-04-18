@@ -270,6 +270,10 @@ describe('ThoughtProcessor', () => {
 			getBranchIds(): string[] {
 				return [];
 			}
+			registerBranch(): void {}
+			branchExists(): boolean {
+				return false;
+			}
 			clear(): void {}
 			getAvailableMcpTools(): string[] | undefined {
 				return undefined;
@@ -985,6 +989,41 @@ describe('ThoughtProcessor', () => {
 			}
 		});
 
+		it('prioritizes confidence_drift over consecutive_without_verification when both fire', async () => {
+			// Build a sequence that triggers BOTH consecutive_without_verification (3+ regular thoughts)
+			// AND confidence_drift (3+ consecutive decreasing confidence). Cap is 3 hints, but if both
+			// patterns fire and the priority sort works, confidence_drift must come first.
+			let result: Awaited<ReturnType<typeof processor.process>> | undefined;
+			for (let i = 1; i <= 3; i++) {
+				result = await processor.process(
+					createTestThought({
+						thought_number: i,
+						total_thoughts: 5,
+						next_thought_needed: true,
+						confidence: 1.0 - i * 0.2, // 0.8, 0.6, 0.4 (strictly decreasing)
+						thought_type: 'regular',
+					})
+				);
+			}
+			const parsed = JSON.parse(result!.content[0]!.text);
+			expect(parsed.reasoning_hints).toBeDefined();
+			expect(parsed.reasoning_hints.length).toBeGreaterThan(0);
+
+			// confidence_drift (priority 1) must come before consecutive_without_verification (priority 4)
+			const driftIdx = parsed.reasoning_hints.findIndex(
+				(h: string) => h.toLowerCase().includes('confidence') || h.includes('\u2192')
+			);
+			const consecutiveIdx = parsed.reasoning_hints.findIndex((h: string) =>
+				h.toLowerCase().includes('consecutive')
+			);
+			if (driftIdx !== -1 && consecutiveIdx !== -1) {
+				expect(driftIdx).toBeLessThan(consecutiveIdx);
+			} else {
+				// At minimum, confidence_drift hint must be present (highest priority)
+				expect(driftIdx).toBeGreaterThanOrEqual(0);
+			}
+		});
+
 		it('reset_state clears history but cooldowns persist on processor', async () => {
 			// Trigger hint at thought 3
 			for (let i = 1; i <= 3; i++) {
@@ -1582,6 +1621,8 @@ describe('ThoughtProcessor — uncovered branches', () => {
 				getHistoryLength(): number { return 0; }
 				getBranches(): Record<string, ThoughtData[]> { return {}; }
 				getBranchIds(): string[] { return []; }
+				registerBranch(): void {}
+				branchExists(): boolean { return false; }
 				clear(): void {}
 				getAvailableMcpTools(): string[] | undefined { return undefined; }
 				getAvailableSkills(): string[] | undefined { return undefined; }

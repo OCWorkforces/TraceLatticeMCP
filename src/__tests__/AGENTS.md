@@ -1,58 +1,45 @@
-# TESTING MODULE
+# TEST SUITE
 
-**Updated:** 2026-04-18
-**Commit:** 906f363
+**Parent:** ../AGENTS.md
 
 ## OVERVIEW
 
-Test suite using Vitest with V8 coverage. 1913 tests across 74 test files (16 skipped).
+Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 1990 tests across 75 files, 16 skipped for known gaps. Coverage gates: branches 55%, functions 60%, lines 65%, statements 65%.
 
 ## STRUCTURE
 
+Test files mirror the `src/` tree. `src/__tests__/core/graph/EdgeStore.test.ts` covers `src/core/graph/EdgeStore.ts`, etc.
+
 ```
-src/__tests__/
-├── helpers/                    # Shared test utilities (factories, timers, mocks)
-├── core/                       # Core module tests
-│   ├── graph/                  # Graph/DAG tests
-│   ├── reasoning/              # Reasoning strategy tests
-│   │   └── strategies/         # Strategy-specific tests
-│   └── tools/                  # Tool interleave tests
-├── integration/                # Integration tests
-├── compression/                # Compression tests
-├── strategies/                 # Strategy tests
-├── calibrator/                 # Calibration tests
-├── config/                     # Config tests
-├── eval/                       # Evaluation harness (gated by RUN_EVAL=1)
-├── evaluator/                  # Evaluator submodule tests
-├── thought-processor.test.ts   # Thought processing pipeline tests (1643L)
-├── sequentialthinking-tools.test.ts # Main integration test (1364L)
-├── sse-transport-cov.test.ts   # SSE coverage tests (1180L)
-├── streamable-http-cov.test.ts # Streamable HTTP coverage tests (1035L)
-├── history-manager.test.ts     # History management tests (1036L)
-├── history-manager-cov.test.ts # History manager coverage tests
-├── thought-evaluator.test.ts   # Thought evaluator tests
-├── skill-registry.test.ts      # Skill registry tests (934L)
-├── streamable-http-transport.test.ts # Streamable HTTP tests (869L)
-├── tool-registry-cov.test.ts   # Tool registry coverage tests (851L)
-├── input-normalizer.test.ts    # Input normalization tests (934L)
-├── sse-transport.test.ts       # SSE transport tests (758L)
-├── thought-formatter.test.ts   # Thought formatting tests (716L)
-├── container.test.ts           # DI container tests (712L)
-├── persistence.test.ts         # Persistence backend tests (713L)
-├── base-registry.test.ts       # BaseRegistry tests (680L)
-├── schema.test.ts              # Valibot schema tests (652L)
-├── lib-server.test.ts          # Server lifecycle tests (359L)
-├── metrics-integration.test.ts # Metrics integration tests (598L)
-└── [module].test.ts            # Other module tests
+helpers/         factories.ts, timers.ts, index.ts (only allowed test barrel)
+core/graph/      EdgeStore, GraphView, Edge
+core/reasoning/strategies/   TreeOfThought.newTypes
+strategies/      TreeOfThoughtStrategy (538L), totScoring, StrategyContract
+integration/     Cross-module flows
+compression/     CompressionAutoTrigger
+eval/fixtures/   scenarios.ts (10 canonical eval scenarios)
 ```
 
-## PATTERNS
+## CONVENTIONS
 
-- **Aggregation**: All tests collected in `src/__tests__/`, co-located with source.
-- **Helpers**: `src/__tests__/helpers/index.ts` — shared utilities (createTestThought with 11 ThoughtType variants, MockHistoryManager, timer helpers).
-- **Mocking**: Manual dependency injection via container or constructor.
-- **Coverage**: V8 provider, thresholds at branches 55%, functions 60%, lines 65%, statements 65%.
+- **Mirror layout**: new test file path = source path with `__tests__/` inserted after `src/`.
+- **No barrels** in test dirs except `helpers/index.ts`. Import other test files directly.
+- **Feature flags via constructor**, never env vars in tests:
+  ```ts
+  const proc = new ThoughtProcessor({ historyManager: mock, dagEdges: true, calibration: true });
+  ```
+- **Spread overrides** for fixtures: `createTestThought({ thought_type: 'hypothesis', confidence: 0.8 })`. Only specify what the test asserts on.
+- **One concern per `it`**. Group by behavior, not by method name.
+- **Skipped tests** (`it.skip`) need a comment explaining the gap.
+- **Async cleanup**: `await` shutdowns in `afterEach` to avoid leaking timers across files.
 
-## COMMANDS
+## HELPERS
 
-`npm test` (all), `npm run test:coverage` (report).
+`helpers/factories.ts`:
+- `createTestThought(overrides?)`: 11 typed variants covering every `ThoughtType` (regular, hypothesis, verification, critique, synthesis, meta, tool_call, tool_observation, assumption, decomposition, backtrack). Returns a fully-valid `ThoughtData`.
+- `MockHistoryManager`: in-memory `Map`-backed `IHistoryManager`. Use it instead of stubbing the real one when persistence isn't under test.
+- `createMockFormatter()`: capture-only formatter for assertions on display output.
+
+`helpers/timers.ts` wraps Vitest timer APIs:
+- `useFakeTimers()` / `useRealTimers()`: pair them in `beforeEach` / `afterEach`.
+- `advanceTime(ms)`: thin wrapper over `vi.advanceTimersByTimeAsync` that also flushes microtasks, keeping suspension TTL and persistence buffer flush tests deterministic.

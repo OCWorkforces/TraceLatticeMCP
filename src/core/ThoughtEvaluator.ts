@@ -94,10 +94,11 @@ export class ThoughtEvaluator {
 		history: ThoughtData[],
 		branches: Record<string, ThoughtData[]>
 	): ConfidenceSignals {
-		const signals = this._signalComputer.computeConfidenceSignals(history, branches);
+		const { history: h, branches: b } = filterRetracted(history, branches);
+		const signals = this._signalComputer.computeConfidenceSignals(h, b);
 		if (!this._calibrator.enabled) return signals;
 
-		const lastThought = history[history.length - 1];
+		const lastThought = h[h.length - 1];
 		if (lastThought?.confidence === undefined) return signals;
 
 		const result = this._calibrator.calibrate(
@@ -117,7 +118,8 @@ export class ThoughtEvaluator {
 		history: ThoughtData[],
 		branches: Record<string, ThoughtData[]>
 	): ReasoningStats {
-		return this._aggregator.computeReasoningStats(history, branches);
+		const { history: h, branches: b } = filterRetracted(history, branches);
+		return this._aggregator.computeReasoningStats(h, b);
 	}
 
 	/** Detect reasoning patterns (anti-patterns and positive signals). Pure computation. */
@@ -125,6 +127,24 @@ export class ThoughtEvaluator {
 		history: ThoughtData[],
 		branches: Record<string, ThoughtData[]>
 	): PatternSignal[] {
-		return this._patternDetector.computePatternSignals(history, branches);
+		const { history: h, branches: b } = filterRetracted(history, branches);
+		return this._patternDetector.computePatternSignals(h, b);
 	}
+}
+
+/**
+ * Filters out logically retracted thoughts from history and branches.
+ * Retracted thoughts remain in storage (event-sourcing) but are excluded
+ * from quality signal calculations.
+ */
+function filterRetracted(
+	history: ThoughtData[],
+	branches: Record<string, ThoughtData[]>
+): { history: ThoughtData[]; branches: Record<string, ThoughtData[]> } {
+	const h = history.filter((t) => !t.retracted);
+	const b: Record<string, ThoughtData[]> = {};
+	for (const [id, list] of Object.entries(branches)) {
+		b[id] = list.filter((t) => !t.retracted);
+	}
+	return { history: h, branches: b };
 }
