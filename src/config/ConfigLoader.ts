@@ -12,7 +12,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { PersistenceConfig } from '../persistence/PersistenceBackend.js';
+import type { PersistenceConfig } from '../contracts/PersistenceBackend.js';
 import { getErrorMessage } from '../errors.js';
 import type { FeatureFlags } from '../ServerConfig.js';
 
@@ -323,7 +323,7 @@ export class ConfigLoader {
 	 * @private
 	 */
 	private applyFeatureFlagOverrides(result: ConfigFileOptions): void {
-		const boolMap: Record<string, keyof FeatureFlags> = {
+		const boolMap: Record<string, Exclude<keyof FeatureFlags, 'reasoningStrategy'>> = {
 			TRACELATTICE_FEATURES_DAG_EDGES: 'dagEdges',
 			TRACELATTICE_FEATURES_CALIBRATION: 'calibration',
 			TRACELATTICE_FEATURES_COMPRESSION: 'compression',
@@ -341,17 +341,20 @@ export class ConfigLoader {
 				);
 				continue;
 			}
-			result.features = result.features || {};
-			(result.features as Record<string, unknown>)[key] = parsed;
+			const features: { -readonly [K in keyof FeatureFlags]?: FeatureFlags[K] } =
+				result.features ?? {};
+			features[key] = parsed;
+			result.features = features;
 		}
 
 		const strategyRaw = process.env.TRACELATTICE_FEATURES_REASONING_STRATEGY;
 		if (strategyRaw !== undefined) {
 			const allowed = ['sequential', 'tot'] as const;
 			if ((allowed as readonly string[]).includes(strategyRaw)) {
-				result.features = result.features || {};
-				result.features.reasoningStrategy =
-					strategyRaw as FeatureFlags['reasoningStrategy'];
+				const features: { -readonly [K in keyof FeatureFlags]?: FeatureFlags[K] } =
+					result.features ?? {};
+				features.reasoningStrategy = strategyRaw as 'sequential' | 'tot';
+				result.features = features;
 			} else {
 				console.warn(
 					`Invalid value for TRACELATTICE_FEATURES_REASONING_STRATEGY: "${strategyRaw}" ` +

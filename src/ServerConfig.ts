@@ -11,7 +11,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { ConfigurationError } from './errors.js';
-import type { PersistenceConfig } from './persistence/PersistenceBackend.js';
+import type { PersistenceConfig } from './contracts/PersistenceBackend.js';
 
 /**
  * Configuration options for creating a `ServerConfig` instance.
@@ -32,25 +32,11 @@ import type { PersistenceConfig } from './persistence/PersistenceBackend.js';
 /**
  * Feature flags for opt-in/out TraceLattice capabilities.
  *
- * All flags default to ON. Users can disable any flag via
- * TRACELATTICE_FEATURES_*=false environment variables.
+ * Re-exported from `./contracts/features.js` for backward compatibility.
  */
-export interface FeatureFlags {
-	/** Enable DAG edges between thoughts (Item #1). @default true */
-	dagEdges: boolean;
-	/** Reasoning strategy selector (Item #2). @default 'sequential' */
-	reasoningStrategy: 'sequential' | 'tot';
-	/** Enable confidence calibration (Item #3). @default true */
-	calibration: boolean;
-	/** Enable thought compression (Item #5). @default true */
-	compression: boolean;
-	/** Enable tool interleaving (Item #6). @default true */
-	toolInterleave: boolean;
-	/** Enable new thought types (Item #8). @default true */
-	newThoughtTypes: boolean;
-	/** Enable outcome recording (prereq for Item #10). @default true */
-	outcomeRecording: boolean;
-}
+import type { FeatureFlags } from './contracts/features.js';
+export type { FeatureFlags, FeatureFlagKey } from './contracts/features.js';
+export { DEFAULT_FLAGS, hasFeature } from './contracts/features.js';
 export interface ServerConfigOptions {
 	/**
 	 * Maximum number of thoughts to keep in history.
