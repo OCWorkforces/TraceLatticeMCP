@@ -8,20 +8,21 @@ import { GraphView } from '../../../core/graph/GraphView.js';
 import { generateUlid } from '../../../core/ids.js';
 import { CycleDetectedError } from '../../../errors.js';
 import type { Edge, EdgeKind } from '../../../core/graph/Edge.js';
+import { asSessionId, asThoughtId, type EdgeId, type SessionId } from '../../../contracts/ids.js';
 
-const SESSION = 's1';
+const SESSION: SessionId = asSessionId('s1');
 
 function makeEdge(
 	from: string,
 	to: string,
 	createdAt: number,
 	kind: EdgeKind = 'sequence',
-	sessionId: string = SESSION
+	sessionId: SessionId = SESSION
 ): Edge {
 	return {
-		id: generateUlid(),
-		from,
-		to,
+		id: generateUlid() as EdgeId,
+		from: asThoughtId(from),
+		to: asThoughtId(to),
 		kind,
 		sessionId,
 		createdAt,
@@ -208,13 +209,13 @@ describe('GraphView', () => {
 	describe('session isolation', () => {
 		it('does not leak across sessions', () => {
 			const edges = [
-				makeEdge('a', 'b', 100, 'sequence', 's1'),
-				makeEdge('x', 'y', 200, 'sequence', 's2'),
+				makeEdge('a', 'b', 100, 'sequence', asSessionId('s1')),
+				makeEdge('x', 'y', 200, 'sequence', asSessionId('s2')),
 			];
 			const view = setup(edges);
-			expect(view.chronological('s1')).toEqual(expect.arrayContaining(['a', 'b']));
-			expect(view.chronological('s1')).not.toContain('x');
-			expect(view.descendants('s1', 'x')).toEqual([]);
+			expect(view.chronological(asSessionId('s1'))).toEqual(expect.arrayContaining(['a', 'b']));
+			expect(view.chronological(asSessionId('s1'))).not.toContain('x');
+			expect(view.descendants(asSessionId('s1'), 'x')).toEqual([]);
 		});
 	});
 

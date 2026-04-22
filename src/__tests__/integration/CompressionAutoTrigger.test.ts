@@ -25,6 +25,7 @@ import type {
 	StrategyDecision,
 } from '../../contracts/strategy.js';
 import { createTestThought } from '../helpers/index.js';
+import { asThoughtId, type EdgeId, GLOBAL_SESSION_ID } from '../../contracts/ids.js';
 
 class TerminateStrategy implements IReasoningStrategy {
 	readonly name = 'terminate-always';
@@ -273,7 +274,7 @@ describe('Compression → Dehydration Roundtrip', () => {
 		});
 
 		// Build 8 thoughts on branch 'b1' with explicit ids and DAG edges.
-		const sessionId = '__global__';
+		const sessionId = GLOBAL_SESSION_ID;
 		for (let i = 1; i <= 8; i++) {
 			await history.addThought(
 				createTestThought({
@@ -290,9 +291,9 @@ describe('Compression → Dehydration Roundtrip', () => {
 		// Wire chronological edges so descendants() walks t-1 → t-2 → ... → t-8.
 		for (let i = 1; i < 8; i++) {
 			edgeStore.addEdge({
-				id: `e-${i}`,
-				from: `t-${i}`,
-				to: `t-${i + 1}`,
+				id: `e-${i}` as EdgeId,
+				from: asThoughtId(`t-${i}`),
+				to: asThoughtId(`t-${i + 1}`),
 				kind: 'sequence',
 				sessionId,
 				createdAt: Date.now() + i,

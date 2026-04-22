@@ -17,18 +17,19 @@ import {
 	PoolTerminatedError,
 	ValidationError,
 } from '../errors.js';
+import type { ErrorCode } from '../errors.js';
 
 describe('Custom Error Types', () => {
 	describe('SequentialThinkingError', () => {
 		it('should create base error with code', () => {
-			const error = new SequentialThinkingError('Test error', 'TEST_CODE');
+			const error = new SequentialThinkingError('Test error', 'TEST_CODE' as ErrorCode);
 			expect(error.message).toBe('Test error');
 			expect(error.code).toBe('TEST_CODE');
 			expect(error.name).toBe('SequentialThinkingError');
 		});
 
 		it('should capture stack trace', () => {
-			const error = new SequentialThinkingError('Test', 'CODE');
+			const error = new SequentialThinkingError('Test', 'CODE' as ErrorCode);
 			expect(error.stack).toBeDefined();
 		});
 	});

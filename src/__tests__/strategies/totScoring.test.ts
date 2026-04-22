@@ -9,8 +9,9 @@ import { GraphView } from '../../core/graph/GraphView.js';
 import type { ThoughtData } from '../../core/thought.js';
 import type { ConfidenceSignals } from '../../core/reasoning.js';
 import type { Edge, EdgeKind } from '../../core/graph/Edge.js';
+import { asSessionId, asThoughtId, type EdgeId, type SessionId } from '../../contracts/ids.js';
 
-const SESSION = 's1';
+const SESSION: SessionId = asSessionId('s1');
 
 type ThoughtWithSignals = ThoughtData & {
 	readonly confidence_signals?: ConfidenceSignals;
@@ -36,9 +37,9 @@ function addEdge(
 	kind: EdgeKind = 'sequence'
 ): Edge {
 	const edge: Edge = {
-		id: `e${++edgeCounter}`,
-		from,
-		to,
+		id: `e${++edgeCounter}` as EdgeId,
+		from: asThoughtId(from),
+		to: asThoughtId(to),
 		kind,
 		sessionId: SESSION,
 		createdAt: edgeCounter,

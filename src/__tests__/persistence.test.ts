@@ -10,7 +10,9 @@ import { FilePersistence } from '../persistence/FilePersistence.js';
 import {
 	createPersistenceBackend,
 	} from '../persistence/PersistenceFactory.js';
-import type { PersistenceConfig } from '../persistence/PersistenceBackend.js';
+import type { PersistenceConfig } from '../contracts/PersistenceBackend.js';
+import type { Edge } from '../core/graph/Edge.js';
+import { asSessionId, asThoughtId, type EdgeId } from '../contracts/ids.js';
 
 describe('MemoryPersistence', () => {
 	let backend: MemoryPersistence;
@@ -727,10 +729,10 @@ describe('FilePersistence — edge persistence roundtrip', () => {
 
 	it('saves edges then loads them back identically (sorted by createdAt)', async () => {
 		const backend = new FilePersistence({ dataDir: testDir });
-		const edges = [
-			{ id: 'e2', from: 'a', to: 'c', kind: 'sequence' as const, sessionId: 's1', createdAt: 200 },
-			{ id: 'e1', from: 'a', to: 'b', kind: 'branch' as const, sessionId: 's1', createdAt: 100 },
-			{ id: 'e3', from: 'b', to: 'd', kind: 'merge' as const, sessionId: 's1', createdAt: 300 },
+		const edges: Edge[] = [
+			{ id: 'e2' as EdgeId, from: asThoughtId('a'), to: asThoughtId('c'), kind: 'sequence' as const, sessionId: asSessionId('s1'), createdAt: 200 },
+			{ id: 'e1' as EdgeId, from: asThoughtId('a'), to: asThoughtId('b'), kind: 'branch' as const, sessionId: asSessionId('s1'), createdAt: 100 },
+			{ id: 'e3' as EdgeId, from: asThoughtId('b'), to: asThoughtId('d'), kind: 'merge' as const, sessionId: asSessionId('s1'), createdAt: 300 },
 		];
 		await backend.saveEdges('s1', edges);
 		const loaded = await backend.loadEdges('s1');
@@ -743,7 +745,7 @@ describe('FilePersistence — edge persistence roundtrip', () => {
 	it('saveEdges with empty array deletes the existing edge file', async () => {
 		const backend = new FilePersistence({ dataDir: testDir });
 		await backend.saveEdges('s2', [
-			{ id: 'e1', from: 'a', to: 'b', kind: 'sequence', sessionId: 's2', createdAt: 1 },
+			{ id: 'e1' as EdgeId, from: asThoughtId('a'), to: asThoughtId('b'), kind: 'sequence', sessionId: asSessionId('s2'), createdAt: 1 },
 		]);
 		expect(await backend.loadEdges('s2')).toHaveLength(1);
 		await backend.saveEdges('s2', []);
@@ -760,7 +762,7 @@ describe('FilePersistence — edge persistence roundtrip', () => {
 		const backend = new FilePersistence({ dataDir: testDir });
 		// Force file creation by saving + then corrupting
 		await backend.saveEdges('corrupt', [
-			{ id: 'e1', from: 'a', to: 'b', kind: 'sequence', sessionId: 'corrupt', createdAt: 1 },
+			{ id: 'e1' as EdgeId, from: asThoughtId('a'), to: asThoughtId('b'), kind: 'sequence', sessionId: asSessionId('corrupt'), createdAt: 1 },
 		]);
 		const { writeFileSync } = await import('node:fs');
 		writeFileSync(join(testDir, 'edges', 'corrupt.json'), '{not valid json', 'utf-8');
@@ -772,7 +774,7 @@ describe('FilePersistence — edge persistence roundtrip', () => {
 		const backend = new FilePersistence({ dataDir: testDir });
 		await expect(
 			backend.saveEdges('../etc', [
-				{ id: 'e1', from: 'a', to: 'b', kind: 'sequence', sessionId: '../etc', createdAt: 1 },
+				{ id: 'e1' as EdgeId, from: asThoughtId('a'), to: asThoughtId('b'), kind: 'sequence', sessionId: 'safe-session' as ReturnType<typeof asSessionId>, createdAt: 1 },
 			])
 		).rejects.toThrow();
 		await expect(backend.loadEdges('../etc')).rejects.toThrow();
@@ -782,7 +784,7 @@ describe('FilePersistence — edge persistence roundtrip', () => {
 	it('persists edges across separate FilePersistence instances (durability)', async () => {
 		const backendA = new FilePersistence({ dataDir: testDir });
 		await backendA.saveEdges('durable', [
-			{ id: 'd1', from: 'x', to: 'y', kind: 'verifies', sessionId: 'durable', createdAt: 50 },
+			{ id: 'd1' as EdgeId, from: asThoughtId('x'), to: asThoughtId('y'), kind: 'verifies', sessionId: asSessionId('durable'), createdAt: 50 },
 		]);
 		const backendB = new FilePersistence({ dataDir: testDir });
 		const loaded = await backendB.loadEdges('durable');

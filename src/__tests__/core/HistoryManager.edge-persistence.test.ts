@@ -17,16 +17,19 @@ import { generateUlid } from '../../core/ids.js';
 import { createTestThought } from '../helpers/factories.js';
 import type { ThoughtData } from '../../core/thought.js';
 import type { Edge } from '../../core/graph/Edge.js';
+import { asSessionId, asThoughtId, type SessionId, type ThoughtId, type EdgeId } from '../../contracts/ids.js';
 
-const GLOBAL = '__global__';
+const GLOBAL: SessionId = asSessionId('__global__');
 
-function makeThought(num: number, overrides?: Partial<ThoughtData>): ThoughtData {
+function makeThought(num: number, overrides?: Partial<Omit<ThoughtData, 'session_id'>> & { session_id?: string }): ThoughtData {
+	const { session_id, ...rest } = overrides ?? {};
 	return createTestThought({
-		id: generateUlid(),
+		id: generateUlid() as ThoughtId,
 		thought_number: num,
 		total_thoughts: 10,
 		thought: `t${num}`,
-		...overrides,
+		...(session_id !== undefined ? { session_id: asSessionId(session_id) } : {}),
+		...rest,
 	});
 }
 
@@ -93,17 +96,17 @@ describe('HistoryManager edge persistence', () => {
 		const persistence = new MemoryPersistence();
 		const seedEdges: Edge[] = [
 			{
-				id: generateUlid(),
-				from: 'thought-a',
-				to: 'thought-b',
+				id: generateUlid() as EdgeId,
+				from: asThoughtId('thought-a'),
+				to: asThoughtId('thought-b'),
 				kind: 'sequence',
 				sessionId: GLOBAL,
 				createdAt: 100,
 			},
 			{
-				id: generateUlid(),
-				from: 'thought-b',
-				to: 'thought-c',
+				id: generateUlid() as EdgeId,
+				from: asThoughtId('thought-b'),
+				to: asThoughtId('thought-c'),
 				kind: 'derives_from',
 				sessionId: GLOBAL,
 				createdAt: 200,
@@ -175,21 +178,21 @@ describe('HistoryManager edge persistence', () => {
 		const persistence = new MemoryPersistence();
 		await persistence.saveEdges('test-A', [
 			{
-				id: generateUlid(),
-				from: 'a1',
-				to: 'a2',
+				id: generateUlid() as EdgeId,
+				from: asThoughtId('a1'),
+				to: asThoughtId('a2'),
 				kind: 'sequence',
-				sessionId: 'test-A',
+				sessionId: asSessionId('test-A'),
 				createdAt: 1,
 			},
 		]);
 		await persistence.saveEdges('test-B', [
 			{
-				id: generateUlid(),
-				from: 'b1',
-				to: 'b2',
+				id: generateUlid() as EdgeId,
+				from: asThoughtId('b1'),
+				to: asThoughtId('b2'),
 				kind: 'sequence',
-				sessionId: 'test-B',
+				sessionId: asSessionId('test-B'),
 				createdAt: 2,
 			},
 		]);
@@ -202,29 +205,29 @@ describe('HistoryManager edge persistence', () => {
 		const persistence = new MemoryPersistence();
 		const seedA: Edge[] = [
 			{
-				id: generateUlid(),
-				from: 'a1',
-				to: 'a2',
+				id: generateUlid() as EdgeId,
+				from: asThoughtId('a1'),
+				to: asThoughtId('a2'),
 				kind: 'sequence',
-				sessionId: 'test-A',
+				sessionId: asSessionId('test-A'),
 				createdAt: 100,
 			},
 			{
-				id: generateUlid(),
-				from: 'a2',
-				to: 'a3',
+				id: generateUlid() as EdgeId,
+				from: asThoughtId('a2'),
+				to: asThoughtId('a3'),
 				kind: 'sequence',
-				sessionId: 'test-A',
+				sessionId: asSessionId('test-A'),
 				createdAt: 101,
 			},
 		];
 		const seedB: Edge[] = [
 			{
-				id: generateUlid(),
-				from: 'b1',
-				to: 'b2',
+				id: generateUlid() as EdgeId,
+				from: asThoughtId('b1'),
+				to: asThoughtId('b2'),
 				kind: 'derives_from',
-				sessionId: 'test-B',
+				sessionId: asSessionId('test-B'),
 				createdAt: 200,
 			},
 		];

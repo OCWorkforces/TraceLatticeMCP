@@ -23,13 +23,14 @@ import { EdgeStore } from '../../core/graph/EdgeStore.js';
 import { GraphView } from '../../core/graph/GraphView.js';
 import type { Edge, EdgeKind } from '../../core/graph/Edge.js';
 import { generateUlid } from '../../core/ids.js';
+import { asSessionId, asThoughtId, type EdgeId, type SessionId } from '../../contracts/ids.js';
 import type { ReasoningStats } from '../../core/reasoning.js';
 import { SequentialStrategy } from '../../core/reasoning/strategies/SequentialStrategy.js';
 import { TreeOfThoughtStrategy } from '../../core/reasoning/strategies/TreeOfThoughtStrategy.js';
 
 import { scenarios, type EvalScenario, type ExpectedBehavior } from './fixtures/scenarios.js';
 
-const SESSION_ID = 'eval-session';
+const SESSION_ID: SessionId = asSessionId('eval-session');
 
 /** Minimal {@link ReasoningStats} stub — analytics aren't exercised by the strategies. */
 function emptyStats(): ReasoningStats {
@@ -62,9 +63,9 @@ function emptyStats(): ReasoningStats {
 /** Build a single edge with a fresh ulid and `Date.now()` timestamp. */
 function makeEdge(from: string, to: string, kind: EdgeKind): Edge {
 	return {
-		id: generateUlid(),
-		from,
-		to,
+		id: generateUlid() as EdgeId,
+		from: asThoughtId(from),
+		to: asThoughtId(to),
 		kind,
 		sessionId: SESSION_ID,
 		createdAt: Date.now(),

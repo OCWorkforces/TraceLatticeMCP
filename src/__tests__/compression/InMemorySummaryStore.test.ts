@@ -6,17 +6,18 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { InMemorySummaryStore } from '../../core/compression/InMemorySummaryStore.js';
 import { SequentialThinkingError } from '../../errors.js';
 import type { Summary } from '../../core/compression/Summary.js';
+import { asSessionId, type ThoughtId } from '../../contracts/ids.js';
 
 let counter = 0;
 
-function makeSummary(overrides: Partial<Summary> = {}): Summary {
+function makeSummary(overrides: Partial<Omit<Summary, 'sessionId' | 'rootThoughtId' | 'coveredIds'>> & { sessionId?: string; rootThoughtId?: string; coveredIds?: readonly string[] } = {}): Summary {
 	counter += 1;
 	return {
 		id: overrides.id ?? `sum-${counter}`,
-		sessionId: overrides.sessionId ?? 's1',
+		sessionId: asSessionId(overrides.sessionId ?? 's1'),
 		branchId: overrides.branchId,
-		rootThoughtId: overrides.rootThoughtId ?? `t-${counter}`,
-		coveredIds: overrides.coveredIds ?? [`t-${counter}`],
+		rootThoughtId: (overrides.rootThoughtId ?? `t-${counter}`) as ThoughtId,
+		coveredIds: (overrides.coveredIds ?? [`t-${counter}`]) as readonly ThoughtId[],
 		coveredRange: overrides.coveredRange ?? [counter, counter],
 		topics: overrides.topics ?? ['x', 'y', 'z'],
 		aggregateConfidence: overrides.aggregateConfidence ?? 0.5,

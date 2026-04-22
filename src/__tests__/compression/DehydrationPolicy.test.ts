@@ -7,8 +7,9 @@ import { DehydrationPolicy, type SummaryRef } from '../../core/compression/Dehyd
 import { InMemorySummaryStore } from '../../core/compression/InMemorySummaryStore.js';
 import type { Summary } from '../../core/compression/Summary.js';
 import type { ThoughtData } from '../../core/thought.js';
+import { asSessionId, asThoughtId } from '../../contracts/ids.js';
 
-const SID = 's1';
+const SID = asSessionId('s1');
 
 let summaryCounter = 0;
 
@@ -28,13 +29,13 @@ function makeHistory(count: number): ThoughtData[] {
 	return out;
 }
 
-function makeSummary(overrides: Partial<Summary> & Pick<Summary, 'coveredRange'>): Summary {
+function makeSummary(overrides: Partial<Omit<Summary, 'sessionId' | 'rootThoughtId'>> & Pick<Summary, 'coveredRange'> & { sessionId?: string; rootThoughtId?: string }): Summary {
 	summaryCounter += 1;
 	return {
 		id: overrides.id ?? `sum-${summaryCounter}`,
-		sessionId: overrides.sessionId ?? SID,
+		sessionId: overrides.sessionId ? asSessionId(overrides.sessionId) : SID,
 		branchId: overrides.branchId,
-		rootThoughtId: overrides.rootThoughtId ?? `t-root-${summaryCounter}`,
+		rootThoughtId: asThoughtId(overrides.rootThoughtId ?? `t-root-${summaryCounter}`),
 		coveredIds: overrides.coveredIds ?? [],
 		coveredRange: overrides.coveredRange,
 		topics: overrides.topics ?? [],

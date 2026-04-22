@@ -79,6 +79,10 @@ class BranchAwareMockHistoryManager implements IHistoryManager {
 	getAvailableSkills(): string[] | undefined {
 		return this._availableSkills;
 	}
+
+	getEdgeStore(): undefined {
+		return undefined;
+	}
 }
 
 describe('Reasoning Integration', () => {

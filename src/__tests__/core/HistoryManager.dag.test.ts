@@ -12,6 +12,7 @@ import { EdgeStore } from '../../core/graph/EdgeStore.js';
 import { generateUlid } from '../../core/ids.js';
 import { createTestThought } from '../helpers/factories.js';
 import type { ThoughtData } from '../../core/thought.js';
+import { asSessionId } from '../../contracts/ids.js';
 
 function makeThought(num: number, overrides?: Partial<ThoughtData>): ThoughtData {
 	return createTestThought({
@@ -274,9 +275,9 @@ describe('HistoryManager DAG edge emission', () => {
 	describe('session isolation', () => {
 		it('keeps edges from session A invisible to session B', () => {
 			const { manager, edgeStore } = setup();
-			manager.addThought(makeThought(1, { session_id: 'A' }));
-			manager.addThought(makeThought(2, { session_id: 'A' }));
-			manager.addThought(makeThought(1, { session_id: 'B' }));
+			manager.addThought(makeThought(1, { session_id: asSessionId('A') }));
+			manager.addThought(makeThought(2, { session_id: asSessionId('A') }));
+			manager.addThought(makeThought(1, { session_id: asSessionId('B') }));
 
 			expect(edgeStore.size('A')).toBe(1);
 			expect(edgeStore.size('B')).toBe(0);

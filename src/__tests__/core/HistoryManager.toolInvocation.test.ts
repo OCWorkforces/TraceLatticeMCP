@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { HistoryManager } from '../../core/HistoryManager.js';
 import { EdgeStore } from '../../core/graph/EdgeStore.js';
 import type { ThoughtData } from '../../core/thought.js';
+import { asSessionId, asThoughtId, asSuspensionToken } from '../../contracts/ids.js';
 
-const SESSION = '__global__';
+const SESSION = asSessionId('__global__');
 
 function toolCallThought(overrides: Partial<ThoughtData> = {}): ThoughtData {
 	return {
@@ -14,7 +15,7 @@ function toolCallThought(overrides: Partial<ThoughtData> = {}): ThoughtData {
 		thought_type: 'tool_call',
 		tool_name: 'search',
 		tool_arguments: { q: 'foo' },
-		id: 'tc-id-1',
+		id: asThoughtId('tc-id-1'),
 		...overrides,
 	};
 }
@@ -26,8 +27,8 @@ function toolObservationThought(overrides: Partial<ThoughtData> = {}): ThoughtDa
 		total_thoughts: 2,
 		next_thought_needed: false,
 		thought_type: 'tool_observation',
-		continuation_token: 'tok',
-		id: 'to-id-1',
+		continuation_token: asSuspensionToken('tok'),
+		id: asThoughtId('to-id-1'),
 		_resumedFrom: 1,
 		...overrides,
 	};

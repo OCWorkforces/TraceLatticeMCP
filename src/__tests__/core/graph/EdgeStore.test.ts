@@ -9,13 +9,16 @@ import { InvalidEdgeError } from '../../../errors.js';
 import type { Edge } from '../../../core/graph/Edge.js';
 
 function createTestEdge(
-	overrides: Partial<Edge> & { from: string; to: string; sessionId: string }
+	overrides: { from: string; to: string; sessionId: string } & Partial<Omit<Edge, 'from' | 'to' | 'sessionId'>>
 ): Edge {
 	return {
-		id: generateUlid(),
+		id: generateUlid() as Edge['id'],
 		kind: 'sequence',
 		createdAt: Date.now(),
 		...overrides,
+		from: overrides.from as Edge['from'],
+		to: overrides.to as Edge['to'],
+		sessionId: overrides.sessionId as Edge['sessionId'],
 	};
 }
 

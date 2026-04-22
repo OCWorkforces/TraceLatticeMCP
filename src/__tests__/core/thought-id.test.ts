@@ -13,6 +13,7 @@
 import { describe, it, expect } from 'vitest';
 import { safeParse } from 'valibot';
 import { normalizeInput } from '../../core/InputNormalizer.js';
+import { asThoughtId } from '../../contracts/ids.js';
 import { SequentialThinkingSchema } from '../../schema.js';
 import type { ThoughtData } from '../../core/thought.js';
 
@@ -34,7 +35,7 @@ describe('ThoughtData.id', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				id: '01h2k3m400a1b2c3d4e5f6a7b8',
+				id: asThoughtId('01h2k3m400a1b2c3d4e5f6a7b8'),
 			};
 			expect(thought.id).toBe('01h2k3m400a1b2c3d4e5f6a7b8');
 		});

@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 2005 tests across 75 files, 16 skipped for known gaps. Coverage gates: branches 55%, functions 60%, lines 65%, statements 65%.
+Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 2005 tests across 75 files, 16 skipped for known gaps. Coverage gates: branches 90%, functions 60%, lines 65%, statements 65%.
 
 ## STRUCTURE
 
@@ -36,7 +36,7 @@ eval/fixtures/   scenarios.ts (10 canonical eval scenarios)
 ## HELPERS
 
 `helpers/factories.ts`:
-- `createTestThought(overrides?)`: 11 typed variants covering every `ThoughtType` (regular, hypothesis, verification, critique, synthesis, meta, tool_call, tool_observation, assumption, decomposition, backtrack). Returns a fully-valid `ThoughtData`.
+- `createTestThought(overrides?)`: 11 typed variants covering every `ThoughtType`. Accepts plain `string` for `id`/`session_id`/`continuation_token` and brands internally. Returns a fully-valid `ThoughtData`.
 - `MockHistoryManager`: in-memory `Map`-backed `IHistoryManager`. Use it instead of stubbing the real one when persistence isn't under test.
 - `createMockFormatter()`: capture-only formatter for assertions on display output.
 

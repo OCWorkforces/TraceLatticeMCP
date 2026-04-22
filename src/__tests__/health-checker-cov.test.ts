@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { HealthChecker } from '../health/HealthChecker.js';
-import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
+import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
 
 /**
  * Supplementary coverage tests for HealthChecker.

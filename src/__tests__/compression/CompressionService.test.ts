@@ -11,8 +11,9 @@ import type { IHistoryManager } from '../../core/IHistoryManager.js';
 import type { ThoughtData } from '../../core/thought.js';
 import type { ConfidenceSignals } from '../../core/reasoning.js';
 import type { Edge } from '../../core/graph/Edge.js';
+import { asSessionId, asThoughtId, type EdgeId, type SessionId, type ThoughtId } from '../../contracts/ids.js';
 
-const SESSION = 's1';
+const SESSION: SessionId = asSessionId('s1');
 const BRANCH = 'b1';
 
 type Signals = Partial<ConfidenceSignals>;
@@ -25,7 +26,7 @@ function makeThought(
 	signals?: Signals,
 ): ThoughtData {
 	const t: ThoughtData & { confidence_signals?: ConfidenceSignals } = {
-		id,
+		id: id as ThoughtId,
 		thought,
 		thought_number,
 		total_thoughts: 10,
@@ -60,19 +61,24 @@ class FakeHistoryManager implements IHistoryManager {
 	clear(): void {
 		this._thoughts.length = 0;
 	}
-	getAvailableMcpTools(): string[] | undefined {
+	getAvailableSkills(): string[] | undefined {
 		return undefined;
 	}
-	getAvailableSkills(): string[] | undefined {
+
+	getEdgeStore(): undefined {
+		return undefined;
+	}
+
+	getAvailableMcpTools(): string[] | undefined {
 		return undefined;
 	}
 }
 
 function addSeqEdge(edges: EdgeStore, from: string, to: string): Edge {
 	const edge: Edge = {
-		id: generateUlid(),
-		from,
-		to,
+		id: generateUlid() as EdgeId,
+		from: asThoughtId(from),
+		to: asThoughtId(to),
 		kind: 'sequence',
 		sessionId: SESSION,
 		createdAt: Date.now(),

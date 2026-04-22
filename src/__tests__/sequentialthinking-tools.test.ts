@@ -4,6 +4,7 @@ import type { ThoughtData } from '../core/thought.js';
 import { ToolAwareSequentialThinkingServer, createServer } from '../index.js';
 import type { SkillRecommendation } from '../types/skill.js';
 import type { ToolRecommendation } from '../types/tool.js';
+import { asSessionId } from '../contracts/ids.js';
 
 /**
  * Helper function for creating test thoughts with minimal required fields
@@ -1133,7 +1134,7 @@ describe('tracelattice MCP Tool', () => {
 					thought_number: 1,
 					total_thoughts: 1,
 					next_thought_needed: false,
-					session_id: 'chain-b',
+					session_id: asSessionId('chain-b'),
 				})
 			);
 
@@ -1172,7 +1173,7 @@ describe('tracelattice MCP Tool', () => {
 					thought_number: 1,
 					total_thoughts: 1,
 					next_thought_needed: false,
-					session_id: 'chain-b',
+					session_id: asSessionId('chain-b'),
 				})
 			);
 
@@ -1216,7 +1217,7 @@ describe('tracelattice MCP Tool', () => {
 					thought_number: 1,
 					total_thoughts: 1,
 					next_thought_needed: false,
-					session_id: 'chain-b',
+					session_id: asSessionId('chain-b'),
 				})
 			);
 
@@ -1253,7 +1254,7 @@ describe('tracelattice MCP Tool', () => {
 					thought_number: 1,
 					total_thoughts: 1,
 					next_thought_needed: false,
-					session_id: 'chain-b',
+					session_id: asSessionId('chain-b'),
 					quality_score: 0.95,
 					confidence: 0.99,
 				})
@@ -1306,7 +1307,7 @@ describe('tracelattice MCP Tool', () => {
 						thought_number: i,
 						total_thoughts: 3,
 						next_thought_needed: i < 3,
-						session_id: 'task-a',
+						session_id: asSessionId('task-a'),
 					})
 				);
 			}
@@ -1318,7 +1319,7 @@ describe('tracelattice MCP Tool', () => {
 					thought_number: 1,
 					total_thoughts: 1,
 					next_thought_needed: false,
-					session_id: 'task-a',
+					session_id: asSessionId('task-a'),
 					reset_state: true,
 				})
 			);
