@@ -23,3 +23,22 @@ export type { Summary, ISummaryStore } from './summary.js';
 
 export type { SuspensionRecord, ISuspensionStore } from './suspension.js';
 
+export type { FeatureFlags, FeatureFlagKey } from './features.js';
+export { DEFAULT_FLAGS, hasFeature } from './features.js';
+
+export type { Brand, SessionId, ThoughtId, EdgeId, SuspensionToken } from './ids.js';
+export {
+	asSessionId,
+	asThoughtId,
+	asEdgeId,
+	asSuspensionToken,
+	generateThoughtId,
+	generateEdgeId,
+	generateSuspensionToken,
+	GLOBAL_SESSION_ID,
+} from './ids.js';
+
+export type { TransportKind, ITransport } from './transport.js';
+
+export type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
+
