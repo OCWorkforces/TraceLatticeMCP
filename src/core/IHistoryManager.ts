@@ -7,6 +7,7 @@
  * @module IHistoryManager
  */
 
+import type { IEdgeStore } from '../contracts/interfaces.js';
 import type { ThoughtData } from './thought.js';
 
 /**
@@ -124,4 +125,14 @@ export interface IHistoryManager {
 	 * @returns true if the branch exists or has been registered
 	 */
 	branchExists(sessionId: string | undefined, branchId: string): boolean;
+
+	/**
+	 * Access the EdgeStore, if configured.
+	 *
+	 * Returns undefined when DAG edges are not enabled.
+	 * Used by ThoughtProcessor to build StrategyContext.
+	 *
+	 * @returns The edge store, or undefined if not configured
+	 */
+	getEdgeStore(): IEdgeStore | undefined;
 }

@@ -22,6 +22,11 @@
  *   alternatives: ['mcp__web_reader__webReader']
  * };
  * ```
+ *
+ * NOTE: Kept as a hand-written interface (not inferred from `ToolRecommendationSchema`)
+ * because `priority` is REQUIRED here but OPTIONAL in the schema (the schema accepts
+ * partial input from LLMs; the normalizer fills the default). An inferred type would
+ * make `priority` optional and break call sites that read it without a guard.
  */
 export interface ToolRecommendation {
 	/** The unique name/identifier of the recommended tool. */

@@ -117,7 +117,7 @@ export abstract class BaseRegistry<T extends { name: string }> {
 	 */
 	protected abstract readonly _entityName: string;
 
-	constructor(options: BaseRegistryOptions & Record<string, unknown>) {
+	constructor(options: BaseRegistryOptions) {
 		this._items = new Map();
 		this._logger = (options.logger ?? new NullLogger()) as Logger;
 		this._cache = (options.cache ||
