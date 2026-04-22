@@ -715,4 +715,4 @@ export const EdgeSchema = v.object({
 	sessionId: v.pipe(v.string(), v.minLength(1)),
 	createdAt: v.number(),
 	metadata: v.optional(v.record(v.string(), v.unknown())),
-}) satisfies v.GenericSchema<Edge>;
+}) satisfies v.GenericSchema<Omit<Edge, 'id' | 'from' | 'to' | 'sessionId'> & { id: string; from: string; to: string; sessionId: string }>;

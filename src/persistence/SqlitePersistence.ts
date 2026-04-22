@@ -341,10 +341,10 @@ export class SqlitePersistence implements PersistenceBackend {
 		}>;
 
 		return rows.map((row) => ({
-			id: row.id,
-			sessionId: row.session_id,
-			from: row.from_id,
-			to: row.to_id,
+			id: row.id as Edge['id'],
+			sessionId: row.session_id as Edge['sessionId'],
+			from: row.from_id as Edge['from'],
+			to: row.to_id as Edge['to'],
 			kind: row.kind as EdgeKind,
 			createdAt: row.created_at,
 			...(row.metadata ? { metadata: JSON.parse(row.metadata) as Record<string, unknown> } : {}),
@@ -429,10 +429,10 @@ export class SqlitePersistence implements PersistenceBackend {
 
 		return rows.map((row) => ({
 			id: row.id,
-			sessionId: row.session_id,
+			sessionId: row.session_id as Summary['sessionId'],
 			...(row.branch_id !== null ? { branchId: row.branch_id } : {}),
-			rootThoughtId: row.root_thought_id,
-			coveredIds: JSON.parse(row.covered_ids) as string[],
+			rootThoughtId: row.root_thought_id as Summary['rootThoughtId'],
+			coveredIds: JSON.parse(row.covered_ids) as Summary['coveredIds'],
 			coveredRange: [row.covered_range_start, row.covered_range_end] as [number, number],
 			topics: JSON.parse(row.topics) as string[],
 			aggregateConfidence: row.aggregate_confidence,

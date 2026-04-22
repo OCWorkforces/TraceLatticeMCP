@@ -13,7 +13,7 @@ import type { Logger } from '../../logger/StructuredLogger.js';
 import { NullLogger } from '../../logger/NullLogger.js';
 import type { ThoughtData } from '../thought.js';
 import type { Edge, EdgeKind } from './Edge.js';
-import { generateUlid } from '../ids.js';
+import { generateEdgeId } from '../../contracts/ids.js';
 
 /** Minimal session view needed for edge emission. */
 export interface EdgeEmissionSession {
@@ -194,11 +194,11 @@ export class EdgeEmitter {
 			return false;
 		}
 		const edge: Edge = {
-			id: generateUlid(),
-			from,
-			to,
+			id: generateEdgeId(),
+			from: from as Edge['from'],
+			to: to as Edge['to'],
 			kind,
-			sessionId,
+			sessionId: sessionId as Edge['sessionId'],
 			createdAt: Date.now(),
 			...(metadata !== undefined ? { metadata } : {}),
 		};

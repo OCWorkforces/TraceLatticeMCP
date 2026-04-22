@@ -14,7 +14,8 @@
 import { ValidationError } from '../errors.js';
 import { sanitizeString } from '../sanitize.js';
 import type { ThoughtData } from './thought.js';
-import { generateUlid, SESSION_ID_PATTERN, MAX_SESSION_ID_LENGTH } from './ids.js';
+import { SESSION_ID_PATTERN, MAX_SESSION_ID_LENGTH } from './ids.js';
+import { asSessionId, generateThoughtId } from '../contracts/ids.js';
 
 /**
  * Default values for missing partial recommendation fields.
@@ -408,13 +409,13 @@ export function normalizeInput(input: unknown): ThoughtData {
 		if (sanitized === undefined) {
 			delete normalized.session_id;
 		} else {
-			normalized.session_id = sanitized;
+			normalized.session_id = asSessionId(sanitized);
 		}
 	}
 
 	// Auto-generate id if not provided (for DAG node identity)
 	if (!normalized.id || typeof normalized.id !== 'string') {
-		normalized.id = generateUlid();
+		normalized.id = generateThoughtId();
 	}
 
 	// Normalize reasoning fields
@@ -425,5 +426,5 @@ export function normalizeInput(input: unknown): ThoughtData {
 	// This was moved from schema transforms because v.transform() cannot be converted to JSON Schema
 	const sanitized = sanitizeRecursive(normalized);
 
-	return sanitized as unknown as ThoughtData;
+	return sanitized as ThoughtData;
 }
