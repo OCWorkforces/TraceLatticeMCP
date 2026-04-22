@@ -1,6 +1,6 @@
 # SRC
 
-**Updated:** 2026-04-18 | **Parent:** ../AGENTS.md
+**Updated:** 2026-04-23 | **Parent:** ../AGENTS.md
 
 ## OVERVIEW
 
@@ -14,8 +14,8 @@ src/
 ├── lib.ts            # ToolAwareSequentialThinkingServer, DI wiring, factories (577L)
 ├── cli.ts            # CLI bin entry (tracelattice)
 ├── schema.ts         # Valibot schemas + TOOL_DESCRIPTION (718L)
-├── ServerConfig.ts   # Config validation, 10 fields + 7 feature flags (503L)
-├── errors.ts         # 20 error subclasses + getErrorMessage helper (705L)
+├── ServerConfig.ts   # Config validation, 10 fields + 7 feature flags (488L)
+├── errors.ts         # 20 error subclasses + ERROR_CODES const (22 codes) + getErrorMessage helper (748L)
 ├── core/             # Domain (13 files, 5 subsystems) — has AGENTS.md
 │   ├── graph/        # DAG edges: Edge, EdgeStore, GraphView
 │   ├── compression/  # Branch rollup + sliding-window dehydration
@@ -45,10 +45,10 @@ src/
 | -------------------------- | ------------------------------------------------------------------------------- |
 | Entry flow                 | `cli.ts` → `lib.ts:initializeServer` → `createServer` (DI wires 18 services)    |
 | Add a service              | `di/ServiceRegistry.ts` (typed key) + `lib.ts` (registration)                   |
-| Add a feature flag         | `ServerConfig.ts` + env var `TRACELATTICE_FEATURES_*`                           |
-| Add an error type          | `errors.ts` (extend `SequentialThinkingError`, unique `code`)                   |
-| Add MCP tool input schema  | `schema.ts` (valibot) + `TOOL_DESCRIPTION`                                      |
-| Wire a new transport       | `transport/` factory + `lib.ts` registration                                    |
+| Add a feature flag         | `contracts/features.ts` (type) + `ServerConfig.ts` (wiring) + env var `TRACELATTICE_FEATURES_*` |
+| Add an error type          | `errors.ts` (extend `SequentialThinkingError`, unique `code` in `ERROR_CODES`) |
+| Add MCP tool input schema  | `schema.ts` (valibot) + `TOOL_DESCRIPTION` |
+| Wire a new transport       | `transport/` factory + `contracts/transport.ts` (implements ITransport) |
 | Public API surface         | `index.ts` (re-exports from `lib.ts`)                                           |
 
 ## NOTES
@@ -60,4 +60,4 @@ src/
 - **Subdirs with own AGENTS.md** (read first before navigating): `core/`, `core/evaluator/`, `transport/`, `persistence/`, `contracts/`, `__tests__/`.
 - **Coupling rule**: Cross-module type imports go through `contracts/`. Exceptions: `IHistoryManager` and `ThoughtData` live in `core/` (domain primitives).
 - **Layered**: 9 layers in `.sentrux/rules.toml` (types → crosscutting → config → core → domain → infrastructure → di → app → cli). 6 forbidden boundaries.
-- **Large files**: `schema.ts` (718L), `errors.ts` (705L), `lib.ts` (577L), `ServerConfig.ts` (503L). Split cautiously; risk public API churn.
+- **Large files**: `schema.ts` (718L), `errors.ts` (748L), `lib.ts` (577L), `ServerConfig.ts` (488L). Split cautiously; risk public API churn.

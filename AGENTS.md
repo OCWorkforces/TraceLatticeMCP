@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Updated:** 2026-04-18
-**Commit:** bfc8a7d
+**Updated:** 2026-04-23
+**Commit:** 0f039fc
 **Branch:** feat/rslib-rsbuild-migration
 
 ## OVERVIEW
@@ -71,7 +71,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `initializeServer`                  | function  | src/lib.ts                               | Convenience factory with config + logger + watchers                                  |
 | `HistoryManager`                    | class     | src/core/HistoryManager.ts               | Coordinates history + branching + session partitioning. Delegates to EdgeEmitter, PersistenceBuffer, SessionManager. TTL eviction (30min), LRU (100 max). |
 | `IHistoryManager`                   | interface | src/core/IHistoryManager.ts              | History manager contract (8 methods + session lifecycle)                                                 |
-| `ThoughtProcessor`                  | class     | src/core/ThoughtProcessor.ts             | Validate → normalize → persist → format → evaluate → strategy → hints pipeline (750L) |
+| `ThoughtProcessor`                  | class     | src/core/ThoughtProcessor.ts             | Validate → normalize → persist → format → evaluate → strategy → hints pipeline (754L) |
 | `ThoughtEvaluator`                  | class     | src/core/ThoughtEvaluator.ts             | Stateless quality signals + reasoning analytics (527L)                               |
 | `normalizeInput`                    | function  | src/core/InputNormalizer.ts              | Field correction, default filling, branch_id sanitization (433L)                     |
 | `ThoughtFormatter`                  | class     | src/core/ThoughtFormatter.ts             | Chalk display: 💭🔄🌿🔬✅🔍🧬🧠📝 (231L)                                             |
@@ -79,7 +79,8 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `ThoughtType`                       | union     | src/core/reasoning.ts                    | `'regular'\|'hypothesis'\|'verification'\|'critique'\|'synthesis'\|'meta'\|'tool_call'\|'tool_observation'\|'assumption'\|'decomposition'\|'backtrack'` |
 | `ConfidenceSignals`                 | interface | src/core/reasoning.ts                    | Computed quality indicators (depth, revision count, type distribution)               |
 | `ReasoningStats`                    | interface | src/core/reasoning.ts                    | Aggregated session analytics (totals, hypothesis chains, averages)                   |
-| `SequentialThinkingError`           | class     | src/errors.ts                            | Base error (20 subclasses + `ValidationError` with `field`, each with unique `code`). Module also exports `getErrorMessage(error: unknown): string` helper. (705L) |
+| `PatternName`                      | union     | src/core/reasoning.ts                    | 6 pattern name variants for `PatternSignal.pattern` (consecutive_without_verification, unverified_hypothesis, etc.) |
+| `SequentialThinkingError`           | class     | src/errors.ts                            | Base error (20 subclasses + `ValidationError` with `field`, each with unique `code`). Module exports `ERROR_CODES` const (22 codes), `ErrorCode` union, `isErrorCode()` type guard, `getErrorMessage()` helper. (748L) |
 | `BaseRegistry<T>`                   | class     | src/registry/BaseRegistry.ts             | Generic CRUD + discovery + cache + frontmatter                                       |
 | `ToolRegistry`                      | class     | src/registry/ToolRegistry.ts             | MCP tool discovery (extends BaseRegistry)                                            |
 | `SkillRegistry`                     | class     | src/registry/SkillRegistry.ts            | Claude skill discovery(extends BaseRegistry)                                         |
@@ -128,6 +129,9 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `EdgeEmitter`                       | class     | src/core/EdgeEmitter.ts                  | Extracted from HistoryManager: edge creation, _resolveThoughtId (searches history + branches), _addEdgeIfValid |
 | `PersistenceBuffer`                 | class     | src/core/PersistenceBuffer.ts            | Extracted from HistoryManager: write buffer, flush timer, batched persistence |
 | `SessionManager`                    | class     | src/core/SessionManager.ts               | Extracted from HistoryManager: session lifecycle, TTL eviction, LRU tracking |
+| `SessionId` / `ThoughtId` / `EdgeId` / `SuspensionToken` | branded types | src/contracts/ids.ts | Branded ID types preventing wrong-ID-passing. Constructors validate at trust boundaries. `generateThoughtId/EdgeId/SuspensionToken` wrap `generateUlid`. |
+| `FeatureFlags`                     | interface | src/contracts/features.ts                | 7 readonly feature flags + `DEFAULT_FLAGS` + `hasFeature()` type guard. Re-exported from `ServerConfig.ts`. |
+| `ITransport`                       | interface | src/contracts/transport.ts               | Shared transport lifecycle: `kind`, `connect`, `stop`, `clientCount`, `isShuttingDown`, `serverUrl`. |
 
 ## CONVENTIONS
 
@@ -163,18 +167,18 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 ## SETUP NOTES
 
 - **CI**: `.github/workflows/ci.yml` — Node 22.x + 24.x matrix. Hard gates: type-check, test+coverage, build. Soft gates (continue-on-error): lint, audit.
-- **Coverage**: 2005 tests (75 files, 16 skipped). Thresholds: branches 55%, functions 60%, lines 65%, statements 65%.
+- **Coverage**: 2005 tests (75 files, 16 skipped). Thresholds: branches 90%, functions 60%, lines 65%, statements 65%.
 - **Test Helpers**: `src/__tests__/helpers/index.ts` — `createTestThought()`, `MockHistoryManager`, timer helpers.
-- **Large Files**: `ThoughtProcessor.ts` (750L), `schema.ts` (718L), `errors.ts` (705L), `StreamableHttpTransport.ts` (704L), `lib.ts` (577L), `HistoryManager.ts` (538L), `ServerConfig.ts` (503L), `SseTransport.ts` (476L), `ConnectionPool.ts` (470L), `metrics.impl.ts` (470L).
+- **Large Files**: `ThoughtProcessor.ts` (754L), `errors.ts` (748L), `schema.ts` (718L), `StreamableHttpTransport.ts` (704L), `lib.ts` (577L), `HistoryManager.ts` (538L), `ServerConfig.ts` (488L), `SseTransport.ts` (476L), `ConnectionPool.ts` (470L), `metrics.impl.ts` (470L).
 - **Architectural Layers**: `.sentrux/rules.toml` — 9 layers (types→crosscutting→config→core→domain→infrastructure→di→app→cli), 6 forbidden boundaries.
 - **Duplicate env files**: Both `.env.example` (minimal) and `.example.env` (full) exist — non-standard.
 
 ## COMMANDS
 
 ```bash
-npm run build       # tsc && chmod +x dist/cli.js
-npm run start       # node dist/cli.js
-npm run dev         # MCP inspector mode
+npm run build       # rslib build && rsbuild build -c rsbuild.config.ts && node scripts/postbuild-cli.mjs
+npm run start       # bun dist/cli.js
+npm run dev         # bunx @modelcontextprotocol/inspector dist/cli.js
 npm test            # vitest run (2005 tests)
 npm run test:coverage # vitest run --coverage
 npm run type-check  # tsc --noEmit
