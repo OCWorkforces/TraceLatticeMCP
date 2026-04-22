@@ -6,7 +6,7 @@
  * Concrete types are imported only where needed for DI resolution.
  */
 
-import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
+import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
 // Concrete types — needed for DI container resolution type safety
 import type { HistoryManager } from '../core/HistoryManager.js';
 import type { EdgeStore } from '../core/graph/EdgeStore.js';
@@ -14,7 +14,7 @@ import type { ICalibrator } from '../contracts/calibrator.js';
 import type { IOutcomeRecorder } from '../contracts/interfaces.js';
 import type { IReasoningStrategy } from '../contracts/strategy.js';
 import type { ThoughtEvaluator } from '../core/ThoughtEvaluator.js';
-import type { ThoughtFormatter } from '../core/ThoughtFormatter.js';
+import type { IThoughtFormatter } from '../core/IThoughtFormatter.js';
 import type { ThoughtProcessor } from '../core/ThoughtProcessor.js';
 import type { StructuredLogger } from '../logger/StructuredLogger.js';
 import type { Metrics } from '../metrics/metrics.impl.js';
@@ -31,7 +31,7 @@ export interface ServiceRegistry {
 	FileConfig: Record<string, unknown>;
 	HistoryManager: HistoryManager;
 	ThoughtProcessor: ThoughtProcessor;
-	ThoughtFormatter: ThoughtFormatter;
+	ThoughtFormatter: IThoughtFormatter;
 	ThoughtEvaluator: ThoughtEvaluator;
 	Persistence: PersistenceBackend | null;
 	ToolRegistry: ToolRegistry;

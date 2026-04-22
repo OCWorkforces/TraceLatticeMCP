@@ -9,6 +9,7 @@
  */
 
 import chalk from 'chalk';
+import type { IThoughtFormatter } from './IThoughtFormatter.js';
 import type { ThoughtType } from './reasoning.js';
 import type { StepRecommendation } from './step.js';
 import type { ThoughtData } from './thought.js';
@@ -56,7 +57,7 @@ import type { ThoughtData } from './thought.js';
  * console.log(output);
  * ```
  */
-export class ThoughtFormatter {
+export class ThoughtFormatter implements IThoughtFormatter {
 	/**
 	 * Formats a step recommendation into a readable string.
 	 *
@@ -220,9 +221,15 @@ export class ThoughtFormatter {
 					icon = chalk.red('↩️');
 					label = 'Backtrack';
 					break;
-				default:
+				case 'regular':
 					icon = chalk.blue('💭');
 					break;
+				default: {
+					const _exhaust: never = thoughtType;
+					void _exhaust;
+					icon = chalk.blue('💭');
+					break;
+				}
 			}
 		}
 

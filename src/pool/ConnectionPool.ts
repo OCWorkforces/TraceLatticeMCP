@@ -25,7 +25,7 @@ import {
 	SessionNotFoundError,
 } from '../errors.js';
 import type { Logger } from '../logger/StructuredLogger.js';
-import type { IDisposable } from '../types/disposable.js';
+import type { ConnectionPoolStats, IConnectionPool } from './IConnectionPool.js';
 
 export interface SessionOptions {
 	/**
@@ -73,11 +73,13 @@ export interface SessionServer {
 	stop(): void | Promise<void>;
 }
 
+/**
+ * Represents a content block in a process result.
+ */
+export type ContentBlock = { type: 'text'; text: string };
+
 export interface ProcessResult {
-	content: Array<{
-		type: string;
-		text: string;
-	}>;
+	content: ContentBlock[];
 	isError?: boolean;
 }
 
@@ -200,7 +202,7 @@ export class Session {
  * Each session has its own server instance with isolated state,
  * allowing multiple users to interact with the system simultaneously.
  */
-export class ConnectionPool implements IDisposable {
+export class ConnectionPool implements IConnectionPool {
 	private _sessions: Map<string, Session> = new Map();
 	private _createSessionLock: Promise<void> | null = null;
 	private _maxSessions: number;
@@ -351,13 +353,7 @@ export class ConnectionPool implements IDisposable {
 	/**
 	 * Get connection pool statistics.
 	 */
-	getStats(): {
-		totalSessions: number;
-		activeSessions: number;
-		maxSessions: number;
-		cleanupEnabled: boolean;
-		sessionTimeout: number;
-	} {
+	getStats(): ConnectionPoolStats {
 		const activeSessions = this.getActiveSessions();
 
 		return {
