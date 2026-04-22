@@ -8,11 +8,19 @@
  * @module core/graph/Edge
  */
 
+import type { EdgeId, SessionId, ThoughtId } from '../../contracts/ids.js';
+
 /**
  * Kinds of relationships between thoughts in the DAG.
  *
  * Each kind represents a semantic relationship that the reasoning controller
  * can use for search policy decisions.
+ *
+ * NOTE: Kept as a hand-written union (not inferred from `EdgeKindSchema`) because
+ * `schema.ts` imports `EdgeKind` from this file to constrain the schema via
+ * `satisfies v.GenericSchema<EdgeKind>`. Reversing the dependency would create a
+ * circular import (schema.ts → Edge.ts → schema.ts). The `satisfies` clause in
+ * schema.ts already guarantees the schema and the union stay in sync.
  */
 export type EdgeKind =
 	| 'sequence' // default chronological successor
@@ -44,15 +52,15 @@ export type EdgeKind =
  */
 export interface Edge {
 	/** Unique edge identifier (ulid). */
-	readonly id: string;
+	readonly id: EdgeId;
 	/** Source thought id. */
-	readonly from: string;
+	readonly from: ThoughtId;
 	/** Target thought id. */
-	readonly to: string;
+	readonly to: ThoughtId;
 	/** Semantic relationship kind. */
 	readonly kind: EdgeKind;
 	/** Session this edge belongs to. */
-	readonly sessionId: string;
+	readonly sessionId: SessionId;
 	/** Creation timestamp (`Date.now()`). */
 	readonly createdAt: number;
 	/** Optional metadata for strategy-specific annotations. */

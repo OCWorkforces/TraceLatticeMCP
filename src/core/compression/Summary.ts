@@ -9,6 +9,7 @@
  *
  * @module core/compression/Summary
  */
+import type { SessionId, ThoughtId } from '../../contracts/ids.js';
 
 /**
  * Immutable record describing a compressed group of thoughts.
@@ -35,13 +36,13 @@ export interface Summary {
 	/** Unique identifier (ulid). */
 	readonly id: string;
 	/** Session this summary belongs to. */
-	readonly sessionId: string;
+	readonly sessionId: SessionId;
 	/** Optional branch id; `undefined` indicates main-chain compression. */
 	readonly branchId?: string;
 	/** `id` of the thought that anchors the compressed subtree. */
-	readonly rootThoughtId: string;
+	readonly rootThoughtId: ThoughtId;
 	/** Thought ids included in this summary, in chronological order. */
-	readonly coveredIds: readonly string[];
+	readonly coveredIds: readonly ThoughtId[];
 	/** Inclusive `[min, max]` of `thought_number` values covered. */
 	readonly coveredRange: readonly [number, number];
 	/** Top-3 unigrams extracted from the covered thought texts. */
