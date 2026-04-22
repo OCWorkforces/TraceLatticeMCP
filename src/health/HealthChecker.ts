@@ -8,7 +8,7 @@
  */
 
 import type { Logger } from '../logger/StructuredLogger.js';
-import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
+import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
 import { getErrorMessage } from '../errors.js';
 
 /**

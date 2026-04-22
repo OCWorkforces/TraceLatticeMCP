@@ -18,7 +18,7 @@ import type { ISummaryStore } from '../contracts/summary.js';
 import { ValidationError, getErrorMessage } from '../errors.js';
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
-import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
+import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
 import {
 	DehydrationPolicy,
 	type DehydrationOptions,

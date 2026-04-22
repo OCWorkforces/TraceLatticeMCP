@@ -13,7 +13,7 @@ import type { IEdgeStore } from '../contracts/interfaces.js';
 import { getErrorMessage } from '../errors.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import { NullLogger } from '../logger/NullLogger.js';
-import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
+import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
 import type { ThoughtData } from './thought.js';
 
 /** Minimal session view: anything that owns a `writeBuffer`. */
