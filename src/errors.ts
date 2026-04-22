@@ -27,6 +27,36 @@
  */
 
 /**
+ * All known error codes as a const object for exhaustive switching.
+ */
+export const ERROR_CODES = {
+	CONFIGURATION_ERROR: 'CONFIGURATION_ERROR',
+	TOOL_NOT_FOUND: 'TOOL_NOT_FOUND',
+	SKILL_NOT_FOUND: 'SKILL_NOT_FOUND',
+	INVALID_THOUGHT: 'INVALID_THOUGHT',
+	SKILL_DISCOVERY_FAILED: 'SKILL_DISCOVERY_FAILED',
+	HISTORY_LIMIT_EXCEEDED: 'HISTORY_LIMIT_EXCEEDED',
+	DUPLICATE_SKILL: 'DUPLICATE_SKILL',
+	INVALID_SKILL: 'INVALID_SKILL',
+	DUPLICATE_TOOL: 'DUPLICATE_TOOL',
+	INVALID_TOOL: 'INVALID_TOOL',
+	SESSION_NOT_ACTIVE: 'SESSION_NOT_ACTIVE',
+	SESSION_NOT_FOUND: 'SESSION_NOT_FOUND',
+	MAX_SESSIONS_REACHED: 'MAX_SESSIONS_REACHED',
+	POOL_TERMINATED: 'POOL_TERMINATED',
+	VALIDATION_ERROR: 'VALIDATION_ERROR',
+	INVALID_EDGE: 'INVALID_EDGE',
+	CYCLE_DETECTED: 'CYCLE_DETECTED',
+	SUSPENSION_NOT_FOUND: 'SUSPENSION_NOT_FOUND',
+	SUSPENSION_EXPIRED: 'SUSPENSION_EXPIRED',
+	INVALID_TOOL_CALL: 'INVALID_TOOL_CALL',
+	INVALID_BACKTRACK: 'INVALID_BACKTRACK',
+	DUPLICATE_SUMMARY: 'DUPLICATE_SUMMARY',
+} as const;
+
+export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+
+/**
  * Base error class for all Sequential Thinking server errors.
  *
  * This error extends the native `Error` class and adds a `code` property
@@ -55,7 +85,7 @@
  */
 export class SequentialThinkingError extends Error {
 	/** The error code for programmatic identification. */
-	public readonly code: string;
+	public readonly code: ErrorCode;
 
 	/**
 	 * Creates a new SequentialThinkingError.
@@ -72,7 +102,7 @@ export class SequentialThinkingError extends Error {
 	 * console.log(error.code); // 'CUSTOM_ERROR'
 	 * ```
 	 */
-	constructor(message: string, code: string) {
+	constructor(message: string, code: ErrorCode) {
 		super(message);
 		this.code = code;
 		this.name = 'SequentialThinkingError';
@@ -82,7 +112,7 @@ export class SequentialThinkingError extends Error {
 
 export class ConfigurationError extends SequentialThinkingError {
 	constructor(message: string) {
-		super(message, 'CONFIGURATION_ERROR');
+		super(message, ERROR_CODES.CONFIGURATION_ERROR);
 		this.name = 'ConfigurationError';
 	}
 }
@@ -122,7 +152,7 @@ export class ToolNotFoundError extends SequentialThinkingError {
 		const message = action
 			? `Tool '${toolName}' not found, cannot ${action}`
 			: `Tool '${toolName}' not found`;
-		super(message, 'TOOL_NOT_FOUND');
+		super(message, ERROR_CODES.TOOL_NOT_FOUND);
 		this.name = 'ToolNotFoundError';
 	}
 }
@@ -162,7 +192,7 @@ export class SkillNotFoundError extends SequentialThinkingError {
 		const message = action
 			? `Skill '${skillName}' not found, cannot ${action}`
 			: `Skill '${skillName}' not found`;
-		super(message, 'SKILL_NOT_FOUND');
+		super(message, ERROR_CODES.SKILL_NOT_FOUND);
 		this.name = 'SkillNotFoundError';
 	}
 }
@@ -196,7 +226,7 @@ export class InvalidThoughtError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(thoughtNumber: number, reason: string) {
-		super(`Invalid thought ${thoughtNumber}: ${reason}`, 'INVALID_THOUGHT');
+		super(`Invalid thought ${thoughtNumber}: ${reason}`, ERROR_CODES.INVALID_THOUGHT);
 		this.name = 'InvalidThoughtError';
 	}
 }
@@ -240,7 +270,10 @@ export class SkillDiscoveryError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(directory: string, cause: Error) {
-		super(`Failed to discover skills in ${directory}: ${cause.message}`, 'SKILL_DISCOVERY_FAILED');
+		super(
+			`Failed to discover skills in ${directory}: ${cause.message}`,
+			ERROR_CODES.SKILL_DISCOVERY_FAILED,
+		);
 		this.name = 'SkillDiscoveryError';
 		this.cause = cause;
 	}
@@ -274,7 +307,7 @@ export class HistoryLimitExceededError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(currentSize: number, maxSize: number) {
-		super(`History size ${currentSize} exceeds limit ${maxSize}`, 'HISTORY_LIMIT_EXCEEDED');
+		super(`History size ${currentSize} exceeds limit ${maxSize}`, ERROR_CODES.HISTORY_LIMIT_EXCEEDED);
 		this.name = 'HistoryLimitExceededError';
 	}
 }
@@ -306,7 +339,7 @@ export class DuplicateSkillError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(skillName: string) {
-		super(`skill '${skillName}' already exists`, 'DUPLICATE_SKILL');
+		super(`skill '${skillName}' already exists`, ERROR_CODES.DUPLICATE_SKILL);
 		this.name = 'DuplicateSkillError';
 	}
 }
@@ -338,7 +371,7 @@ export class InvalidSkillError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(reason: string) {
-		super(`Invalid skill: ${reason}`, 'INVALID_SKILL');
+		super(`Invalid skill: ${reason}`, ERROR_CODES.INVALID_SKILL);
 		this.name = 'InvalidSkillError';
 	}
 }
@@ -370,7 +403,7 @@ export class DuplicateToolError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(toolName: string) {
-		super(`tool '${toolName}' already exists`, 'DUPLICATE_TOOL');
+		super(`tool '${toolName}' already exists`, ERROR_CODES.DUPLICATE_TOOL);
 		this.name = 'DuplicateToolError';
 	}
 }
@@ -402,7 +435,7 @@ export class InvalidToolError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(reason: string) {
-		super(`Invalid tool: ${reason}`, 'INVALID_TOOL');
+		super(`Invalid tool: ${reason}`, ERROR_CODES.INVALID_TOOL);
 		this.name = 'InvalidToolError';
 	}
 }
@@ -434,7 +467,7 @@ export class SessionNotActiveError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(sessionId: string) {
-		super(`Session '${sessionId}' is not active`, 'SESSION_NOT_ACTIVE');
+		super(`Session '${sessionId}' is not active`, ERROR_CODES.SESSION_NOT_ACTIVE);
 		this.name = 'SessionNotActiveError';
 	}
 }
@@ -467,7 +500,7 @@ export class SessionNotFoundError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(sessionId: string) {
-		super(`Session not found: ${sessionId}`, 'SESSION_NOT_FOUND');
+		super(`Session not found: ${sessionId}`, ERROR_CODES.SESSION_NOT_FOUND);
 		this.name = 'SessionNotFoundError';
 	}
 }
@@ -501,7 +534,7 @@ export class MaxSessionsReachedError extends SequentialThinkingError {
 	constructor(maxSessions: number) {
 		super(
 			`Max sessions (${maxSessions}) reached. Wait for a session to close or increase maxSessions.`,
-			'MAX_SESSIONS_REACHED'
+			ERROR_CODES.MAX_SESSIONS_REACHED,
 		);
 		this.name = 'MaxSessionsReachedError';
 	}
@@ -532,7 +565,7 @@ export class PoolTerminatedError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor() {
-		super('ConnectionPool has been terminated', 'POOL_TERMINATED');
+		super('ConnectionPool has been terminated', ERROR_CODES.POOL_TERMINATED);
 		this.name = 'PoolTerminatedError';
 	}
 }
@@ -555,7 +588,7 @@ export class ValidationError extends SequentialThinkingError {
 	public readonly field: string;
 
 	constructor(field: string, reason: string) {
-		super(`Validation failed for '${field}': ${reason}`, 'VALIDATION_ERROR');
+		super(`Validation failed for '${field}': ${reason}`, ERROR_CODES.VALIDATION_ERROR);
 		this.name = 'ValidationError';
 		this.field = field;
 	}
@@ -590,7 +623,7 @@ export class InvalidEdgeError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(message: string) {
-		super(message, 'INVALID_EDGE');
+		super(message, ERROR_CODES.INVALID_EDGE);
 		this.name = 'InvalidEdgeError';
 	}
 }
@@ -625,7 +658,7 @@ export class CycleDetectedError extends SequentialThinkingError {
 	 * ```
 	 */
 	constructor(message: string) {
-		super(message, 'CYCLE_DETECTED');
+		super(message, ERROR_CODES.CYCLE_DETECTED);
 		this.name = 'CycleDetectedError';
 	}
 }
@@ -638,7 +671,7 @@ export class CycleDetectedError extends SequentialThinkingError {
  */
 export class SuspensionNotFoundError extends SequentialThinkingError {
 	constructor(message: string) {
-		super(message, 'SUSPENSION_NOT_FOUND');
+		super(message, ERROR_CODES.SUSPENSION_NOT_FOUND);
 		this.name = 'SuspensionNotFoundError';
 	}
 }
@@ -651,7 +684,7 @@ export class SuspensionNotFoundError extends SequentialThinkingError {
  */
 export class SuspensionExpiredError extends SequentialThinkingError {
 	constructor(message: string) {
-		super(message, 'SUSPENSION_EXPIRED');
+		super(message, ERROR_CODES.SUSPENSION_EXPIRED);
 		this.name = 'SuspensionExpiredError';
 	}
 }
@@ -664,7 +697,7 @@ export class SuspensionExpiredError extends SequentialThinkingError {
  */
 export class InvalidToolCallError extends SequentialThinkingError {
 	constructor(message: string) {
-		super(message, 'INVALID_TOOL_CALL');
+		super(message, ERROR_CODES.INVALID_TOOL_CALL);
 		this.name = 'InvalidToolCallError';
 	}
 }
@@ -677,9 +710,19 @@ export class InvalidToolCallError extends SequentialThinkingError {
  */
 export class InvalidBacktrackError extends SequentialThinkingError {
 	constructor(message: string) {
-		super(message, 'INVALID_BACKTRACK');
+		super(message, ERROR_CODES.INVALID_BACKTRACK);
 		this.name = 'InvalidBacktrackError';
 	}
+}
+
+/**
+ * Type guard to check if an error has a specific error code.
+ */
+export function isErrorCode<C extends ErrorCode>(
+	err: unknown,
+	code: C,
+): err is SequentialThinkingError & { readonly code: C } {
+	return err instanceof SequentialThinkingError && err.code === code;
 }
 
 /**
