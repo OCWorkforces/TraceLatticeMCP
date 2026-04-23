@@ -11,7 +11,7 @@ import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
 import type { HistoryManager } from '../core/HistoryManager.js';
 import type { EdgeStore } from '../core/graph/EdgeStore.js';
 import type { ICalibrator } from '../contracts/calibrator.js';
-import type { IOutcomeRecorder } from '../contracts/interfaces.js';
+import type { IOutcomeRecorder, ISessionLock, IToolRegistry } from '../contracts/interfaces.js';
 import type { IReasoningStrategy } from '../contracts/strategy.js';
 import type { ThoughtEvaluator } from '../core/ThoughtEvaluator.js';
 import type { IThoughtFormatter } from '../core/IThoughtFormatter.js';
@@ -19,7 +19,6 @@ import type { ThoughtProcessor } from '../core/ThoughtProcessor.js';
 import type { StructuredLogger } from '../logger/StructuredLogger.js';
 import type { Metrics } from '../metrics/metrics.impl.js';
 import type { SkillRegistry } from '../registry/SkillRegistry.js';
-import type { ToolRegistry } from '../registry/ToolRegistry.js';
 import type { ServerConfig } from '../ServerConfig.js';
 import type { ISummaryStore } from '../contracts/summary.js';
 import type { CompressionService } from '../core/compression/CompressionService.js';
@@ -34,7 +33,7 @@ export interface ServiceRegistry {
 	ThoughtFormatter: IThoughtFormatter;
 	ThoughtEvaluator: ThoughtEvaluator;
 	Persistence: PersistenceBackend | null;
-	ToolRegistry: ToolRegistry;
+	ToolRegistry: IToolRegistry;
 	SkillRegistry: SkillRegistry;
 	Metrics: Metrics;
 	EdgeStore: EdgeStore;
@@ -44,6 +43,7 @@ export interface ServiceRegistry {
 	summaryStore: ISummaryStore;
 	compressionService: CompressionService;
 	suspensionStore: ISuspensionStore;
+	sessionLock: ISessionLock;
 }
 
 export type ServiceKey = keyof ServiceRegistry;

@@ -159,6 +159,10 @@ export class ToolRegistry extends BaseRegistry<Tool> {
 		return this.get(name);
 	}
 
+	public list(): string[] {
+		return this.getNames();
+	}
+
 	public setTools(tools: Tool[]): void {
 		this.setAll(tools);
 	}
