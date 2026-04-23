@@ -5,8 +5,8 @@ import { ThoughtProcessor } from '../core/ThoughtProcessor.js';
 import { ThoughtFormatter } from '../core/ThoughtFormatter.js';
 import { normalizeInput } from '../core/InputNormalizer.js';
 import { SequentialThinkingSchema } from '../schema.js';
-import { MockHistoryManager } from './helpers/index.js';
-import { createTestThought } from './helpers/index.js';
+import { MockHistoryManager } from './helpers/factories.js';
+import { createTestThought } from './helpers/factories.js';
 import type { ThoughtData } from '../core/thought.js';
 
 describe('ThoughtEvaluator', () => {

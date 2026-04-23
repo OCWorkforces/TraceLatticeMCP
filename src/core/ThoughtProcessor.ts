@@ -14,7 +14,7 @@ import { asSessionId, GLOBAL_SESSION_ID } from '../contracts/ids.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
 import type { ISuspensionStore, SuspensionRecord } from '../contracts/suspension.js';
 import type { IReasoningStrategy, StrategyDecision } from '../contracts/strategy.js';
-import type { FeatureFlags } from '../ServerConfig.js';
+import type { FeatureFlags } from '../contracts/features.js';
 import {
 	InvalidBacktrackError,
 	InvalidToolCallError,

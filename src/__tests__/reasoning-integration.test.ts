@@ -15,7 +15,7 @@ import { ThoughtEvaluator } from '../core/ThoughtEvaluator.js';
 import { StructuredLogger } from '../logger/StructuredLogger.js';
 import type { ThoughtData } from '../core/thought.js';
 import type { IHistoryManager } from '../core/IHistoryManager.js';
-import { createTestThought } from './helpers/index.js';
+import { createTestThought } from './helpers/factories.js';
 
 /**
  * Branch-aware mock that routes thoughts with `branch_id` into the branches map,

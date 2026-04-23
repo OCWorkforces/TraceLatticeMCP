@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { EventEmitter } from 'node:events';
 import type { IncomingMessage } from 'node:http';
 import { BaseTransport, type TransportOptions } from '../transport/BaseTransport.js';
-import { useFakeTimers, useRealTimers, advanceTime } from './helpers/index.js';
+import { useFakeTimers, useRealTimers, advanceTime } from './helpers/timers.js';
 
 /**
  * Concrete subclass exposing protected methods for testing.

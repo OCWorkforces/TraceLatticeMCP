@@ -11,7 +11,7 @@ Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `
 Test files mirror the `src/` tree. `src/__tests__/core/graph/EdgeStore.test.ts` covers `src/core/graph/EdgeStore.ts`, etc.
 
 ```
-helpers/         factories.ts, timers.ts, index.ts (only allowed test barrel)
+helpers/         factories.ts, timers.ts
 core/graph/      EdgeStore, GraphView, Edge
 core/reasoning/strategies/   TreeOfThought.newTypes
 strategies/      TreeOfThoughtStrategy (538L), totScoring, StrategyContract
@@ -23,7 +23,7 @@ eval/fixtures/   scenarios.ts (10 canonical eval scenarios)
 ## CONVENTIONS
 
 - **Mirror layout**: new test file path = source path with `__tests__/` inserted after `src/`.
-- **No barrels** in test dirs except `helpers/index.ts`. Import other test files directly.
+- **No barrels** in test dirs. Import other test files directly.
 - **Feature flags via constructor**, never env vars in tests:
   ```ts
   const proc = new ThoughtProcessor({ historyManager: mock, dagEdges: true, calibration: true });

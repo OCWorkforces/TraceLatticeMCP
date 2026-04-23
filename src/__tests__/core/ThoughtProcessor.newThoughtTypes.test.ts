@@ -5,7 +5,7 @@ import { ThoughtEvaluator } from '../../core/ThoughtEvaluator.js';
 import { InMemorySuspensionStore } from '../../core/tools/InMemorySuspensionStore.js';
 import { SequentialStrategy } from '../../core/reasoning/strategies/SequentialStrategy.js';
 import { MockHistoryManager } from '../helpers/factories.js';
-import type { FeatureFlags } from '../../ServerConfig.js';
+import type { FeatureFlags } from '../../contracts/features.js';
 import { asSuspensionToken } from '../../contracts/ids.js';
 
 function makeFeatures(overrides: Partial<FeatureFlags> = {}): FeatureFlags {

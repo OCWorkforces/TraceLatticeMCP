@@ -10,12 +10,12 @@ import { ThoughtProcessor } from '../core/ThoughtProcessor.js';
 import { ThoughtFormatter } from '../core/ThoughtFormatter.js';
 import { StructuredLogger } from '../logger/StructuredLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
-import { MockHistoryManager } from './helpers/index.js';
+import { MockHistoryManager } from './helpers/factories.js';
 import type { ThoughtData } from '../core/thought.js';
 import { asSessionId } from '../contracts/ids.js';
 import type { IHistoryManager } from '../core/IHistoryManager.js';
 import { ThoughtEvaluator } from '../core/ThoughtEvaluator.js';
-import { createTestThought, createHypothesisThought } from './helpers/index.js';
+import { createTestThought, createHypothesisThought } from './helpers/factories.js';
 
 
 describe('ThoughtProcessor', () => {

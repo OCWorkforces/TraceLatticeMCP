@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ToolAwareSequentialThinkingServer, createServer } from '../index.js';
+import { ToolAwareSequentialThinkingServer, createServer } from '../lib.js';
 import type { Tool } from '../types/tool.js';
 import type { Skill } from '../types/skill.js';
 import type { ThoughtData } from '../core/thought.js';

@@ -2,11 +2,11 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
-import type { IMetrics } from '../contracts/index.js';
+import type { IMetrics } from '../contracts/interfaces.js';
 import type { ThoughtData } from '../core/thought.js';
 import type { Edge } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
-import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
+import type { PersistenceBackend, PersistenceConfig } from '../contracts/PersistenceBackend.js';
 
 /**
  * File-based persistence backend using JSON files.

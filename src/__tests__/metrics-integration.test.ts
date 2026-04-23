@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { McpServer } from 'tmcp';
 import { ValibotJsonSchemaAdapter } from '@tmcp/adapter-valibot';
-import { ToolAwareSequentialThinkingServer } from '../index.js';
+import { ToolAwareSequentialThinkingServer } from '../lib.js';
 import { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { Metrics } from '../metrics/metrics.impl.js';
 import { FilePersistence } from '../persistence/FilePersistence.js';

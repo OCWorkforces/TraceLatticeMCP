@@ -43,7 +43,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 
 | Task                     | Location                       | Notes                                                              |
 | ------------------------ | ------------------------------ | ------------------------------------------------------------------ |
-| **Core Logic**           | `src/lib.ts`, `src/index.ts`   | Entry point, wiring, ToolAwareSequentialThinkingServer             |
+| **Core Logic**           | `src/lib.ts`                   | Entry point, wiring, ToolAwareSequentialThinkingServer             |
 | **State Management**     | `src/core/HistoryManager.ts`   | Thought history, branching, persistence buffering                  |
 | **Shared Interfaces**    | `src/contracts/interfaces.ts`  | IMetrics, IDiscoveryCache, etc. (`IHistoryManager` in `src/core/`) |
 | **Persistence**          | `src/persistence/`             | File/SQLite/Memory backends                                        |
@@ -140,7 +140,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 - **DI**: Inject via `src/di` container; typed via `ServiceRegistry` (18 keys); no global state.
 - **Error Handling**: `SequentialThinkingError` hierarchy (20 subclasses + `ValidationError` with `field`); never swallow.
 - **Contracts Module**: Cross-module type imports go through `src/contracts/` — single coupling point. `IHistoryManager` + `ThoughtData` live in `src/core/`.
-- **No Barrels**: Submodules import directly from source files. Only `src/index.ts` (public API) and `src/contracts/index.ts` (coupling point) are barrels.
+- **No Barrels**: Submodules import directly from source files. No barrel re-exports anywhere.
 - **ESM-only**: `"type": "module"`, imports use `.js` extensions.
 - **Valibot**: Validation uses `valibot` (not zod/joi). Schemas in `src/schema.ts`.
 - **Tabs**: Prettier configured for tabs (tabWidth 2), single quotes, printWidth 100.
@@ -159,8 +159,8 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 - **No Global State**: Use the DI container. `AsyncLocalStorage` for request context.
 - **No Sync I/O**: Use async equivalents (except strictly sync startup).
 - **No Empty Catch**: Never swallow errors. All catch blocks log, rethrow, or collect.
-- **No Barrel Re-exports**: Only `src/index.ts` and `src/contracts/index.ts` are allowed.
-- **Entry Points**: `src/index.ts` is 1-line re-export to `src/lib.ts`; `src/cli.ts` is CLI entry. Don't mix.
+- **No Barrel Re-exports**: All re-exports are forbidden. Import directly from source files.
+- **Entry Points**: `src/lib.ts` is the library entry point and public API; `src/cli.ts` is CLI entry. Don't mix.
 - **Max CC 25**: Cyclomatic complexity per function (enforced by sentrux).
 - **Max function 100 lines**: Function length limit (enforced by sentrux).
 
@@ -168,7 +168,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 
 - **CI**: `.github/workflows/ci.yml` — Node 22.x + 24.x matrix. Hard gates: type-check, test+coverage, build. Soft gates (continue-on-error): lint, audit.
 - **Coverage**: 2005 tests (75 files, 16 skipped). Thresholds: branches 90%, functions 60%, lines 65%, statements 65%.
-- **Test Helpers**: `src/__tests__/helpers/index.ts` — `createTestThought()`, `MockHistoryManager`, timer helpers.
+- **Test Helpers**: `src/__tests__/helpers/factories.ts` — `createTestThought()`, `MockHistoryManager`. `src/__tests__/helpers/timers.ts` — timer helpers.
 - **Large Files**: `ThoughtProcessor.ts` (754L), `errors.ts` (748L), `schema.ts` (718L), `StreamableHttpTransport.ts` (704L), `lib.ts` (577L), `HistoryManager.ts` (538L), `ServerConfig.ts` (488L), `SseTransport.ts` (476L), `ConnectionPool.ts` (470L), `metrics.impl.ts` (470L).
 - **Architectural Layers**: `.sentrux/rules.toml` — 9 layers (types→crosscutting→config→core→domain→infrastructure→di→app→cli), 6 forbidden boundaries.
 - **Duplicate env files**: Both `.env.example` (minimal) and `.example.env` (full) exist — non-standard.

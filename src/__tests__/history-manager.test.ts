@@ -2,8 +2,8 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { ABSOLUTE_MAX_HISTORY_SIZE, HistoryManager } from '../core/HistoryManager.js';
 import { EdgeStore } from '../core/graph/EdgeStore.js';
 import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
-import { createTestThought } from './helpers/index.js';
-import { useFakeTimers, useRealTimers } from './helpers/index.js';
+import { createTestThought } from './helpers/factories.js';
+import { useFakeTimers, useRealTimers } from './helpers/timers.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { ThoughtData } from '../core/thought.js';
 

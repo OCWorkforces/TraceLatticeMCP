@@ -24,7 +24,7 @@ import type {
 	StrategyContext,
 	StrategyDecision,
 } from '../../contracts/strategy.js';
-import { createTestThought } from '../helpers/index.js';
+import { createTestThought } from '../helpers/factories.js';
 import { asThoughtId, type EdgeId, GLOBAL_SESSION_ID } from '../../contracts/ids.js';
 
 class TerminateStrategy implements IReasoningStrategy {

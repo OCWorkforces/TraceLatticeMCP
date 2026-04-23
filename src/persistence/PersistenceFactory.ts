@@ -1,4 +1,4 @@
-import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
+import type { PersistenceBackend, PersistenceConfig } from '../contracts/PersistenceBackend.js';
 
 /**
  * Create a persistence backend based on the provided configuration.

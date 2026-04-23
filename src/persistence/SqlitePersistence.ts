@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { ThoughtData } from '../core/thought.js';
 import type { Edge, EdgeKind } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
-import type { PersistenceBackend, PersistenceConfig } from './PersistenceBackend.js';
+import type { PersistenceBackend, PersistenceConfig } from '../contracts/PersistenceBackend.js';
 
 /**
  * Type definition for the better-sqlite3 Database interface.

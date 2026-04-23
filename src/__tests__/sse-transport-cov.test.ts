@@ -11,7 +11,7 @@ import { ValibotJsonSchemaAdapter } from '@tmcp/adapter-valibot';
 import { request } from 'node:http';
 import { setTimeout } from 'node:timers';
 import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
-import type { IMetrics } from '../contracts/index.js';
+import type { IMetrics } from '../contracts/interfaces.js';
 
 // Helper to make HTTP requests with optional timeout for SSE
 function makeRequest(

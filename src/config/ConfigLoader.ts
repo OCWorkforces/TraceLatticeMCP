@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { PersistenceConfig } from '../contracts/PersistenceBackend.js';
 import { getErrorMessage } from '../errors.js';
-import type { FeatureFlags } from '../ServerConfig.js';
+import type { FeatureFlags } from '../contracts/features.js';
 
 /**
  * Configuration options loaded from config files.

@@ -7,7 +7,7 @@ import {
 	createStreamableHttpTransport,
 } from '../transport/StreamableHttpTransport.js';
 import { HealthChecker } from '../health/HealthChecker.js';
-import type { IMetrics } from '../contracts/index.js';
+import type { IMetrics } from '../contracts/interfaces.js';
 
 /**
  * Helper: send an HTTP request and collect the full response.

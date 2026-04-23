@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
 	createTestThought,
-} from './helpers/index.js';
+} from './helpers/factories.js';
 import { MemoryPersistence } from '../persistence/MemoryPersistence.js';
 import { FilePersistence } from '../persistence/FilePersistence.js';
 import {
@@ -561,7 +561,7 @@ describe('FilePersistence', () => {
 			};
 			const metricsBackend = new FilePersistence({
 				dataDir: testDir,
-				metrics: mockMetrics as unknown as import('../contracts/index.js').IMetrics,
+				metrics: mockMetrics as unknown as import('../contracts/interfaces.js').IMetrics,
 			});
 
 			await metricsBackend.saveThought(createTestThought());

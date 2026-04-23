@@ -29,14 +29,7 @@ import type { PersistenceConfig } from './contracts/PersistenceBackend.js';
  * ```
  */
 
-/**
- * Feature flags for opt-in/out TraceLattice capabilities.
- *
- * Re-exported from `./contracts/features.js` for backward compatibility.
- */
 import type { FeatureFlags } from './contracts/features.js';
-export type { FeatureFlags, FeatureFlagKey } from './contracts/features.js';
-export { DEFAULT_FLAGS, hasFeature } from './contracts/features.js';
 export interface ServerConfigOptions {
 	/**
 	 * Maximum number of thoughts to keep in history.

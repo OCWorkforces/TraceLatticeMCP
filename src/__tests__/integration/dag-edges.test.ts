@@ -29,7 +29,7 @@ import { SqlitePersistence } from '../../persistence/SqlitePersistence.js';
 import type { PersistenceBackend } from '../../contracts/PersistenceBackend.js';
 import type { Edge, EdgeKind } from '../../core/graph/Edge.js';
 import type { ThoughtData } from '../../core/thought.js';
-import { createTestThought } from '../helpers/index.js';
+import { createTestThought } from '../helpers/factories.js';
 
 const GLOBAL = '__global__';
 

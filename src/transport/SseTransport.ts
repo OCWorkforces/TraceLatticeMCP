@@ -21,7 +21,7 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
 import type { McpServer } from 'tmcp';
 import { safeParse } from 'valibot';
-import type { IMetrics } from '../contracts/index.js';
+import type { IMetrics } from '../contracts/interfaces.js';
 import type { ConnectionPool } from '../pool/ConnectionPool.js';
 import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
