@@ -8,7 +8,7 @@ Reasoning engine: thought ingest → graph mutation → quality signals → stra
 
 `ThoughtProcessor.process()` (7 stages):
 
-1. **normalize** (`InputNormalizer`): fix LLM field mistakes, fill defaults, sanitize `branch_id`
+1. **normalize** (`InputNormalizer`): fix LLM field mistakes, fill defaults, sanitize `branch_id`, strip urgency phrases from step-level fields (`step_description`, `expected_outcome`, `meta_observation`, `next_step_conditions`)
 2. **validate** (valibot via `schema.ts`): throw `ValidationError` with `field`
 3. **persist** (`HistoryManager.addThought`): append to history, mutate branches, emit edges
 4. **format** (`ThoughtFormatter`): chalk display for stderr (💭🔄🌿🔬✅🔍🧬🧠📝)
@@ -39,6 +39,7 @@ Reasoning engine: thought ingest → graph mutation → quality signals → stra
 | Batched writes                | `PersistenceBuffer` (flush timer)     |
 | New reasoning strategy        | `reasoning/strategies/` + `StrategyFactory` dispatch |
 | Branch collapse               | `compression/CompressionService.ts`   |
+| Sanitization of step fields   | `InputNormalizer.ts` (uses `sanitizeStepField` from `sanitize.ts`) |
 
 ## KEY INTERFACES
 
@@ -58,3 +59,5 @@ Reasoning engine: thought ingest → graph mutation → quality signals → stra
 - `EdgeStore` is always registered in DI. Feature flag `dagEdges` gates the WRITE path only, not the registration.
 - `reasoning/strategies/` lives at depth 4 deliberately. Strategies are leaf policies, not infrastructure.
 - `generateUlid` is timestamp-base36 + random hex. Not a real ULID. Don't rename.
+- `HistoryManager.clear()` enforces ownership via `_getSession()` — cross-owner `reset_state` throws `SessionAccessDeniedError`. Stdio path (no owner) is unrestricted.
+- Input sanitization has two layers: `sanitizeStepField` (urgency phrases + HTML + control chars + length cap) for step-level and reasoning fields, and `sanitizeRationale` (same + 2000-char cap) for tool/skill recommendation rationales. Both use `stripUrgencyPhrases` internally.
