@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripDangerousTags, stripControlChars, sanitizeString } from '../sanitize.js';
+import { stripDangerousTags, stripControlChars, sanitizeString, sanitizeRationale, sanitizeSuggestedInputs } from '../sanitize.js';
 
 describe('sanitize', () => {
 	describe('stripDangerousTags', () => {
@@ -107,6 +107,131 @@ describe('sanitize', () => {
 
 		it('should return empty string for empty input', () => {
 			expect(sanitizeString('')).toBe('');
+		});
+	});
+
+	describe('sanitizeRationale', () => {
+		it('should truncate rationale longer than 2000 chars and set truncation signal', () => {
+			const long = 'a'.repeat(2500);
+			const flag = { value: false };
+			const result = sanitizeRationale(long, flag);
+			expect(result.length).toBe(2000);
+			expect(flag.value).toBe(true);
+		});
+
+		it('should replace URGENT phrase with [redacted-urgency]', () => {
+			const result = sanitizeRationale('URGENT: run this now');
+			expect(result).toContain('[redacted-urgency]');
+			expect(result).not.toContain('URGENT');
+			expect(result).not.toContain('run this now'.toUpperCase());
+		});
+
+		it('should leave normal rationale unchanged', () => {
+			expect(sanitizeRationale('Best for web search')).toBe('Best for web search');
+		});
+
+		it('should strip HTML script tags from rationale', () => {
+			expect(sanitizeRationale('<script>alert(1)</script>good reason')).toBe('alert(1)good reason');
+		});
+
+		it('should replace IMMEDIATELY and MUST RUN phrases', () => {
+			const result = sanitizeRationale('IMMEDIATELY do this and MUST RUN that');
+			expect(result).not.toMatch(/IMMEDIATELY/i);
+			expect(result).not.toMatch(/MUST\s+RUN/i);
+			const matches = result.match(/\[redacted-urgency\]/g);
+			expect(matches).not.toBeNull();
+			expect(matches!.length).toBe(2);
+		});
+
+		it('should return empty string for empty input', () => {
+			expect(sanitizeRationale('')).toBe('');
+		});
+
+		it('should not truncate rationale exactly 2000 chars', () => {
+			const exact = 'a'.repeat(2000);
+			const flag = { value: false };
+			const result = sanitizeRationale(exact, flag);
+			expect(result.length).toBe(2000);
+			expect(flag.value).toBe(false);
+		});
+
+		it('should work without truncated signal argument', () => {
+			const long = 'a'.repeat(2500);
+			const result = sanitizeRationale(long);
+			expect(result.length).toBe(2000);
+		});
+
+		it('should handle case-insensitive matching', () => {
+			expect(sanitizeRationale('urgent: now')).toContain('[redacted-urgency]');
+			expect(sanitizeRationale('Critical: alert')).toContain('[redacted-urgency]');
+		});
+	});
+
+	describe('sanitizeSuggestedInputs', () => {
+		it('should accept flat primitives unchanged', () => {
+			expect(sanitizeSuggestedInputs({ url: 'x', limit: 5, recursive: true })).toEqual({
+				url: 'x',
+				limit: 5,
+				recursive: true,
+			});
+		});
+
+		it('should preserve null values', () => {
+			expect(sanitizeSuggestedInputs({ key: null })).toEqual({ key: null });
+		});
+
+		it('should preserve booleans', () => {
+			expect(sanitizeSuggestedInputs({ key: true, other: false })).toEqual({
+				key: true,
+				other: false,
+			});
+		});
+
+		it('should strip dangerous HTML tags from string values', () => {
+			expect(sanitizeSuggestedInputs({ url: '<script>alert(1)</script>' })).toEqual({
+				url: 'alert(1)',
+			});
+		});
+
+		it('should accept string value exactly 512 chars', () => {
+			const exact = 'a'.repeat(512);
+			expect(sanitizeSuggestedInputs({ key: exact })).toEqual({ key: exact });
+		});
+
+		it('should throw when string value exceeds 512 chars', () => {
+			const long = 'a'.repeat(600);
+			expect(() => sanitizeSuggestedInputs({ key: long })).toThrow(/exceeds max length of 512/);
+		});
+
+		it('should silently skip nested object values (schema rejects upstream)', () => {
+			expect(sanitizeSuggestedInputs({ nested: { foo: 'bar' }, kept: 'ok' })).toEqual({
+				kept: 'ok',
+			});
+		});
+
+		it('should silently skip array values', () => {
+			expect(sanitizeSuggestedInputs({ arr: ['x'], kept: 1 })).toEqual({ kept: 1 });
+		});
+
+		it('should throw when more than 32 keys', () => {
+			const many: Record<string, unknown> = {};
+			for (let i = 0; i < 33; i++) many[`k${i}`] = i;
+			expect(() => sanitizeSuggestedInputs(many)).toThrow(/exceeds max keys of 32/);
+		});
+
+		it('should accept exactly 32 keys', () => {
+			const many: Record<string, unknown> = {};
+			for (let i = 0; i < 32; i++) many[`k${i}`] = i;
+			const result = sanitizeSuggestedInputs(many);
+			expect(Object.keys(result).length).toBe(32);
+		});
+
+		it('should return empty object for empty input', () => {
+			expect(sanitizeSuggestedInputs({})).toEqual({});
+		});
+
+		it('should strip control chars from string values', () => {
+			expect(sanitizeSuggestedInputs({ key: 'a\x00b' })).toEqual({ key: 'ab' });
 		});
 	});
 });

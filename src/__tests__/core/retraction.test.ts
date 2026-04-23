@@ -7,6 +7,7 @@ import { InMemorySuspensionStore } from '../../core/tools/InMemorySuspensionStor
 import { SequentialStrategy } from '../../core/reasoning/strategies/SequentialStrategy.js';
 import type { FeatureFlags } from '../../contracts/features.js';
 import type { SessionId } from '../../contracts/ids.js';
+import { createMockToolRegistry } from '../helpers/factories.js';
 
 function makeFeatures(overrides: Partial<FeatureFlags> = {}): FeatureFlags {
 	return {
@@ -36,6 +37,7 @@ function makeProcessor(features: FeatureFlags): {
 		new SequentialStrategy(),
 		undefined,
 		new InMemorySuspensionStore(),
+		createMockToolRegistry(['search', 'fetch', 'test-tool']),
 		features,
 	);
 	return { proc, history, evaluator };

@@ -861,20 +861,20 @@ describe('suggested_inputs sanitization', () => {
 		expect(tool?.suggested_inputs).toEqual({ cmd: 'alert(1)' });
 	});
 
-	it('should strip null bytes from deeply nested strings', () => {
+	it('should drop nested object values (flat-primitives only)', () => {
 		const normalized = normalizeInput(
-			createInputWithSuggestedInputs({ nested: { deep: 'a\x00b' } })
+			createInputWithSuggestedInputs({ nested: { deep: 'a\x00b' }, kept: 'ok' })
 		) as ThoughtData;
 		const tool = normalized.current_step?.recommended_tools?.[0];
-		expect(tool?.suggested_inputs).toEqual({ nested: { deep: 'ab' } });
+		expect(tool?.suggested_inputs).toEqual({ kept: 'ok' });
 	});
 
-	it('should sanitize strings inside arrays', () => {
+	it('should drop array values (flat-primitives only)', () => {
 		const normalized = normalizeInput(
-			createInputWithSuggestedInputs({ arr: ['<iframe>x'] })
+			createInputWithSuggestedInputs({ arr: ['<iframe>x'], kept: 'ok' })
 		) as ThoughtData;
 		const tool = normalized.current_step?.recommended_tools?.[0];
-		expect(tool?.suggested_inputs).toEqual({ arr: ['x'] });
+		expect(tool?.suggested_inputs).toEqual({ kept: 'ok' });
 	});
 
 	it('should leave safe strings unchanged', () => {
