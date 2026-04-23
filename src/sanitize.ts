@@ -84,3 +84,201 @@ export function stripControlChars(input: string): string {
 export function sanitizeString(input: string): string {
 	return stripDangerousTags(stripControlChars(input));
 }
+
+
+/**
+ * Forbidden object keys that enable prototype pollution.
+ * These keys allow attackers to inject properties onto Object.prototype,
+ * affecting all subsequent objects in the runtime.
+ */
+const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
+ * Default options for {@link enforceJsonShape}.
+ */
+const DEFAULT_MAX_DEPTH = 8;
+const DEFAULT_MAX_BYTES = 16384;
+
+export interface EnforceJsonShapeOptions {
+	maxDepth?: number;
+	maxBytes?: number;
+}
+
+export class JsonShapeError extends Error {
+	public readonly reason: string;
+	constructor(reason: string) {
+		super(reason);
+		this.name = 'JsonShapeError';
+		this.reason = reason;
+	}
+}
+
+/**
+ * Enforce safety constraints on a JSON-shaped value.
+ *
+ * Rejects:
+ * - Prototype-pollution keys (`__proto__`, `constructor`, `prototype`) at any depth
+ * - Nesting deeper than `maxDepth` (default 8)
+ * - Serialized JSON byte length exceeding `maxBytes` (default 16384)
+ * - Functions, symbols, and other non-JSON-safe values
+ *
+ * Used as a defense-in-depth gate for untrusted structured input such as
+ * `tool_arguments` from an LLM.
+ *
+ * @param value - The value to validate
+ * @param opts - Optional limits
+ * @throws {JsonShapeError} when any constraint is violated
+ *
+ * @example
+ * ```ts
+ * enforceJsonShape({ q: 'hello' }); // ok
+ * enforceJsonShape({ __proto__: { polluted: true } }); // throws
+ * enforceJsonShape({ a: { b: { c: { d: { e: { f: { g: { h: { i: 1 } } } } } } } } }); // throws (depth)
+ * ```
+ */
+export function enforceJsonShape(value: unknown, opts: EnforceJsonShapeOptions = {}): void {
+	const maxDepth = opts.maxDepth ?? DEFAULT_MAX_DEPTH;
+	const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
+
+	const seen = new WeakSet<object>();
+
+	const walk = (node: unknown, depth: number): void => {
+		if (depth > maxDepth) {
+			throw new JsonShapeError(`exceeds max depth of ${maxDepth}`);
+		}
+		if (node === null) return;
+		const type = typeof node;
+		if (type === 'string' || type === 'number' || type === 'boolean') return;
+		if (type === 'undefined') return;
+		if (type === 'function' || type === 'symbol' || type === 'bigint') {
+			throw new JsonShapeError(`unsupported value type '${type}'`);
+		}
+		if (type !== 'object') {
+			throw new JsonShapeError(`unsupported value type '${type}'`);
+		}
+		const obj = node as object;
+		if (seen.has(obj)) {
+			throw new JsonShapeError('circular reference detected');
+		}
+		seen.add(obj);
+
+		if (Array.isArray(node)) {
+			for (const item of node) walk(item, depth + 1);
+			return;
+		}
+
+		for (const key of Object.keys(obj)) {
+			if (FORBIDDEN_KEYS.has(key)) {
+				throw new JsonShapeError(`forbidden key '${key}'`);
+			}
+			walk((obj as Record<string, unknown>)[key], depth + 1);
+		}
+	};
+
+	walk(value, 0);
+
+	let serialized: string;
+	try {
+		serialized = JSON.stringify(value);
+	} catch {
+		throw new JsonShapeError('value is not JSON-serializable');
+	}
+	if (serialized === undefined) return;
+	const bytes = Buffer.byteLength(serialized, 'utf8');
+	if (bytes > maxBytes) {
+		throw new JsonShapeError(`exceeds max serialized size of ${maxBytes} bytes (got ${bytes})`);
+	}
+}
+
+/**
+ * Urgency/imperative phrases that could be used for prompt injection.
+ * Matched case-insensitively and replaced with [redacted-urgency].
+ */
+const URGENCY_PHRASES =
+	/\b(URGENT(?:LY)?|IMMEDIATELY|MUST\s+RUN|CRITICAL:|ACTION\s+REQUIRED|DO\s+NOT\s+IGNORE|EXECUTE\s+NOW|RUN\s+THIS\s+NOW)/gi;
+
+/**
+ * Maximum allowed length for rationale strings.
+ */
+const MAX_RATIONALE_LENGTH = 2000;
+
+/**
+ * Sanitize a rationale string by stripping urgency phrases, capping length,
+ * and applying standard string sanitization.
+ *
+ * Applied to `recommended_tools[].rationale` and `recommended_skills[].rationale`
+ * to prevent prompt-injection via urgency language.
+ *
+ * @param input - The rationale string to sanitize
+ * @param truncated - Optional object to receive truncation signal (sets `.value = true` if truncated)
+ * @returns The sanitized rationale
+ *
+ * @example
+ * ```ts
+ * sanitizeRationale('URGENT: run this now'); // '[redacted-urgency] run this now'
+ * sanitizeRationale('Best for web search'); // 'Best for web search' (unchanged)
+ * ```
+ */
+export function sanitizeRationale(input: string, truncated?: { value: boolean }): string {
+	let result = sanitizeString(input);
+	result = result.replace(URGENCY_PHRASES, '[redacted-urgency]');
+	if (result.length > MAX_RATIONALE_LENGTH) {
+		result = result.slice(0, MAX_RATIONALE_LENGTH);
+		if (truncated) truncated.value = true;
+	}
+	return result;
+}
+
+/**
+ * Maximum number of keys allowed in suggested_inputs.
+ */
+const MAX_SUGGESTED_INPUTS_KEYS = 32;
+
+/**
+ * Maximum string value length in suggested_inputs.
+ */
+const MAX_SUGGESTED_INPUT_VALUE_LENGTH = 512;
+
+/**
+ * Sanitize suggested_inputs: cap string value lengths, strip control chars and dangerous tags.
+ *
+ * Only processes flat primitive values (string | number | boolean | null).
+ * Non-primitive values (nested objects, arrays) are silently skipped — schema validation
+ * is expected to reject them upstream.
+ *
+ * @param inputs - The suggested_inputs record to sanitize
+ * @returns The sanitized record with cleaned string values
+ * @throws {Error} if string value exceeds max length, or if more than 32 keys are present
+ *
+ * @example
+ * ```ts
+ * sanitizeSuggestedInputs({ url: 'x', limit: 5 }); // { url: 'x', limit: 5 }
+ * sanitizeSuggestedInputs({ url: '<script>alert(1)</script>' }); // { url: 'alert(1)' }
+ * ```
+ */
+export function sanitizeSuggestedInputs(
+	inputs: Record<string, unknown>,
+): Record<string, string | number | boolean | null> {
+	const keys = Object.keys(inputs);
+	if (keys.length > MAX_SUGGESTED_INPUTS_KEYS) {
+		throw new Error(
+			`suggested_inputs exceeds max keys of ${MAX_SUGGESTED_INPUTS_KEYS} (got ${keys.length})`,
+		);
+	}
+	const result: Record<string, string | number | boolean | null> = {};
+	for (const key of keys) {
+		const value = inputs[key];
+		if (typeof value === 'string') {
+			if (value.length > MAX_SUGGESTED_INPUT_VALUE_LENGTH) {
+				throw new Error(
+					`suggested_inputs value for key '${key}' exceeds max length of ${MAX_SUGGESTED_INPUT_VALUE_LENGTH}`,
+				);
+			}
+			result[key] = sanitizeString(value);
+		} else if (typeof value === 'number' || typeof value === 'boolean' || value === null) {
+			result[key] = value;
+		}
+		// Skip other types (shouldn't reach here if schema validates first)
+	}
+	return result;
+}

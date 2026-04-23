@@ -176,12 +176,19 @@ export const ToolRecommendationSchema = v.object({
 		v.maxValue(1),
 		v.description('0-1 indicating confidence in recommendation')
 	),
-	rationale: v.pipe(v.string(), v.description('Why this tool is recommended')),
+	rationale: v.pipe(v.string(), v.maxLength(2000), v.description('Why this tool is recommended')),
 	priority: v.optional(
 		v.pipe(v.number(), v.description('Order in the recommendation sequence (default: 999)'))
 	),
 	suggested_inputs: v.optional(
-		v.pipe(v.record(v.string(), v.unknown()), v.description('Optional suggested parameters'))
+		v.pipe(
+			v.record(v.string(), v.union([v.string(), v.number(), v.boolean(), v.null()])),
+			v.check(
+				(value) => Object.keys(value).length <= 32,
+				'suggested_inputs exceeds max keys of 32',
+			),
+			v.description('Optional suggested parameters (flat key-value pairs only)')
+		)
 	),
 	alternatives: v.optional(
 		v.pipe(v.array(v.string()), v.description('Alternative tools that could be used'))
@@ -225,7 +232,7 @@ export const SkillRecommendationSchema = v.object({
 		)
 	),
 	rationale: v.optional(
-		v.pipe(v.string(), v.description('Why this skill is recommended (default: empty string)'))
+		v.pipe(v.string(), v.maxLength(2000), v.description('Why this skill is recommended (default: empty string)'))
 	),
 	priority: v.optional(
 		v.pipe(v.number(), v.description('Order in the recommendation sequence (default: 999)'))
@@ -318,7 +325,7 @@ export const StepRecommendationSchema = v.object({
 export const PartialToolRecommendationSchema = v.object({
 	tool_name: v.pipe(v.string(), v.description('Name of the tool being recommended')),
 	rationale: v.optional(
-		v.pipe(v.string(), v.description('Why this tool is recommended (default: empty string)'))
+		v.pipe(v.string(), v.maxLength(2000), v.description('Why this tool is recommended (default: empty string)'))
 	),
 	confidence: v.optional(
 		v.pipe(
@@ -332,7 +339,14 @@ export const PartialToolRecommendationSchema = v.object({
 		v.pipe(v.number(), v.description('Order in the recommendation sequence (default: 999)'))
 	),
 	suggested_inputs: v.optional(
-		v.pipe(v.record(v.string(), v.unknown()), v.description('Optional suggested parameters'))
+		v.pipe(
+			v.record(v.string(), v.union([v.string(), v.number(), v.boolean(), v.null()])),
+			v.check(
+				(value) => Object.keys(value).length <= 32,
+				'suggested_inputs exceeds max keys of 32',
+			),
+			v.description('Optional suggested parameters (flat key-value pairs only)')
+		)
 	),
 	alternatives: v.optional(
 		v.pipe(v.array(v.string()), v.description('Alternative tools that could be used'))
