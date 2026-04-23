@@ -15,6 +15,7 @@
  */
 
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import type { McpServer } from 'tmcp';
 import { safeParse } from 'valibot';
 import type { IMetrics } from '../contracts/interfaces.js';
@@ -28,6 +29,7 @@ import {
 	sendJsonRpcError,
 	sendJsonRpcResponse,
 } from './HttpHelpers.js';
+import { runWithContext } from '../context/RequestContext.js';
 
 export interface HttpTransportOptions extends TransportOptions {
 	/**
@@ -279,9 +281,13 @@ export class HttpTransport extends BaseTransport implements ITransport {
 				return;
 			}
 
-			const response = await this._mcpServer.receive(jsonRpcRequest, {
-				sessionInfo: {},
-			});
+			const owner = randomUUID();
+			const response = await runWithContext(
+				{ requestId: randomUUID(), owner },
+				() => this._mcpServer!.receive(jsonRpcRequest, {
+					sessionInfo: {},
+				})
+			);
 
 			clearTimeout(timeout);
 			this._activeRequests--;

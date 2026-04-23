@@ -117,6 +117,13 @@ export interface ConfigFileOptions {
 	 * Can be overridden by `TRACELATTICE_TOOL_INTERLEAVE_SWEEP_MS` environment variable.
 	 */
 	toolInterleaveSweepMs?: number;
+
+	/**
+	 * Maximum sessions per owner. Per-owner LRU bucket prevents one user from
+	 * consuming all session slots.
+	 * Can be overridden by `SESSION_MAX_PER_OWNER` environment variable.
+	 */
+	maxSessionsPerOwner?: number;
 }
 
 /**
@@ -308,6 +315,12 @@ export class ConfigLoader {
 				result.toolInterleaveSweepMs = parsed;
 			}
 		}
+		if (process.env.SESSION_MAX_PER_OWNER) {
+			const parsed = parseInt(process.env.SESSION_MAX_PER_OWNER, 10);
+			if (Number.isFinite(parsed)) {
+				result.maxSessionsPerOwner = parsed;
+			}
+		}
 
 		this.applyFeatureFlagOverrides(result);
 
@@ -427,6 +440,7 @@ export class ConfigLoader {
 		features?: Partial<FeatureFlags>;
 		toolInterleaveTtlMs?: number;
 		toolInterleaveSweepMs?: number;
+		maxSessionsPerOwner?: number;
 	} {
 		return {
 			maxHistorySize: config.maxHistorySize,
@@ -435,6 +449,7 @@ export class ConfigLoader {
 			features: config.features,
 			toolInterleaveTtlMs: config.toolInterleaveTtlMs,
 			toolInterleaveSweepMs: config.toolInterleaveSweepMs,
+			maxSessionsPerOwner: config.maxSessionsPerOwner,
 		};
 	}
 }

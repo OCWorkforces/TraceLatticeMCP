@@ -200,3 +200,53 @@ export interface IEdgeStore {
 	 */
 	size(sessionId?: string): number;
 }
+
+/**
+ * Tool registry interface used for tool_name allowlisting in ThoughtProcessor.
+ *
+ * Provides the minimal read-only contract needed to validate tool_call thoughts.
+ * Implementations include the concrete `ToolRegistry` class.
+ */
+export interface IToolRegistry {
+	/**
+	 * Returns true if a tool with the given name is registered.
+	 */
+	has(name: string): boolean;
+
+	/**
+	 * Returns the names of all registered tools.
+	 */
+	list(): string[];
+}
+
+/**
+ * Per-session async lock used to serialize state-mutating operations.
+ *
+ * Implementations must guarantee:
+ * - Concurrent calls for the same session id are serialized in arrival order.
+ * - Calls for different session ids never block each other.
+ * - The lock is always released, even when the critical section throws.
+ * - A waiter that times out does not corrupt the chain — later waiters
+ *   still observe correct serialization.
+ *
+ * Used by `ThoughtProcessor.process()` to prevent `reset_state` from
+ * interleaving with concurrent `addThought` calls for the same session.
+ */
+export interface ISessionLock {
+	/**
+	 * Execute `fn` while holding the lock for the given session.
+	 *
+	 * @param sessionId - Session to lock (`undefined` shares a global slot).
+	 * @param fn - Critical section to run while holding the lock.
+	 * @param timeoutMs - Max wait for lock acquisition (default 5000ms).
+	 * @throws {LockTimeoutError} If the lock is not acquired before `timeoutMs`.
+	 */
+	withLock<T>(
+		sessionId: string | undefined,
+		fn: () => Promise<T>,
+		timeoutMs?: number,
+	): Promise<T>;
+
+	/** Number of currently held lock chains (diagnostics). */
+	readonly size: number;
+}

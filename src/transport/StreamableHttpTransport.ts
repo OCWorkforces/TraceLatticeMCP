@@ -32,6 +32,7 @@ import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 import type { ITransport, TransportKind } from '../contracts/transport.js';
 import { readRequestBody } from './HttpHelpers.js';
+import { runWithContext } from '../context/RequestContext.js';
 
 /**
  * MCP Streamable HTTP transport options extending base TransportOptions.
@@ -364,7 +365,12 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 			}
 
 			// Process JSON-RPC request through MCP server
-			const response = await this._mcpServer.receive(jsonRpcRequest, { sessionInfo: {} });
+			// Process JSON-RPC request through MCP server with owner context
+			const owner = this._stateful ? (sessionId ?? randomUUID()) : randomUUID();
+			const response = await runWithContext(
+				{ requestId: randomUUID(), owner },
+				() => this._mcpServer!.receive(jsonRpcRequest, { sessionInfo: {} })
+			);
 			clearTimeout(timeout);
 			this._activeRequests--;
 

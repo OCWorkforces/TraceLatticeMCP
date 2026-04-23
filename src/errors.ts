@@ -52,9 +52,22 @@ export const ERROR_CODES = {
 	INVALID_TOOL_CALL: 'INVALID_TOOL_CALL',
 	INVALID_BACKTRACK: 'INVALID_BACKTRACK',
 	DUPLICATE_SUMMARY: 'DUPLICATE_SUMMARY',
+	UNKNOWN_TOOL: 'UNKNOWN_TOOL',
+	LOCK_TIMEOUT: 'LOCK_TIMEOUT',
+	SESSION_ACCESS_DENIED: 'SESSION_ACCESS_DENIED',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];
+
+/**
+ * All known warning codes as a const object.
+ * Warnings are non-fatal advisory signals returned alongside successful results.
+ */
+export const WARNING_CODES = {
+	TOTAL_THOUGHTS_ADJUSTED: 'TOTAL_THOUGHTS_ADJUSTED',
+} as const;
+
+export type WarningCode = (typeof WARNING_CODES)[keyof typeof WARNING_CODES];
 
 /**
  * Base error class for all Sequential Thinking server errors.
@@ -714,6 +727,74 @@ export class InvalidBacktrackError extends SequentialThinkingError {
 		this.name = 'InvalidBacktrackError';
 	}
 }
+
+/**
+ * Error thrown when a tool_call references a tool not registered with the server.
+ *
+ * Acts as an allowlist gate: only tools registered in the ToolRegistry may be
+ * invoked through tool interleave. Prevents arbitrary tool name injection.
+ */
+export class UnknownToolError extends SequentialThinkingError {
+	public readonly toolName: string;
+
+	constructor(toolName: string, message?: string) {
+		super(
+			message ?? `Unknown tool '${toolName}': not registered with the server`,
+			ERROR_CODES.UNKNOWN_TOOL
+		);
+		this.name = 'UnknownToolError';
+		this.toolName = toolName;
+	}
+}
+
+/**
+ * Error thrown when a per-session async lock cannot be acquired in time.
+ *
+ * Indicates that a critical section held the lock for longer than the
+ * configured timeout, suggesting a stuck handler or deadlock.
+ */
+export class LockTimeoutError extends SequentialThinkingError {
+	public readonly sessionId: string;
+	public readonly timeoutMs: number;
+
+	constructor(sessionId: string, timeoutMs: number) {
+		super(
+			`Lock timeout for session '${sessionId}' after ${timeoutMs}ms`,
+			ERROR_CODES.LOCK_TIMEOUT,
+		);
+		this.name = 'LockTimeoutError';
+		this.sessionId = sessionId;
+		this.timeoutMs = timeoutMs;
+	}
+}
+
+/**
+ * Error thrown when a session is accessed by a non-owner.
+ *
+ * Sessions are bound to an owner identifier on first creation when accessed
+ * via a multi-user transport (SSE/HTTP). Subsequent access attempts using a
+ * different owner are rejected to prevent IDOR (Insecure Direct Object
+ * Reference) vulnerabilities.
+ *
+ * The stdio transport does not set an owner, so its sessions are unaffected.
+ */
+export class SessionAccessDeniedError extends SequentialThinkingError {
+	public readonly sessionId: string;
+	public readonly expectedOwner: string;
+	public readonly actualOwner: string | undefined;
+
+	constructor(sessionId: string, expectedOwner: string, actualOwner?: string) {
+		super(
+			`Access denied to session '${sessionId}': owned by '${expectedOwner}', accessed by '${actualOwner ?? 'anonymous'}'`,
+			ERROR_CODES.SESSION_ACCESS_DENIED,
+		);
+		this.name = 'SessionAccessDeniedError';
+		this.sessionId = sessionId;
+		this.expectedOwner = expectedOwner;
+		this.actualOwner = actualOwner;
+	}
+}
+
 
 /**
  * Type guard to check if an error has a specific error code.

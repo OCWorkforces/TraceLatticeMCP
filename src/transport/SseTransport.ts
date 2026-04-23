@@ -18,6 +18,7 @@
  */
 
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { URL } from 'node:url';
 import type { McpServer } from 'tmcp';
 import { safeParse } from 'valibot';
@@ -26,6 +27,7 @@ import type { ConnectionPool } from '../pool/ConnectionPool.js';
 import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 import type { ITransport, TransportKind } from '../contracts/transport.js';
+import { runWithContext } from '../context/RequestContext.js';
 /**
  * SSE-specific transport options extending base TransportOptions.
  */
@@ -320,11 +322,16 @@ export class SseTransport extends BaseTransport implements ITransport {
 				return;
 			}
 
-			// Process message through MCP server
+			// Process message through MCP server with owner context
 			if (this._mcpServer) {
-				const response = await this._mcpServer.receive(jsonRpcRequest, {
-					sessionInfo: {},
-				});
+				const sessionId = this._clientSessionMap.get(res);
+				const owner = sessionId ?? `sse-${randomUUID()}`;
+				const response = await runWithContext(
+					{ requestId: randomUUID(), owner },
+					() => this._mcpServer!.receive(jsonRpcRequest, {
+						sessionInfo: {},
+					})
+				);
 				res.writeHead(200, {
 					'Content-Type': 'application/json',
 				});

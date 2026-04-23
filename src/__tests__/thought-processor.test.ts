@@ -1278,7 +1278,7 @@ describe('ThoughtProcessor', () => {
 			// Verify warning in response
 			expect(response.warnings).toEqual(
 				expect.arrayContaining([
-					expect.stringContaining('Auto-adjusted total_thoughts from 3 to 99'),
+					expect.stringContaining('[TOTAL_THOUGHTS_ADJUSTED] Auto-adjusted total_thoughts from 3 to 99'),
 				]),
 			);
 		});

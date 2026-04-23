@@ -26,6 +26,8 @@ import { OutcomeRecorder } from './core/reasoning/OutcomeRecorder.js';
 import { createReasoningStrategy } from './core/reasoning/strategies/StrategyFactory.js';
 import { ThoughtFormatter } from './core/ThoughtFormatter.js';
 import { ThoughtProcessor, type CallToolResult } from './core/ThoughtProcessor.js';
+import { SessionLock } from './core/SessionLock.js';
+import type { ISessionLock } from './contracts/interfaces.js';
 import { Container } from './di/Container.js';
 import { StructuredLogger } from './logger/StructuredLogger.js';
 import { Metrics } from './metrics/metrics.impl.js';
@@ -33,6 +35,7 @@ import type { PersistenceBackend } from './contracts/PersistenceBackend.js';
 import { createPersistenceBackend } from './persistence/PersistenceFactory.js';
 import { SkillRegistry } from './registry/SkillRegistry.js';
 import { ToolRegistry } from './registry/ToolRegistry.js';
+import type { IToolRegistry } from './contracts/interfaces.js';
 import { ServerConfig } from './ServerConfig.js';
 import type { SseTransportOptions } from './transport/SseTransport.js';
 import { SkillWatcher } from './watchers/SkillWatcher.js';
@@ -305,6 +308,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 			skillDirs: fileConfig?.skillDirs,
 			discoveryCache: fileConfig?.discoveryCache,
 			persistence: fileConfig?.persistence,
+			maxSessionsPerOwner: fileConfig?.maxSessionsPerOwner,
 		});
 
 		// Initialize logger
@@ -378,6 +382,10 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 			createReasoningStrategy(config.features.reasoningStrategy),
 		);
 
+		// Register SessionLock as a lazy singleton (always registered;
+		// serializes ThoughtProcessor.process() per-session).
+		container.register('sessionLock', () => new SessionLock());
+
 		// Register HistoryManager with lazy initialization
 		container.register('HistoryManager', () => {
 			const cfg = container.resolve<ServerConfig>('Config');
@@ -396,6 +404,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 				persistenceFlushInterval: cfg.persistenceFlushInterval,
 				persistenceMaxRetries: cfg.persistenceMaxRetries,
 				edgeStore,
+				maxSessionsPerOwner: cfg.maxSessionsPerOwner,
 			});
 		});
 
@@ -437,6 +446,8 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 			const suspensionStore = config.features.toolInterleave
 				? container.resolve<ISuspensionStore>('suspensionStore')
 				: undefined;
+			const toolRegistry = container.resolve<IToolRegistry>('ToolRegistry');
+			const sessionLock = container.resolve<ISessionLock>('sessionLock');
 			return new ThoughtProcessor(
 				history,
 				formatter,
@@ -445,7 +456,9 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 				strategy,
 				compressionService,
 				suspensionStore,
+				toolRegistry,
 				config.features,
+				sessionLock,
 			);
 		});
 

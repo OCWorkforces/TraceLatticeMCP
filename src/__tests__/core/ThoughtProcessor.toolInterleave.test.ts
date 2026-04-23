@@ -4,7 +4,7 @@ import { ThoughtFormatter } from '../../core/ThoughtFormatter.js';
 import { ThoughtEvaluator } from '../../core/ThoughtEvaluator.js';
 import { InMemorySuspensionStore } from '../../core/tools/InMemorySuspensionStore.js';
 import { SequentialStrategy } from '../../core/reasoning/strategies/SequentialStrategy.js';
-import { MockHistoryManager } from '../helpers/factories.js';
+import { MockHistoryManager, createMockToolRegistry } from '../helpers/factories.js';
 import type { FeatureFlags } from '../../contracts/features.js';
 import type { ThoughtData } from '../../core/thought.js';
 import { asSessionId, type SuspensionToken } from '../../contracts/ids.js';
@@ -35,6 +35,7 @@ function makeProcessor(
 		new SequentialStrategy(),
 		undefined,
 		store,
+			createMockToolRegistry(['echo', 'test-tool', 'sleep', 'sum', 'add', 'search', 'fetch']),
 		features,
 	);
 	return { processor, history };

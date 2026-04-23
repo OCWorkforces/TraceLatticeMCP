@@ -15,7 +15,7 @@
 import type { IMetrics } from '../contracts/interfaces.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
 import type { ISummaryStore } from '../contracts/summary.js';
-import { ValidationError, getErrorMessage } from '../errors.js';
+import { ValidationError, SessionAccessDeniedError, getErrorMessage } from '../errors.js';
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
@@ -29,6 +29,7 @@ import type { IHistoryManager } from './IHistoryManager.js';
 import { PersistenceBuffer, type PersistenceEventEmitter } from './PersistenceBuffer.js';
 import { SessionManager } from './SessionManager.js';
 import type { ThoughtData } from './thought.js';
+import { getOwner } from '../context/RequestContext.js';
 
 
 /** Absolute maximum history size (~20MB at 2KB/thought). Cannot be overridden. */
@@ -42,6 +43,8 @@ interface SessionState {
 	writeBuffer: ThoughtData[];
 	lastAccessedAt: number;
 	registeredBranches: Set<string>;
+	/** Owner identifier set on first owner-aware access. Immutable thereafter. */
+	owner?: string;
 }
 
 export interface HistoryManagerConfig {
@@ -65,6 +68,8 @@ export interface HistoryManagerConfig {
 	summaryStore?: ISummaryStore;
 	/** Whether to emit DAG edges (gated independently of edgeStore). @default false */
 	dagEdges?: boolean;
+	/** Maximum sessions per owner (per-owner LRU bucket). @default 50 */
+	maxSessionsPerOwner?: number;
 }
 
 /**
@@ -131,6 +136,7 @@ export class HistoryManager implements IHistoryManager {
 			sessionTtlMs: HistoryManager.SESSION_TTL_MS,
 			cleanupIntervalMs: 5 * 60 * 1000,
 			getMaxSessions: () => HistoryManager.MAX_SESSIONS,
+			maxSessionsPerOwner: config.maxSessionsPerOwner ?? 50,
 			logger: this._logger,
 		});
 
@@ -183,8 +189,21 @@ export class HistoryManager implements IHistoryManager {
 		this._logger.info(message, meta);
 	}
 
-	/** Gets or creates session state; updates lastAccessedAt. */
-	private _getSession(sessionId?: string): SessionState {
+	/** Reads owner from RequestContext (AsyncLocalStorage). Stdio path returns undefined. */
+	private _getCurrentOwner(): string | undefined {
+		return getOwner();
+	}
+
+	/**
+	 * Gets or creates session state; updates lastAccessedAt.
+	 *
+	 * Ownership semantics:
+	 * - `owner === undefined` (stdio path): never rejects, never sets owner.
+	 * - `owner !== undefined`: if session has a different owner, throws
+	 *   `SessionAccessDeniedError`. If session was created without an owner
+	 *   (e.g. by stdio), the owner is set on first owner-aware access.
+	 */
+	private _getSession(sessionId?: string, owner?: string): SessionState {
 		const key = sessionId ?? HistoryManager.DEFAULT_SESSION;
 		let session = this._sessions.get(key);
 		if (!session) {
@@ -196,9 +215,20 @@ export class HistoryManager implements IHistoryManager {
 				writeBuffer: [],
 				lastAccessedAt: Date.now(),
 				registeredBranches: new Set<string>(),
+				owner,
 			};
 			this._sessions.set(key, session);
 			this._sessionManager.evictExcessSessions(this._sessions);
+		} else if (owner !== undefined) {
+			if (session.owner !== undefined && session.owner !== owner) {
+				throw new SessionAccessDeniedError(key, session.owner, owner);
+			}
+			if (session.owner === undefined) {
+				// First owner-aware access: bind owner. Acceptable promotion path
+				// for sessions created by stdio that later receive an owner-bearing
+				// access (single-user transition).
+				session.owner = owner;
+			}
 		}
 		session.lastAccessedAt = Date.now();
 		return session;
@@ -209,7 +239,7 @@ export class HistoryManager implements IHistoryManager {
 	 * caches tools/skills, trims, branches, emits DAG edges, and buffers for persistence.
 	 */
 	public addThought(thought: ThoughtData): void {
-		const session = this._getSession(thought.session_id);
+		const session = this._getSession(thought.session_id, this._getCurrentOwner());
 		this._metrics?.counter(
 			'thought_requests_total',
 			1,
@@ -329,7 +359,7 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	public getHistory(sessionId?: string): ThoughtData[] {
-		return this._getSession(sessionId).thought_history;
+		return this._getSession(sessionId, this._getCurrentOwner()).thought_history;
 	}
 
 	/**
@@ -350,15 +380,15 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	public getHistoryLength(sessionId?: string): number {
-		return this._getSession(sessionId).thought_history.length;
+		return this._getSession(sessionId, this._getCurrentOwner()).thought_history.length;
 	}
 
 	public getBranches(sessionId?: string): Record<string, ThoughtData[]> {
-		return this._getSession(sessionId).branches;
+		return this._getSession(sessionId, this._getCurrentOwner()).branches;
 	}
 
 	public getBranchIds(sessionId?: string): string[] {
-		const session = this._getSession(sessionId);
+		const session = this._getSession(sessionId, this._getCurrentOwner());
 		const ids = new Set<string>(Object.keys(session.branches));
 		for (const id of session.registeredBranches) ids.add(id);
 		return Array.from(ids);
@@ -369,7 +399,7 @@ export class HistoryManager implements IHistoryManager {
 		if (typeof branchId !== 'string' || branchId.length === 0) {
 			throw new ValidationError('branch_id', 'branch_id must be a non-empty string');
 		}
-		const session = this._getSession(sessionId);
+		const session = this._getSession(sessionId, this._getCurrentOwner());
 		if (branchId in session.branches || session.registeredBranches.has(branchId)) {
 			throw new ValidationError('branch_id', `Branch already exists: ${branchId}`);
 		}
@@ -378,20 +408,20 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	public branchExists(sessionId: string | undefined, branchId: string): boolean {
-		const session = this._getSession(sessionId);
+		const session = this._getSession(sessionId, this._getCurrentOwner());
 		return branchId in session.branches || session.registeredBranches.has(branchId);
 	}
 
 	public getAvailableMcpTools(sessionId?: string): string[] | undefined {
-		return this._getSession(sessionId).availableMcpTools;
+		return this._getSession(sessionId, this._getCurrentOwner()).availableMcpTools;
 	}
 
 	public getAvailableSkills(sessionId?: string): string[] | undefined {
-		return this._getSession(sessionId).availableSkills;
+		return this._getSession(sessionId, this._getCurrentOwner()).availableSkills;
 	}
 
 	public getBranch(branchId: string, sessionId?: string): ThoughtData[] | undefined {
-		return this._getSession(sessionId).branches[branchId];
+		return this._getSession(sessionId, this._getCurrentOwner()).branches[branchId];
 	}
 
 	/** Clears history and branches. If sessionId provided, clears only that session. */

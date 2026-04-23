@@ -12,7 +12,7 @@
  */
 
 import { ValidationError } from '../errors.js';
-import { sanitizeString } from '../sanitize.js';
+import { sanitizeString, sanitizeRationale, sanitizeSuggestedInputs } from '../sanitize.js';
 import type { ThoughtData } from './thought.js';
 import { SESSION_ID_PATTERN, MAX_SESSION_ID_LENGTH } from './ids.js';
 import { asSessionId, generateThoughtId } from '../contracts/ids.js';
@@ -154,8 +154,21 @@ function normalizeRecommendation(rec: Record<string, unknown>): Record<string, u
 	}
 
 	// Fill in default rationale if missing
+	// Fill in default rationale if missing, otherwise sanitize urgency phrases + cap length
 	if (!('rationale' in normalized) || normalized.rationale === undefined) {
 		normalized.rationale = DEFAULT_RECOMMENDATION_RATIONALE;
+	} else if (typeof normalized.rationale === 'string') {
+		normalized.rationale = sanitizeRationale(normalized.rationale);
+	}
+	// Sanitize suggested_inputs: enforce flat primitives, key cap, value-length cap
+	if (
+		normalized.suggested_inputs &&
+		typeof normalized.suggested_inputs === 'object' &&
+		!Array.isArray(normalized.suggested_inputs)
+	) {
+		normalized.suggested_inputs = sanitizeSuggestedInputs(
+			normalized.suggested_inputs as Record<string, unknown>,
+		);
 	}
 
 	return normalized;

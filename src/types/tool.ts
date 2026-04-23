@@ -42,7 +42,7 @@ export interface ToolRecommendation {
 	priority: number;
 
 	/** Optional suggested parameter values for the tool based on the current context. */
-	suggested_inputs?: Record<string, unknown>;
+	suggested_inputs?: Record<string, string | number | boolean | null>;
 
 	/** Alternative tools that could be used if the primary recommendation is not available. */
 	alternatives?: string[];
