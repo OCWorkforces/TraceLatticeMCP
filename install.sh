@@ -183,14 +183,14 @@ build_project() {
 	log_success "Build completed"
 
 	# Verify the build output
-	if [ ! -f "dist/index.js" ]; then
-		log_error "Build output dist/index.js not found"
+	if [ ! -f "dist/lib.js" ]; then
+		log_error "Build output dist/lib.js not found"
 		exit 1
 	fi
 
-	if [ ! -x "dist/index.js" ]; then
-		log_warn "dist/index.js is not executable, fixing..."
-		chmod +x dist/index.js
+	if [ ! -x "dist/cli.js" ]; then
+		log_warn "dist/cli.js is not executable, fixing..."
+		chmod +x dist/cli.js
 	fi
 
 	log_success "Build output verified"
