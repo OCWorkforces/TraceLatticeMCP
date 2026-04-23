@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripDangerousTags, stripControlChars, sanitizeString, sanitizeRationale, sanitizeSuggestedInputs } from '../sanitize.js';
+import { stripDangerousTags, stripControlChars, sanitizeString, sanitizeRationale, stripUrgencyPhrases, sanitizeStepField, sanitizeSuggestedInputs } from '../sanitize.js';
 
 describe('sanitize', () => {
 	describe('stripDangerousTags', () => {
@@ -232,6 +232,50 @@ describe('sanitize', () => {
 
 		it('should strip control chars from string values', () => {
 			expect(sanitizeSuggestedInputs({ key: 'a\x00b' })).toEqual({ key: 'ab' });
+		});
+	});
+
+	describe('stripUrgencyPhrases', () => {
+		it('strips urgency phrases from input', () => {
+			expect(stripUrgencyPhrases('URGENT: do this now')).toContain('[redacted-urgency]');
+			expect(stripUrgencyPhrases('IMMEDIATELY run')).toContain('[redacted-urgency]');
+		});
+
+		it('leaves non-urgent text unchanged', () => {
+			expect(stripUrgencyPhrases('Best tool for the job')).toBe('Best tool for the job');
+		});
+
+		it('is case-insensitive', () => {
+			expect(stripUrgencyPhrases('urgent: now')).toContain('[redacted-urgency]');
+			expect(stripUrgencyPhrases('Immediately act')).toContain('[redacted-urgency]');
+		});
+	});
+
+	describe('sanitizeStepField', () => {
+		it('strips urgency phrases', () => {
+			expect(sanitizeStepField('You MUST RUN this tool now')).toContain('[redacted-urgency]');
+		});
+
+		it('strips dangerous HTML tags', () => {
+			expect(sanitizeStepField('<script>alert(1)</script>analyze')).toBe('alert(1)analyze');
+		});
+
+		it('strips control characters', () => {
+			expect(sanitizeStepField('hello\x00world')).toBe('helloworld');
+		});
+
+		it('caps length at 4000 characters', () => {
+			const long = 'a'.repeat(5000);
+			const result = sanitizeStepField(long);
+			expect(result.length).toBe(4000);
+		});
+
+		it('preserves normal text', () => {
+			expect(sanitizeStepField('Analyze the data')).toBe('Analyze the data');
+		});
+
+		it('handles empty string', () => {
+			expect(sanitizeStepField('')).toBe('');
 		});
 	});
 });

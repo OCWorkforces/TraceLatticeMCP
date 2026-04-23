@@ -426,6 +426,11 @@ export class HistoryManager implements IHistoryManager {
 
 	/** Clears history and branches. If sessionId provided, clears only that session. */
 	public clear(sessionId?: string): void {
+		// Enforce ownership before clearing a specific session.
+		// _getSession throws SessionAccessDeniedError on owner mismatch.
+		if (sessionId !== undefined) {
+			this._getSession(sessionId, this._getCurrentOwner());
+		}
 		// Clear edges from EdgeStore (before session map mutation so keys are still available)
 		if (this._edgeStore) {
 			if (sessionId !== undefined) {

@@ -198,6 +198,22 @@ const URGENCY_PHRASES =
 	/\b(URGENT(?:LY)?|IMMEDIATELY|MUST\s+RUN|CRITICAL:|ACTION\s+REQUIRED|DO\s+NOT\s+IGNORE|EXECUTE\s+NOW|RUN\s+THIS\s+NOW)/gi;
 
 /**
+ * Strip urgency/imperative phrases from a string.
+ * These phrases could be used for prompt injection when reflected to a host LLM.
+ *
+ * @param input - The string to strip urgency phrases from
+ * @returns The string with urgency phrases replaced by '[redacted-urgency]'
+ *
+ * @example
+ * ```ts
+ * stripUrgencyPhrases('URGENT: do this'); // '[redacted-urgency] do this'
+ * stripUrgencyPhrases('Best for web search'); // 'Best for web search'
+ * ```
+ */
+export function stripUrgencyPhrases(input: string): string {
+	return input.replace(URGENCY_PHRASES, '[redacted-urgency]');
+}
+/**
  * Maximum allowed length for rationale strings.
  */
 const MAX_RATIONALE_LENGTH = 2000;
@@ -221,10 +237,40 @@ const MAX_RATIONALE_LENGTH = 2000;
  */
 export function sanitizeRationale(input: string, truncated?: { value: boolean }): string {
 	let result = sanitizeString(input);
-	result = result.replace(URGENCY_PHRASES, '[redacted-urgency]');
+	result = stripUrgencyPhrases(result);
 	if (result.length > MAX_RATIONALE_LENGTH) {
 		result = result.slice(0, MAX_RATIONALE_LENGTH);
 		if (truncated) truncated.value = true;
+	}
+	return result;
+}
+
+/**
+ * Maximum allowed length for step-level string fields (step_description, expected_outcome, meta_observation).
+ */
+const MAX_STEP_FIELD_LENGTH = 4000;
+
+/**
+ * Sanitize a step-level string field by stripping urgency phrases, capping length,
+ * and applying standard string sanitization.
+ *
+ * Applied to `step_description`, `expected_outcome`, `meta_observation`, and
+ * `next_step_conditions` items to prevent prompt injection through urgency language.
+ *
+ * @param input - The string to sanitize
+ * @returns The sanitized string
+ *
+ * @example
+ * ```ts
+ * sanitizeStepField('You MUST RUN this tool'); // 'You [redacted-urgency] this tool'
+ * sanitizeStepField('Analyze the code'); // 'Analyze the code' (unchanged)
+ * ```
+ */
+export function sanitizeStepField(input: string): string {
+	let result = sanitizeString(input);
+	result = stripUrgencyPhrases(result);
+	if (result.length > MAX_STEP_FIELD_LENGTH) {
+		result = result.slice(0, MAX_STEP_FIELD_LENGTH);
 	}
 	return result;
 }

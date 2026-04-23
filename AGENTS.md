@@ -69,11 +69,11 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `ToolAwareSequentialThinkingServer` | class     | src/lib.ts                               | Main server: DI wiring, MCP tool registration, lifecycle                             |
 | `createServer`                      | function  | src/lib.ts                               | Async factory with persistence + discovery                                           |
 | `initializeServer`                  | function  | src/lib.ts                               | Convenience factory with config + logger + watchers                                  |
-| `HistoryManager`                    | class     | src/core/HistoryManager.ts               | Coordinates history + branching + session partitioning. Delegates to EdgeEmitter, PersistenceBuffer, SessionManager. TTL eviction (30min), LRU (100 max). |
+| `HistoryManager`                    | class     | src/core/HistoryManager.ts               | Coordinates history + branching + session partitioning. Delegates to EdgeEmitter, PersistenceBuffer, SessionManager. Ownership enforced on all mutating methods including `clear()`. TTL eviction (30min), LRU (100 max). |
 | `IHistoryManager`                   | interface | src/core/IHistoryManager.ts              | History manager contract (8 methods + session lifecycle)                                                 |
 | `ThoughtProcessor`                  | class     | src/core/ThoughtProcessor.ts             | Validate → normalize → persist → format → evaluate → strategy → hints pipeline (754L) |
 | `ThoughtEvaluator`                  | class     | src/core/ThoughtEvaluator.ts             | Stateless quality signals + reasoning analytics (527L)                               |
-| `normalizeInput`                    | function  | src/core/InputNormalizer.ts              | Field correction, default filling, branch_id sanitization (433L)                     |
+| `normalizeInput`                    | function  | src/core/InputNormalizer.ts              | Field correction, default filling, sanitization of `branch_id`, step-level urgency phrase stripping (460L) |
 | `ThoughtFormatter`                  | class     | src/core/ThoughtFormatter.ts             | Chalk display: 💭🔄🌿🔬✅🔍🧬🧠📝 (231L)                                             |
 | `ThoughtData`                       | interface | src/core/thought.ts                      | Core data structure with 11 optional reasoning fields + `retracted` boolean (193L) |
 | `ThoughtType`                       | union     | src/core/reasoning.ts                    | `'regular'\|'hypothesis'\|'verification'\|'critique'\|'synthesis'\|'meta'\|'tool_call'\|'tool_observation'\|'assumption'\|'decomposition'\|'backtrack'` |
@@ -132,6 +132,8 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `SessionId` / `ThoughtId` / `EdgeId` / `SuspensionToken` | branded types | src/contracts/ids.ts | Branded ID types preventing wrong-ID-passing. Constructors validate at trust boundaries. `generateThoughtId/EdgeId/SuspensionToken` wrap `generateUlid`. |
 | `FeatureFlags`                     | interface | src/contracts/features.ts                | 7 readonly feature flags + `DEFAULT_FLAGS` + `hasFeature()` type guard. Re-exported from `ServerConfig.ts`. |
 | `ITransport`                       | interface | src/contracts/transport.ts               | Shared transport lifecycle: `kind`, `connect`, `stop`, `clientCount`, `isShuttingDown`, `serverUrl`. |
+| `stripUrgencyPhrases`              | function  | src/sanitize.ts                          | Strips urgency/imperative phrases (URGENT, IMMEDIATELY, etc.) from strings to prevent prompt injection. Used by `sanitizeRationale` and `sanitizeStepField`. |
+| `sanitizeStepField`                | function  | src/sanitize.ts                          | Sanitizes step-level fields (`step_description`, `expected_outcome`, `meta_observation`, `next_step_conditions`). Combines `sanitizeString` + `stripUrgencyPhrases` + 4000-char cap. |
 
 ## CONVENTIONS
 
@@ -148,7 +150,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 - **Private `_` prefix**: `_container`, `_logger`, `_historyManager` etc.
 - **Unused params `_`**: ESLint `argsIgnorePattern: '^_'`.
 - **JSDoc**: All public APIs have full TSDoc with `@example`, `@param`, `@returns`.
-- **Session Isolation**: `session_id` on ThoughtData scopes history, branches, and stats to isolated sessions. Omit for backward-compatible global behavior. `reset_state: true` clears session before processing.
+- **Session Isolation & Ownership**: `session_id` on ThoughtData scopes history, branches, and stats to isolated sessions. Omit for backward-compatible global behavior. `reset_state: true` clears session before processing. All mutating methods (including `clear()`/`clearSession()`) enforce ownership via `_getSession()`, throwing `SessionAccessDeniedError` on cross-owner access. Stdio path (no owner) is unrestricted.
 - **Feature Flags**: 7 flags (dagEdges, reasoningStrategy `'sequential'\|'tot'`, calibration, compression, toolInterleave, newThoughtTypes, outcomeRecording). All default off (reasoningStrategy defaults to `sequential`). Env vars: `TRACELATTICE_FEATURES_*`. Flag gates write path only; EdgeStore always registered in DI.
 - **Strategy Purity**: `IReasoningStrategy` implementations are pure policies. No mutable state, no I/O. Decisions derived from `StrategyContext` (graph snapshot + history).
 

@@ -12,7 +12,7 @@
  */
 
 import { ValidationError } from '../errors.js';
-import { sanitizeString, sanitizeRationale, sanitizeSuggestedInputs } from '../sanitize.js';
+import { sanitizeString, sanitizeRationale, sanitizeStepField, sanitizeSuggestedInputs } from '../sanitize.js';
 import type { ThoughtData } from './thought.js';
 import { SESSION_ID_PATTERN, MAX_SESSION_ID_LENGTH } from './ids.js';
 import { asSessionId, generateThoughtId } from '../contracts/ids.js';
@@ -241,6 +241,18 @@ function normalizeStepRecommendation(
 				: skill
 		);
 	}
+	// Sanitize step-level string fields for prompt injection prevention
+	if (typeof normalized.step_description === 'string') {
+		normalized.step_description = sanitizeStepField(normalized.step_description);
+	}
+	if (typeof normalized.expected_outcome === 'string') {
+		normalized.expected_outcome = sanitizeStepField(normalized.expected_outcome);
+	}
+	if (Array.isArray(normalized.next_step_conditions)) {
+		normalized.next_step_conditions = normalized.next_step_conditions.map(
+			(cond: unknown) => (typeof cond === 'string' ? sanitizeStepField(cond) : cond),
+		);
+	}
 	// In lenient mode, fill in default expected_outcome if missing
 	if (lenient && !('expected_outcome' in normalized)) {
 		normalized.expected_outcome = DEFAULT_STEP_OUTCOME;
@@ -433,6 +445,11 @@ export function normalizeInput(input: unknown): ThoughtData {
 
 	// Normalize reasoning fields
 	normalizeReasoningFields(normalized);
+
+	// Sanitize meta_observation for prompt injection prevention
+	if (typeof normalized.meta_observation === 'string') {
+		normalized.meta_observation = sanitizeStepField(normalized.meta_observation);
+	}
 
 
 	// Sanitize all free-text string fields recursively (dangerous HTML tags + null bytes)

@@ -4,11 +4,11 @@
 
 ## OVERVIEW
 
-Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 2005 tests across 75 files, 16 skipped for known gaps. Coverage gates: branches 90%, functions 60%, lines 65%, statements 65%.
+Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 2014 tests across 75 files, 16 skipped for known gaps. Coverage gates: branches 90%, functions 60%, lines 65%, statements 65%.
 
 ## STRUCTURE
 
-Test files mirror the `src/` tree. `src/__tests__/core/graph/EdgeStore.test.ts` covers `src/core/graph/EdgeStore.ts`, etc.
+Test files mirror the `src/` tree. `src/__tests__/core/graph/EdgeStore.test.ts` covers `src/core/graph/EdgeStore.ts`, etc. Ownership tests in `core/HistoryManager.ownership.test.ts` cover all owner-enforced methods including `clear()`.
 
 ```
 helpers/         factories.ts, timers.ts

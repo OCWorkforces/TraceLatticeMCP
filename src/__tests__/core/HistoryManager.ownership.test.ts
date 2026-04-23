@@ -143,6 +143,56 @@ describe('HistoryManager — session ownership', () => {
 				expect(() => hm.registerBranch('s1', 'other')).toThrow(SessionAccessDeniedError);
 			});
 		});
+
+		describe('clear() / reset_state ownership enforcement', () => {
+			it('clear(sessionId) throws SessionAccessDeniedError when a different owner attempts reset', () => {
+				runWithContext({ requestId: 'r1', owner: 'user-A' }, () => {
+					hm.addThought(createTestThought({ session_id: 's1', thought: 't1' }));
+					hm.addThought(createTestThought({ session_id: 's1', thought: 't2', thought_number: 2 }));
+				});
+
+				expect(() =>
+					runWithContext({ requestId: 'r2', owner: 'user-B' }, () => {
+						hm.clear('s1');
+					}),
+				).toThrow(SessionAccessDeniedError);
+
+				// Session still exists with original data under the original owner
+				runWithContext({ requestId: 'r3', owner: 'user-A' }, () => {
+					expect(hm.getHistoryLength('s1')).toBe(2);
+				});
+			});
+
+			it('clear(sessionId) succeeds for the same owner', () => {
+				runWithContext({ requestId: 'r1', owner: 'user-A' }, () => {
+					hm.addThought(createTestThought({ session_id: 's1', thought: 't1' }));
+					hm.addThought(createTestThought({ session_id: 's1', thought: 't2', thought_number: 2 }));
+				});
+
+				runWithContext({ requestId: 'r2', owner: 'user-A' }, () => {
+					expect(() => hm.clear('s1')).not.toThrow();
+					// Session is recreated empty on next access
+					expect(hm.getHistoryLength('s1')).toBe(0);
+				});
+			});
+
+			it('clearSession(sessionId) also enforces ownership (delegates to clear)', () => {
+				runWithContext({ requestId: 'r1', owner: 'user-A' }, () => {
+					hm.addThought(createTestThought({ session_id: 's1' }));
+				});
+
+				expect(() =>
+					runWithContext({ requestId: 'r2', owner: 'user-B' }, () => {
+						hm.clearSession('s1');
+					}),
+				).toThrow(SessionAccessDeniedError);
+			});
+
+			it('stdio path: clear(sessionId) works without owner in context', () => {
+				hm.addThought(createTestThought({ session_id: 's1' }));
+				expect(() => hm.clear('s1')).not.toThrow();
+			});
+		});
 	});
 
 	describe('mixed access — owner promotion of stdio-created session', () => {
