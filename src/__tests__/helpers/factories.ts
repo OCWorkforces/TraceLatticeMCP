@@ -1,13 +1,50 @@
 import type { ThoughtData } from '../../core/thought.js';
+import {
+	asSessionId,
+	asThoughtId,
+	asEdgeId,
+	asSuspensionToken,
+	type SessionId,
+	type ThoughtId,
+	type EdgeId,
+	type SuspensionToken,
+} from '../../contracts/ids.js';
 import type { ToolRecommendation } from '../../types/tool.js';
 import type { SkillRecommendation } from '../../types/skill.js';
 import type { StepRecommendation } from '../../core/step.js';
 import type { IHistoryManager } from '../../core/IHistoryManager.js';
 import type { ThoughtFormatter } from '../../core/ThoughtFormatter.js';
 
+// === Branded ID Helpers ===
+
+export function createTestSessionId(value = 'test-session'): SessionId {
+	return asSessionId(value);
+}
+
+export function createTestThoughtId(value = 'test-thought'): ThoughtId {
+	return asThoughtId(value);
+}
+
+export function createTestEdgeId(value = 'test-edge'): EdgeId {
+	return asEdgeId(value);
+}
+
+export function createTestSuspensionToken(value = 'test-token'): SuspensionToken {
+	return asSuspensionToken(value);
+}
+
 // === Data Factories ===
 
-export function createTestThought(overrides?: Partial<ThoughtData>): ThoughtData {
+// Loose overrides type allows tests to pass plain strings for branded ID fields.
+// They are branded internally before being merged.
+type ThoughtOverrides = Partial<Omit<ThoughtData, 'id' | 'session_id' | 'continuation_token'>> & {
+	id?: string;
+	session_id?: string;
+	continuation_token?: string;
+};
+
+export function createTestThought(overrides?: ThoughtOverrides): ThoughtData {
+	const { id, session_id, continuation_token, ...rest } = overrides ?? {};
 	return {
 		available_mcp_tools: ['test-tool'],
 		available_skills: ['test-skill'],
@@ -15,7 +52,12 @@ export function createTestThought(overrides?: Partial<ThoughtData>): ThoughtData
 		thought_number: 1,
 		total_thoughts: 1,
 		next_thought_needed: false,
-		...overrides,
+		...(id !== undefined ? { id: asThoughtId(id) } : {}),
+		...(session_id !== undefined ? { session_id: asSessionId(session_id) } : {}),
+		...(continuation_token !== undefined
+			? { continuation_token: asSuspensionToken(continuation_token) }
+			: {}),
+		...rest,
 	};
 }
 
@@ -192,6 +234,10 @@ export class MockHistoryManager implements IHistoryManager {
 
 	getAvailableSkills(sessionId?: string): string[] | undefined {
 		return this._getSession(sessionId).skills;
+	}
+
+	getEdgeStore(): undefined {
+		return undefined;
 	}
 }
 

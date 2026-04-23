@@ -1,7 +1,7 @@
 import type { ThoughtData } from '../core/thought.js';
 import type { Edge } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
-import type { PersistenceBackend } from './PersistenceBackend.js';
+import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
 
 /**
  * Configuration options for MemoryPersistence.

@@ -5,8 +5,9 @@ import { ThoughtEvaluator } from '../../core/ThoughtEvaluator.js';
 import { InMemorySuspensionStore } from '../../core/tools/InMemorySuspensionStore.js';
 import { SequentialStrategy } from '../../core/reasoning/strategies/SequentialStrategy.js';
 import { MockHistoryManager } from '../helpers/factories.js';
-import type { FeatureFlags } from '../../ServerConfig.js';
+import type { FeatureFlags } from '../../contracts/features.js';
 import type { ThoughtData } from '../../core/thought.js';
+import { asSessionId, type SuspensionToken } from '../../contracts/ids.js';
 
 function makeFeatures(overrides: Partial<FeatureFlags> = {}): FeatureFlags {
 	return {
@@ -112,7 +113,7 @@ describe('ThoughtProcessor — tool interleave', () => {
 			tool_name: 'search',
 			tool_arguments: {},
 		});
-		const token = JSON.parse(callResult.content[0]!.text).continuation_token as string;
+		const token = JSON.parse(callResult.content[0]!.text).continuation_token as SuspensionToken;
 
 		const obsResult = await processor.process({
 			thought: 'tool returned X',
@@ -145,7 +146,7 @@ describe('ThoughtProcessor — tool interleave', () => {
 			tool_name: 'search',
 			tool_arguments: {},
 		});
-		const token = JSON.parse(callResult.content[0]!.text).continuation_token as string;
+		const token = JSON.parse(callResult.content[0]!.text).continuation_token as SuspensionToken;
 
 		await processor.process({
 			thought: 'observed',
@@ -168,7 +169,7 @@ describe('ThoughtProcessor — tool interleave', () => {
 			total_thoughts: 1,
 			next_thought_needed: false,
 			thought_type: 'tool_observation',
-			continuation_token: 'definitely-not-a-real-token',
+			continuation_token: 'definitely-not-a-real-token' as SuspensionToken,
 		});
 		expect(result.isError).toBe(true);
 		const payload = JSON.parse(result.content[0]!.text);
@@ -179,7 +180,7 @@ describe('ThoughtProcessor — tool interleave', () => {
 	it('tool_observation with an expired token returns SuspensionExpiredError', async () => {
 		// Manually seed an expired record in the store.
 		const expired = store.suspend({
-			sessionId: '__global__',
+			sessionId: asSessionId('__global__'),
 			toolCallThoughtNumber: 1,
 			toolName: 'search',
 			toolArguments: {},
@@ -214,7 +215,7 @@ describe('ThoughtProcessor — tool interleave', () => {
 			tool_name: 'search',
 			tool_arguments: {},
 		});
-		const token = JSON.parse(callResult.content[0]!.text).continuation_token as string;
+		const token = JSON.parse(callResult.content[0]!.text).continuation_token as SuspensionToken;
 
 		// First observation succeeds.
 		const ok = await processor.process({
@@ -255,7 +256,7 @@ describe('ThoughtProcessor — tool interleave', () => {
 				tool_name: 'search',
 				tool_arguments: { q: 'first' },
 			});
-			const token1 = JSON.parse(call1.content[0]!.text).continuation_token as string;
+			const token1 = JSON.parse(call1.content[0]!.text).continuation_token as SuspensionToken;
 
 			// First observation
 			const obs1 = await processor.process({
@@ -278,7 +279,7 @@ describe('ThoughtProcessor — tool interleave', () => {
 				tool_name: 'fetch',
 				tool_arguments: { url: 'http://x' },
 			});
-			const token2 = JSON.parse(call2.content[0]!.text).continuation_token as string;
+			const token2 = JSON.parse(call2.content[0]!.text).continuation_token as SuspensionToken;
 			expect(token2).not.toBe(token1);
 
 			// Second observation
@@ -319,7 +320,7 @@ describe('ThoughtProcessor — tool interleave', () => {
 				thought_type: 'tool_call',
 				tool_name: 'search',
 				tool_arguments: { q: 'A' },
-				session_id: 'session-A',
+				session_id: asSessionId('session-A'),
 			});
 			const callB = await processor.process({
 				thought: 'B invokes',
@@ -329,7 +330,7 @@ describe('ThoughtProcessor — tool interleave', () => {
 				thought_type: 'tool_call',
 				tool_name: 'search',
 				tool_arguments: { q: 'B' },
-				session_id: 'session-B',
+				session_id: asSessionId('session-B'),
 			});
 
 			const payloadA = JSON.parse(callA.content[0]!.text);

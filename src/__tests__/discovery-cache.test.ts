@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DiscoveryCache } from '../cache/DiscoveryCache.js';
-import { useFakeTimers, useRealTimers } from './helpers/index.js';
+import { useFakeTimers, useRealTimers } from './helpers/timers.js';
 
 describe('DiscoveryCache', () => {
 	describe('basic operations', () => {

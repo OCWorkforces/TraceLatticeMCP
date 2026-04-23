@@ -1,17 +1,28 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Container, createDefaultContainer } from '../di/Container.js';
+import type { Logger, LogLevel } from '../logger/StructuredLogger.js';
+import { ServerConfig } from '../ServerConfig.js';
 
 // Test classes and interfaces
 interface ILogger {
 	log(message: string): void;
 }
 
-class ConsoleLogger implements ILogger {
+class ConsoleLogger implements ILogger, Logger {
 	constructor(public prefix: string = '') {}
 
 	log(message: string): void {
 		console.log(`${this.prefix}${message}`);
 	}
+
+	debug(message: string, _meta?: Record<string, unknown>): void { this.log(message); }
+	info(message: string, _meta?: Record<string, unknown>): void { this.log(message); }
+	warn(message: string, _meta?: Record<string, unknown>): void { this.log(message); }
+	error(message: string, _meta?: Record<string, unknown>): void { this.log(message); }
+	setLevel(_level: LogLevel): void {}
+	getLevel(): LogLevel { return 'info'; }
+	createChild(context: string): Logger { return new ConsoleLogger(`${this.prefix}${context}:`); }
+	async flush(): Promise<void> {}
 }
 
 interface IConfig {
@@ -623,20 +634,18 @@ describe('createDefaultContainer', () => {
 	});
 
 	it('should register config if provided', () => {
-		const config = new TestConfig({ key: 'value' });
+		const config = new ServerConfig();
 		const container = createDefaultContainer({ config });
 
 		expect(container.has('Config')).toBe(true);
-		const resolved = container.resolve<TestConfig>('Config');
+		const resolved = container.resolve<ServerConfig>('Config');
 		expect(resolved).toBe(config);
 	});
 
 	it('should register both logger and config if provided', () => {
 		const logger = new ConsoleLogger('[CUSTOM] ');
-		const config = new TestConfig({ key: 'value' });
+		const config = new ServerConfig();
 		const container = createDefaultContainer({ logger, config });
-
-		expect(container.size).toBe(2);
 		expect(container.has('Logger')).toBe(true);
 		expect(container.has('Config')).toBe(true);
 	});

@@ -26,10 +26,11 @@ import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { McpServer } from 'tmcp';
 import { safeParse } from 'valibot';
-import type { IMetrics } from '../contracts/index.js';
+import type { IMetrics } from '../contracts/interfaces.js';
 import { getErrorMessage } from '../errors.js';
 import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
+import type { ITransport, TransportKind } from '../contracts/transport.js';
 import { readRequestBody } from './HttpHelpers.js';
 
 /**
@@ -134,7 +135,8 @@ interface SessionState {
  * - 500: Internal Server Error
  * - 503: Server Not Ready / Shutting Down
  */
-export class StreamableHttpTransport extends BaseTransport {
+export class StreamableHttpTransport extends BaseTransport implements ITransport {
+	get kind(): TransportKind { return 'streamable-http'; }
 	private _server: Server | null = null;
 	private _mcpServer: McpServer | null = null;
 	private _path: string;
@@ -212,7 +214,7 @@ export class StreamableHttpTransport extends BaseTransport {
 		}
 
 		// Shutdown check
-		if (this.isShuttingDown()) {
+		if (this.isShuttingDown) {
 			this._sendJsonRpcError(res, 503, -32603, 'Server is shutting down');
 			return;
 		}

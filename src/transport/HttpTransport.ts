@@ -17,10 +17,11 @@
 import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import type { McpServer } from 'tmcp';
 import { safeParse } from 'valibot';
-import type { IMetrics } from '../contracts/index.js';
+import type { IMetrics } from '../contracts/interfaces.js';
 import { getErrorMessage } from '../errors.js';
 import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
+import type { ITransport, TransportKind } from '../contracts/transport.js';
 import {
 	readRequestBody,
 	sendCorsPreflight,
@@ -87,7 +88,8 @@ export interface HttpTransportOptions extends TransportOptions {
  * - 500: Internal Server Error
  * - 503: Server Not Ready
  */
-export class HttpTransport extends BaseTransport {
+export class HttpTransport extends BaseTransport implements ITransport {
+	get kind(): TransportKind { return 'http'; }
 	private _server: ReturnType<typeof createServer>;
 	private _mcpServer: McpServer | null = null;
 	private _requestTimeout: number;
@@ -176,7 +178,7 @@ export class HttpTransport extends BaseTransport {
 			return;
 		}
 
-		if (this.isShuttingDown()) {
+		if (this.isShuttingDown) {
 			this._trackError('shutting_down');
 			sendJsonRpcError(res, 503, -32603, 'Server is shutting down');
 			return;

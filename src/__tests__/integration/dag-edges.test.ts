@@ -26,10 +26,10 @@ import { generateUlid } from '../../core/ids.js';
 import { MemoryPersistence } from '../../persistence/MemoryPersistence.js';
 import { FilePersistence } from '../../persistence/FilePersistence.js';
 import { SqlitePersistence } from '../../persistence/SqlitePersistence.js';
-import type { PersistenceBackend } from '../../persistence/PersistenceBackend.js';
+import type { PersistenceBackend } from '../../contracts/PersistenceBackend.js';
 import type { Edge, EdgeKind } from '../../core/graph/Edge.js';
 import type { ThoughtData } from '../../core/thought.js';
-import { createTestThought } from '../helpers/index.js';
+import { createTestThought } from '../helpers/factories.js';
 
 const GLOBAL = '__global__';
 
@@ -44,7 +44,10 @@ const SQLITE_AVAILABLE = await (async () => {
 	}
 })();
 
-function makeThought(num: number, overrides?: Partial<ThoughtData>): ThoughtData {
+function makeThought(
+	num: number,
+	overrides?: Partial<Omit<ThoughtData, 'session_id'>> & { session_id?: string }
+): ThoughtData {
 	return createTestThought({
 		id: generateUlid(),
 		thought_number: num,

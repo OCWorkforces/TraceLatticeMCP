@@ -9,7 +9,8 @@
  */
 
 import type { ISuspensionStore, SuspensionRecord } from '../../contracts/suspension.js';
-import { generateUlid } from '../ids.js';
+import { generateSuspensionToken } from '../../contracts/ids.js';
+import type { Logger } from '../../logger/StructuredLogger.js';
 
 /**
  * Configuration for {@link InMemorySuspensionStore}.
@@ -20,7 +21,8 @@ export interface InMemorySuspensionStoreConfig {
 	/** Sweep interval for the background expiry timer. Defaults to 60_000ms. */
 	sweepIntervalMs?: number;
 	/** Optional logger; reserved for future diagnostic output. */
-	logger?: unknown;
+	/** Optional logger for diagnostic output. */
+	logger?: Logger;
 }
 
 const DEFAULT_TTL_MS = 300_000;
@@ -59,7 +61,7 @@ export class InMemorySuspensionStore implements ISuspensionStore {
 	suspend(
 		record: Omit<SuspensionRecord, 'token' | 'createdAt'> & { ttlMs?: number },
 	): SuspensionRecord {
-		const token = generateUlid();
+		const token = generateSuspensionToken();
 		const createdAt = Date.now();
 		const ttlMs = record.ttlMs ?? this._ttlMs;
 		const expiresAt = createdAt + ttlMs;

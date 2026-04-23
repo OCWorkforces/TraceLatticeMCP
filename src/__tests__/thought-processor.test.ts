@@ -10,11 +10,12 @@ import { ThoughtProcessor } from '../core/ThoughtProcessor.js';
 import { ThoughtFormatter } from '../core/ThoughtFormatter.js';
 import { StructuredLogger } from '../logger/StructuredLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
-import { MockHistoryManager } from './helpers/index.js';
+import { MockHistoryManager } from './helpers/factories.js';
 import type { ThoughtData } from '../core/thought.js';
+import { asSessionId } from '../contracts/ids.js';
 import type { IHistoryManager } from '../core/IHistoryManager.js';
 import { ThoughtEvaluator } from '../core/ThoughtEvaluator.js';
-import { createTestThought, createHypothesisThought } from './helpers/index.js';
+import { createTestThought, createHypothesisThought } from './helpers/factories.js';
 
 
 describe('ThoughtProcessor', () => {
@@ -279,6 +280,9 @@ describe('ThoughtProcessor', () => {
 				return undefined;
 			}
 			getAvailableSkills(): string[] | undefined {
+				return undefined;
+			}
+			getEdgeStore(): undefined {
 				return undefined;
 			}
 		}
@@ -1322,7 +1326,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				session_id: 'sess-a',
+				session_id: asSessionId('sess-a'),
 			});
 
 			expect(spy).toHaveBeenCalledWith('sess-a');
@@ -1338,7 +1342,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				session_id: 'sess-b',
+				session_id: asSessionId('sess-b'),
 			});
 
 			expect(spy).toHaveBeenCalledWith('sess-b');
@@ -1354,7 +1358,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				session_id: 'sess-c',
+				session_id: asSessionId('sess-c'),
 			});
 
 			expect(spy).toHaveBeenCalledWith('sess-c');
@@ -1370,7 +1374,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				session_id: 'sess-d',
+				session_id: asSessionId('sess-d'),
 			});
 
 			expect(spy).toHaveBeenCalledWith('sess-d');
@@ -1386,7 +1390,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				session_id: 'sess-e',
+				session_id: asSessionId('sess-e'),
 			});
 
 			expect(spy).toHaveBeenCalledWith('sess-e');
@@ -1402,7 +1406,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				session_id: 'sess-f',
+				session_id: asSessionId('sess-f'),
 			});
 
 			expect(spy).toHaveBeenCalledWith('sess-f');
@@ -1414,7 +1418,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				session_id: 'my-session',
+				session_id: asSessionId('my-session'),
 			});
 			const parsed = JSON.parse(result.content[0]!.text);
 			expect(parsed.session_id).toBe('my-session');
@@ -1442,7 +1446,7 @@ describe('ThoughtProcessor', () => {
 					thought_number: i,
 					total_thoughts: 3,
 					next_thought_needed: true,
-					session_id: 'alpha',
+					session_id: asSessionId('alpha'),
 				});
 			}
 
@@ -1452,7 +1456,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 3,
 				total_thoughts: 3,
 				next_thought_needed: false,
-				session_id: 'alpha',
+				session_id: asSessionId('alpha'),
 				is_revision: true,
 				revises_thought: 1,
 			});
@@ -1474,7 +1478,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				session_id: 'my-session',
+				session_id: asSessionId('my-session'),
 				reset_state: true,
 			});
 
@@ -1491,7 +1495,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				session_id: 'my-session',
+				session_id: asSessionId('my-session'),
 				reset_state: false,
 			});
 
@@ -1508,7 +1512,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				session_id: 'my-session',
+				session_id: asSessionId('my-session'),
 			});
 
 			expect(spy).not.toHaveBeenCalled();
@@ -1525,7 +1529,7 @@ describe('ThoughtProcessor', () => {
 					thought_number: i,
 					total_thoughts: 5,
 					next_thought_needed: true,
-					session_id: 'reset-sess',
+					session_id: asSessionId('reset-sess'),
 				});
 			}
 
@@ -1535,7 +1539,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 2,
 				next_thought_needed: true,
-				session_id: 'reset-sess',
+				session_id: asSessionId('reset-sess'),
 				reset_state: true,
 			});
 
@@ -1629,6 +1633,7 @@ describe('ThoughtProcessor — uncovered branches', () => {
 				clear(): void {}
 				getAvailableMcpTools(): string[] | undefined { return undefined; }
 				getAvailableSkills(): string[] | undefined { return undefined; }
+				getEdgeStore(): undefined { return undefined; }
 			}
 
 			const throwingHistory = new StringThrowingHistoryManager();

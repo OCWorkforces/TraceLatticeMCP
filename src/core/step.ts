@@ -31,6 +31,11 @@ import type { ToolRecommendation } from '../types/tool.js';
  *   next_step_conditions: ['If no results found, try broader search terms']
  * };
  * ```
+ *
+ * NOTE: Kept as a hand-written interface (not inferred from `StepRecommendationSchema`)
+ * because it composes `ToolRecommendation` / `SkillRecommendation`, which are themselves
+ * stricter than their schemas (required vs optional fields). An inferred type would
+ * weaken those nested guarantees.
  */
 export interface StepRecommendation {
 	/** Human-readable description of what needs to be done in this step. */

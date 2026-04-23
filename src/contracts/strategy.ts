@@ -36,8 +36,8 @@ export interface StrategyContext {
 	readonly sessionId: string;
 	/** Chronological list of thoughts recorded in this session. */
 	readonly history: readonly ThoughtData[];
-	/** Read-only graph view for traversal (ancestors, descendants, etc.). */
-	readonly graph: GraphView;
+	/** Read-only graph view for traversal (ancestors, descendants, etc.). Undefined when DAG edges are disabled. */
+	readonly graph: GraphView | undefined;
 	/** Aggregated reasoning analytics for the session. */
 	readonly stats: ReasoningStats;
 	/** The thought that just triggered the strategy decision. */

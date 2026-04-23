@@ -3,8 +3,8 @@ import type { Mock } from 'vitest';
 import { EventEmitter } from 'node:events';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { BaseTransport, type TransportOptions } from '../transport/BaseTransport.js';
-import { useFakeTimers, useRealTimers, advanceTime } from './helpers/index.js';
-import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
+import { useFakeTimers, useRealTimers, advanceTime } from './helpers/timers.js';
+import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
 
 import { HealthChecker } from '../health/HealthChecker.js';
 
@@ -45,8 +45,8 @@ class TestableTransport extends BaseTransport {
 	override setCorsHeaders(res: ServerResponse): void {
 		return super.setCorsHeaders(res);
 	}
-	override isShuttingDown(): boolean {
-		return super.isShuttingDown();
+	override get isShuttingDown(): boolean {
+		return super.isShuttingDown;
 	}
 
 	get exposedServerUrl(): string {
@@ -178,7 +178,7 @@ describe('BaseTransport additional coverage', () => {
 	describe('isShuttingDown', () => {
 		it('should return false initially', () => {
 			transport = new TestableTransport();
-			expect(transport.isShuttingDown()).toBe(false);
+			expect(transport.isShuttingDown).toBe(false);
 		});
 	});
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { createTestThought } from './helpers/index.js';
+import { createTestThought } from './helpers/factories.js';
 import { MemoryPersistence } from '../persistence/MemoryPersistence.js';
 
 describe('MemoryPersistence', () => {

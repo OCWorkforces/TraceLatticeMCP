@@ -5,7 +5,8 @@ import { ThoughtEvaluator } from '../../core/ThoughtEvaluator.js';
 import { HistoryManager } from '../../core/HistoryManager.js';
 import { InMemorySuspensionStore } from '../../core/tools/InMemorySuspensionStore.js';
 import { SequentialStrategy } from '../../core/reasoning/strategies/SequentialStrategy.js';
-import type { FeatureFlags } from '../../ServerConfig.js';
+import type { FeatureFlags } from '../../contracts/features.js';
+import type { SessionId } from '../../contracts/ids.js';
 
 function makeFeatures(overrides: Partial<FeatureFlags> = {}): FeatureFlags {
 	return {
@@ -40,7 +41,7 @@ function makeProcessor(features: FeatureFlags): {
 	return { proc, history, evaluator };
 }
 
-async function seed(proc: ThoughtProcessor, count: number, sessionId?: string): Promise<void> {
+async function seed(proc: ThoughtProcessor, count: number, sessionId?: SessionId): Promise<void> {
 	for (let i = 1; i <= count; i++) {
 		await proc.process({
 			thought: `thought ${i}`,

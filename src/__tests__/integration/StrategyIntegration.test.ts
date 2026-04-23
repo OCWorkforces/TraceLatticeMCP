@@ -19,7 +19,7 @@ import type {
 	StrategyContext,
 	StrategyDecision,
 } from '../../contracts/strategy.js';
-import { MockHistoryManager, createTestThought } from '../helpers/index.js';
+import { MockHistoryManager, createTestThought } from '../helpers/factories.js';
 
 interface ParsedResponse {
 	thought_number: number;

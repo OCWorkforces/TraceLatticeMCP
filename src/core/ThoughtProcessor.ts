@@ -10,10 +10,11 @@
 
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
+import { asSessionId, GLOBAL_SESSION_ID } from '../contracts/ids.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
 import type { ISuspensionStore, SuspensionRecord } from '../contracts/suspension.js';
 import type { IReasoningStrategy, StrategyDecision } from '../contracts/strategy.js';
-import type { FeatureFlags } from '../ServerConfig.js';
+import type { FeatureFlags } from '../contracts/features.js';
 import {
 	InvalidBacktrackError,
 	InvalidToolCallError,
@@ -385,7 +386,7 @@ export class ThoughtProcessor {
 		let decision: StrategyDecision;
 		try {
 			const edgeStore = this._getEdgeStore();
-			const graph = edgeStore ? new GraphView(edgeStore) : (undefined as unknown as GraphView);
+			const graph = edgeStore ? new GraphView(edgeStore) : undefined;
 			decision = this.strategy.decide({
 				sessionId: sessionId ?? '__global__',
 				history,
@@ -444,10 +445,9 @@ export class ThoughtProcessor {
 		return firstId;
 	}
 
-	/** Best-effort access to the EdgeStore via duck typing. @private */
+	/** Access the EdgeStore via IHistoryManager. @private */
 	private _getEdgeStore(): IEdgeStore | undefined {
-		const hm = this.historyManager as { getEdgeStore?: () => IEdgeStore | undefined };
-		return typeof hm.getEdgeStore === 'function' ? hm.getEdgeStore() : undefined;
+		return this.historyManager.getEdgeStore();
 	}
 
 	/**
@@ -689,6 +689,10 @@ export class ThoughtProcessor {
 				return 'hypothesis';
 			case 'backtrack':
 				return 'regular';
+			default: {
+				const _exhaust: never = t;
+				throw new Error(`Unhandled type: ${_exhaust as string}`);
+			}
 		}
 	}
 
@@ -700,7 +704,7 @@ export class ThoughtProcessor {
 	private _handleToolCall(input: ThoughtData, sessionId?: string): CallToolResult {
 		this.historyManager.addThought(input);
 		const record: SuspensionRecord = this._suspensionStore!.suspend({
-			sessionId: sessionId ?? '__global__',
+			sessionId: sessionId ? asSessionId(sessionId) : GLOBAL_SESSION_ID,
 			toolCallThoughtNumber: input.thought_number,
 			toolName: input.tool_name!,
 			toolArguments: input.tool_arguments ?? {},

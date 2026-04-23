@@ -10,6 +10,7 @@
  */
 
 import type { ThoughtData } from '../../../core/thought.js';
+import { asThoughtId } from '../../../contracts/ids.js';
 
 /**
  * Behavior expected of the Tree-of-Thought strategy on a given scenario.
@@ -44,7 +45,7 @@ function t(
 	overrides: Partial<ThoughtData> = {}
 ): ThoughtData {
 	return {
-		id: `t-${idx}`,
+		id: asThoughtId(`t-${idx}`),
 		thought,
 		thought_number: idx,
 		total_thoughts: 10,

@@ -8,6 +8,8 @@
  * @module contracts/suspension
  */
 
+import type { SessionId, SuspensionToken } from './ids.js';
+
 /**
  * A single pending tool-call suspension record.
  *
@@ -17,9 +19,9 @@
  */
 export interface SuspensionRecord {
 	/** Opaque token used to resume this suspension. */
-	readonly token: string;
+	readonly token: SuspensionToken;
 	/** Session that owns this suspension. */
-	readonly sessionId: string;
+	readonly sessionId: SessionId;
 	/** Thought number of the originating `tool_call` thought. */
 	readonly toolCallThoughtNumber: number;
 	/** Name of the tool to invoke. */

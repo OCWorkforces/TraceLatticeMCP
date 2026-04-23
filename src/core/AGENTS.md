@@ -43,7 +43,7 @@ Reasoning engine: thought ingest → graph mutation → quality signals → stra
 ## KEY INTERFACES
 
 - `IHistoryManager` (8 methods + session lifecycle): contract for the coordinator
-- `ThoughtData`: 11 optional reasoning fields + `retracted: boolean` (logical retraction via `backtrack`)
+- `ThoughtData`: 11 optional reasoning fields + `retracted: boolean` (logical retraction via `backtrack`). Uses branded ID types (`ThoughtId`, `SessionId`, `SuspensionToken`) from `contracts/ids.ts`.
 - `ThoughtType`: 11-variant union. Flag gates:
   - `newThoughtTypes`: `assumption`, `decomposition`, `backtrack`
   - `toolInterleave`: `tool_call`, `tool_observation`
@@ -54,7 +54,7 @@ Reasoning engine: thought ingest → graph mutation → quality signals → stra
 
 - `HistoryManager` was decomposed (538L). Mutation logic lives in `EdgeEmitter` / `PersistenceBuffer` / `SessionManager`. Keep it that way: HM coordinates, doesn't compute.
 - `_resolveThoughtId` walks BOTH `session.thought_history` AND every `session.branches[*]`. Branch thoughts are NOT in main history.
-- `ThoughtProcessor` is 750L because it's the seam between schema, persistence, and policy. Don't fold helpers back in. Extract further if it grows.
+- `ThoughtProcessor` is 754L because it's the seam between schema, persistence, and policy. Don't fold helpers back in. Extract further if it grows.
 - `EdgeStore` is always registered in DI. Feature flag `dagEdges` gates the WRITE path only, not the registration.
 - `reasoning/strategies/` lives at depth 4 deliberately. Strategies are leaf policies, not infrastructure.
 - `generateUlid` is timestamp-base36 + random hex. Not a real ULID. Don't rename.

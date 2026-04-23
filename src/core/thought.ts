@@ -4,6 +4,7 @@
  * @module types/thought
  */
 
+import type { SessionId, ThoughtId, SuspensionToken } from '../contracts/ids.js';
 import type { ThoughtType } from './reasoning.js';
 import type { StepRecommendation } from './step.js';
 
@@ -62,7 +63,7 @@ export interface ThoughtData {
 	 * const thought: ThoughtData = { ...base, id: '01H0X0X0X0X0X0X0X0X0X0X0X0' };
 	 * ```
 	 */
-	id?: string;
+	id?: ThoughtId;
 
 	/** Current thought number in the sequence (1-indexed). */
 	thought_number: number;
@@ -213,7 +214,7 @@ export interface ThoughtData {
 	 * const thought: ThoughtData = { ...base, session_id: 'analysis-task-42' };
 	 * ```
 	 */
-	session_id?: string;
+	session_id?: SessionId;
 
 	/**
 	 * When true, clears all state for the target session before processing this thought.
@@ -236,7 +237,7 @@ export interface ThoughtData {
 	tool_result?: unknown;
 
 	/** Continuation token linking tool_observation back to suspended tool_call */
-	continuation_token?: string;
+	continuation_token?: SuspensionToken;
 
 	/** Sub-problem labels for decomposition thoughts */
 	decomposition_children?: string[];

@@ -5,15 +5,24 @@
 import { describe, expect, it } from 'vitest';
 import { OutcomeRecorder } from '../../../core/reasoning/OutcomeRecorder.js';
 
-function makeOutcome(overrides: Partial<Parameters<OutcomeRecorder['recordVerification']>[0]> = {}) {
+import { asSessionId, asThoughtId } from '../../../contracts/ids.js';
+import type { VerificationOutcome } from '../../../contracts/interfaces.js';
+
+function makeOutcome(
+	overrides: Partial<Omit<VerificationOutcome, 'recordedAt' | 'sessionId' | 'thoughtId'>> & {
+		sessionId?: string;
+		thoughtId?: string;
+	} = {}
+): Omit<VerificationOutcome, 'recordedAt'> {
+	const { sessionId, thoughtId, ...rest } = overrides;
 	return {
-		thoughtId: 't1',
+		thoughtId: asThoughtId(thoughtId ?? 't1'),
 		thoughtNumber: 1,
-		sessionId: 'session-a',
+		sessionId: asSessionId(sessionId ?? 'session-a'),
 		predicted: 0.8,
 		actual: 1 as 0 | 1,
-		type: 'verification',
-		...overrides,
+		type: 'verification' as const,
+		...rest,
 	};
 }
 

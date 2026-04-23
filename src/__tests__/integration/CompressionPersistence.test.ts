@@ -27,9 +27,9 @@ import { generateUlid } from '../../core/ids.js';
 import { MemoryPersistence } from '../../persistence/MemoryPersistence.js';
 import { FilePersistence } from '../../persistence/FilePersistence.js';
 import { SqlitePersistence } from '../../persistence/SqlitePersistence.js';
-import type { PersistenceBackend } from '../../persistence/PersistenceBackend.js';
+import type { PersistenceBackend } from '../../contracts/PersistenceBackend.js';
 import type { ThoughtData } from '../../core/thought.js';
-import { createTestThought } from '../helpers/index.js';
+import { createTestThought } from '../helpers/factories.js';
 
 const SESSION = 'compression-persistence-sess';
 const BRANCH = 'alt-1';

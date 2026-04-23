@@ -12,13 +12,13 @@
  * @module HistoryManager
  */
 
-import type { IMetrics } from '../contracts/index.js';
+import type { IMetrics } from '../contracts/interfaces.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
 import type { ISummaryStore } from '../contracts/summary.js';
 import { ValidationError, getErrorMessage } from '../errors.js';
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
-import type { PersistenceBackend } from '../persistence/PersistenceBackend.js';
+import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
 import {
 	DehydrationPolicy,
 	type DehydrationOptions,
@@ -30,7 +30,6 @@ import { PersistenceBuffer, type PersistenceEventEmitter } from './PersistenceBu
 import { SessionManager } from './SessionManager.js';
 import type { ThoughtData } from './thought.js';
 
-export type { PersistenceEventEmitter } from './PersistenceBuffer.js';
 
 /** Absolute maximum history size (~20MB at 2KB/thought). Cannot be overridden. */
 export const ABSOLUTE_MAX_HISTORY_SIZE = 10_000;

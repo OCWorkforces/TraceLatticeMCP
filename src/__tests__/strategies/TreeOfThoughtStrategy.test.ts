@@ -14,8 +14,9 @@ import { createTestThought } from '../helpers/factories.js';
 import type { StrategyContext } from '../../contracts/strategy.js';
 import type { ThoughtData } from '../../core/thought.js';
 import type { ReasoningStats } from '../../core/reasoning.js';
+import { asSessionId, asThoughtId, type EdgeId, type SessionId } from '../../contracts/ids.js';
 
-const SID = 'tot-session';
+const SID: SessionId = asSessionId('tot-session');
 
 function makeStats(): ReasoningStats {
 	return {
@@ -47,9 +48,9 @@ function makeStats(): ReasoningStats {
 let edgeSeq = 0;
 function addEdge(store: EdgeStore, from: string, to: string): void {
 	store.addEdge({
-		id: `e-${++edgeSeq}`,
-		from,
-		to,
+		id: `e-${++edgeSeq}` as EdgeId,
+		from: asThoughtId(from),
+		to: asThoughtId(to),
 		kind: 'sequence',
 		sessionId: SID,
 		createdAt: edgeSeq,

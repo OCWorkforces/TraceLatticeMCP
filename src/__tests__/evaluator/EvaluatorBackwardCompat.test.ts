@@ -21,7 +21,7 @@ import {
 	createCritiqueThought,
 	createSynthesisThought,
 	createMetaThought,
-} from '../helpers/index.js';
+} from '../helpers/factories.js';
 import type { ThoughtData } from '../../core/thought.js';
 import type { ThoughtType } from '../../core/reasoning.js';
 

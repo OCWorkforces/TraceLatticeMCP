@@ -11,6 +11,8 @@
  * @module contracts
  */
 import type { Edge } from '../core/graph/Edge.js';
+import type { ThoughtType } from '../core/reasoning.js';
+import type { SessionId, ThoughtId } from './ids.js';
 
 /**
  * Metrics interface for observability.
@@ -67,17 +69,18 @@ export interface DiscoveryCacheOptions {
  */
 export interface VerificationOutcome {
 	/** The thought id that made the prediction. */
-	thoughtId: string;
+	thoughtId: ThoughtId;
 	/** The thought number of the prediction (backward compat). */
 	thoughtNumber: number;
 	/** The session this outcome belongs to. */
-	sessionId: string;
+	sessionId: SessionId;
 	/** The predicted confidence (0-1). */
 	predicted: number;
 	/** The actual outcome (0 = wrong, 1 = correct). */
 	actual: 0 | 1;
 	/** The thought type that made the prediction. */
-	type: string;
+	/** The thought type that made the prediction. */
+	type: ThoughtType;
 	/** Timestamp of outcome recording. */
 	recordedAt: number;
 }

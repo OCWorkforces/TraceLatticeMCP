@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { SqlitePersistence } from '../persistence/SqlitePersistence.js';
-import { createTestThought } from './helpers/index.js';
+import { createTestThought } from './helpers/factories.js';
 
 // Shared mock state accessible to both mock factory and tests
 const mockState = vi.hoisted(() => {

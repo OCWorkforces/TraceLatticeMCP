@@ -22,6 +22,7 @@ import { URL } from 'node:url';
 import type { HealthChecker } from '../health/HealthChecker.js';
 import type { Logger, LogLevel } from '../logger/StructuredLogger.js';
 import { SESSION_ID_PATTERN, MAX_SESSION_ID_LENGTH } from '../core/ids.js';
+import type { McpServer } from 'tmcp';
 
 /**
  * No-op logger that does nothing. Used when no logger is provided.
@@ -321,7 +322,7 @@ export abstract class BaseTransport {
 	 * Check if transport is shutting down.
 	 * @returns true if in shutdown phase
 	 */
-	protected isShuttingDown(): boolean {
+	public get isShuttingDown(): boolean {
 		return this._isShuttingDown;
 	}
 
@@ -386,7 +387,7 @@ export abstract class BaseTransport {
 	/**
 	 * Connect to MCP server.
 	 */
-	abstract connect(mcpServer: unknown): Promise<void>;
+	abstract connect(mcpServer: McpServer): Promise<void>;
 
 	/**
 	 * Stop transport server with graceful shutdown.

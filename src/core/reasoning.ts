@@ -36,6 +36,19 @@ export type ThoughtType =
 	| 'backtrack'; // Backtracking from a prior thought
 
 /**
+ * Machine-readable names for the 6 detected reasoning patterns.
+ *
+ * Each name corresponds to a private detector method in PatternDetector.
+ */
+export type PatternName =
+	| 'consecutive_without_verification'
+	| 'unverified_hypothesis'
+	| 'monotonic_type'
+	| 'no_alternatives_explored'
+	| 'confidence_drift'
+	| 'healthy_verification';
+
+/**
  * A detected reasoning pattern — surfaced as metadata or a warning.
  *
  * @example
@@ -50,7 +63,8 @@ export type ThoughtType =
  */
 export interface PatternSignal {
 	/** Machine-readable pattern identifier. */
-	pattern: string;
+	/** Machine-readable pattern identifier. */
+	pattern: PatternName;
 
 	/** Severity: 'warning' surfaces as a hint, 'info' is metadata only. */
 	severity: 'info' | 'warning';

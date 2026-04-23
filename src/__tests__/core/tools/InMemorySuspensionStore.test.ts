@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { InMemorySuspensionStore } from '../../../core/tools/InMemorySuspensionStore.js';
+import { asSessionId } from '../../../contracts/ids.js';
 
 describe('InMemorySuspensionStore', () => {
 	let store: InMemorySuspensionStore;
@@ -15,7 +16,7 @@ describe('InMemorySuspensionStore', () => {
 	it('suspend() returns a fully populated record with token, createdAt, and expiresAt', () => {
 		const before = Date.now();
 		const rec = store.suspend({
-			sessionId: 's1',
+			sessionId: asSessionId('s1'),
 			toolCallThoughtNumber: 3,
 			toolName: 'search',
 			toolArguments: { q: 'foo' },
@@ -34,7 +35,7 @@ describe('InMemorySuspensionStore', () => {
 
 	it('suspend() with explicit ttlMs overrides the default', () => {
 		const rec = store.suspend({
-			sessionId: 's1',
+			sessionId: asSessionId('s1'),
 			toolCallThoughtNumber: 1,
 			toolName: 't',
 			toolArguments: {},
@@ -46,7 +47,7 @@ describe('InMemorySuspensionStore', () => {
 
 	it('resume() returns the record once and removes it (single-use)', () => {
 		const rec = store.suspend({
-			sessionId: 's1',
+			sessionId: asSessionId('s1'),
 			toolCallThoughtNumber: 1,
 			toolName: 't',
 			toolArguments: {},
@@ -61,7 +62,7 @@ describe('InMemorySuspensionStore', () => {
 
 	it('resume() returns null and deletes the record when expired', () => {
 		const rec = store.suspend({
-			sessionId: 's1',
+			sessionId: asSessionId('s1'),
 			toolCallThoughtNumber: 1,
 			toolName: 't',
 			toolArguments: {},
@@ -81,7 +82,7 @@ describe('InMemorySuspensionStore', () => {
 
 	it('peek() is non-destructive and returns expired records as-is', () => {
 		const rec = store.suspend({
-			sessionId: 's1',
+			sessionId: asSessionId('s1'),
 			toolCallThoughtNumber: 1,
 			toolName: 't',
 			toolArguments: {},
@@ -107,7 +108,7 @@ describe('InMemorySuspensionStore', () => {
 
 	it('expireOlderThan() removes expired records and returns the count', () => {
 		const r1 = store.suspend({
-			sessionId: 's1',
+			sessionId: asSessionId('s1'),
 			toolCallThoughtNumber: 1,
 			toolName: 't',
 			toolArguments: {},
@@ -115,7 +116,7 @@ describe('InMemorySuspensionStore', () => {
 			expiresAt: 0,
 		});
 		const r2 = store.suspend({
-			sessionId: 's1',
+			sessionId: asSessionId('s1'),
 			toolCallThoughtNumber: 2,
 			toolName: 't',
 			toolArguments: {},
@@ -131,21 +132,21 @@ describe('InMemorySuspensionStore', () => {
 
 	it('clearSession() removes only the targeted session', () => {
 		store.suspend({
-			sessionId: 'sA',
+			sessionId: asSessionId('sA'),
 			toolCallThoughtNumber: 1,
 			toolName: 't',
 			toolArguments: {},
 			expiresAt: 0,
 		});
 		store.suspend({
-			sessionId: 'sA',
+			sessionId: asSessionId('sA'),
 			toolCallThoughtNumber: 2,
 			toolName: 't',
 			toolArguments: {},
 			expiresAt: 0,
 		});
 		store.suspend({
-			sessionId: 'sB',
+			sessionId: asSessionId('sB'),
 			toolCallThoughtNumber: 1,
 			toolName: 't',
 			toolArguments: {},
@@ -161,14 +162,14 @@ describe('InMemorySuspensionStore', () => {
 	it('size() returns global total when no session id is provided, and per-session count otherwise', () => {
 		expect(store.size()).toBe(0);
 		store.suspend({
-			sessionId: 'sA',
+			sessionId: asSessionId('sA'),
 			toolCallThoughtNumber: 1,
 			toolName: 't',
 			toolArguments: {},
 			expiresAt: 0,
 		});
 		store.suspend({
-			sessionId: 'sB',
+			sessionId: asSessionId('sB'),
 			toolCallThoughtNumber: 1,
 			toolName: 't',
 			toolArguments: {},

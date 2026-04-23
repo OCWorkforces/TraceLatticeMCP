@@ -1,4 +1,4 @@
-import type { IMetrics } from '../contracts/index.js';
+import type { IMetrics } from '../contracts/interfaces.js';
 
 /**
  * LRU Cache for tool/skill discovery results with TTL support.

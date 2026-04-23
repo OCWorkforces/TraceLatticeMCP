@@ -5,7 +5,8 @@ import { ThoughtEvaluator } from '../../core/ThoughtEvaluator.js';
 import { InMemorySuspensionStore } from '../../core/tools/InMemorySuspensionStore.js';
 import { SequentialStrategy } from '../../core/reasoning/strategies/SequentialStrategy.js';
 import { MockHistoryManager } from '../helpers/factories.js';
-import type { FeatureFlags } from '../../ServerConfig.js';
+import type { FeatureFlags } from '../../contracts/features.js';
+import { asSuspensionToken } from '../../contracts/ids.js';
 
 function makeFeatures(overrides: Partial<FeatureFlags> = {}): FeatureFlags {
 	return {
@@ -58,7 +59,7 @@ describe('ThoughtProcessor — new thought type validation', () => {
 			total_thoughts: 1,
 			next_thought_needed: false,
 			thought_type: 'tool_observation',
-			continuation_token: 'tok',
+			continuation_token: asSuspensionToken('tok'),
 		});
 		expect(result.isError).toBe(true);
 		const payload = JSON.parse(result.content[0]!.text);

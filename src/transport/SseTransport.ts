@@ -21,10 +21,11 @@ import { createServer, IncomingMessage, ServerResponse } from 'node:http';
 import { URL } from 'node:url';
 import type { McpServer } from 'tmcp';
 import { safeParse } from 'valibot';
-import type { IMetrics } from '../contracts/index.js';
+import type { IMetrics } from '../contracts/interfaces.js';
 import type { ConnectionPool } from '../pool/ConnectionPool.js';
 import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
+import type { ITransport, TransportKind } from '../contracts/transport.js';
 /**
  * SSE-specific transport options extending base TransportOptions.
  */
@@ -57,7 +58,8 @@ export interface SseTransportOptions extends TransportOptions {
  * - Returns 429 Too Many Requests when limit exceeded
  * - Can be disabled via `enableRateLimit: false`
  */
-export class SseTransport extends BaseTransport {
+export class SseTransport extends BaseTransport implements ITransport {
+	get kind(): TransportKind { return 'sse'; }
 	private _server: ReturnType<typeof createServer>;
 	private _path: string;
 	private _clients: Set<ServerResponse> = new Set();

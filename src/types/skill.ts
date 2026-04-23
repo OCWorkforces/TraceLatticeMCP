@@ -23,6 +23,11 @@
  *   user_invocable: true
  * };
  * ```
+ *
+ * NOTE: Kept as a hand-written interface (not inferred from `SkillRecommendationSchema`)
+ * because `confidence`, `rationale`, and `priority` are REQUIRED here but OPTIONAL in the
+ * schema (the schema accepts partial LLM input; the normalizer fills defaults). An inferred
+ * type would make these fields optional and break call sites that read them without guards.
  */
 export interface SkillRecommendation {
 	/** The unique name/identifier of the recommended skill. */

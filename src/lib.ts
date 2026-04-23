@@ -25,11 +25,11 @@ import { Calibrator } from './core/evaluator/Calibrator.js';
 import { OutcomeRecorder } from './core/reasoning/OutcomeRecorder.js';
 import { createReasoningStrategy } from './core/reasoning/strategies/StrategyFactory.js';
 import { ThoughtFormatter } from './core/ThoughtFormatter.js';
-import { ThoughtProcessor } from './core/ThoughtProcessor.js';
+import { ThoughtProcessor, type CallToolResult } from './core/ThoughtProcessor.js';
 import { Container } from './di/Container.js';
 import { StructuredLogger } from './logger/StructuredLogger.js';
 import { Metrics } from './metrics/metrics.impl.js';
-import type { PersistenceBackend } from './persistence/PersistenceBackend.js';
+import type { PersistenceBackend } from './contracts/PersistenceBackend.js';
 import { createPersistenceBackend } from './persistence/PersistenceFactory.js';
 import { SkillRegistry } from './registry/SkillRegistry.js';
 import { ToolRegistry } from './registry/ToolRegistry.js';
@@ -84,7 +84,76 @@ interface ServerEvents {
 	thoughtProcessed: { thoughtNumber: number; duration: number };
 }
 
-export class ToolAwareSequentialThinkingServer extends EventEmitter implements IDisposable {
+/**
+ * Public API contract for the tool-aware sequential thinking server.
+ *
+ * Extends {@link IDisposable} for resource cleanup. Concrete implementations
+ * are expected to also extend Node's `EventEmitter` to support the typed
+ * `emit`/`on` overloads.
+ */
+export interface IToolAwareSequentialThinkingServer extends IDisposable {
+	/** Direct access to the history manager. */
+	readonly history: HistoryManager;
+
+	/** Direct access to the tool registry. */
+	readonly tools: ToolRegistry;
+
+	/** Direct access to the skill registry. */
+	readonly skills: SkillRegistry;
+
+	/** Server configuration. */
+	readonly config: ServerConfig;
+
+	/**
+	 * Discover skills asynchronously without blocking server startup.
+	 *
+	 * @returns The number of skills discovered
+	 */
+	discoverSkillsAsync(): Promise<number>;
+
+	/**
+	 * Get all branches from the history manager.
+	 *
+	 * @returns Map of branch IDs to thought arrays
+	 */
+	getBranches(): Record<string, ThoughtData[]>;
+
+	/**
+	 * Process a thought through the configured pipeline.
+	 *
+	 * @param input - Validated thought input matching the schema
+	 * @returns The processing result
+	 */
+	processThought(input: v.InferInput<typeof SequentialThinkingSchema>): Promise<CallToolResult>;
+
+	/**
+	 * Export the current Prometheus metrics snapshot.
+	 */
+	getMetricsSnapshot(): string;
+
+	/**
+	 * Get the DI container used by this server.
+	 * Useful for testing and advanced customizations.
+	 */
+	getContainer(): Container;
+
+	/**
+	 * Stop the server and clean up watchers, suspension stores, and persistence.
+	 */
+	stop(): Promise<void>;
+
+	/**
+	 * Clear all server state (history, tools, skills).
+	 */
+	clear(): void;
+
+	/**
+	 * Dispose of the server and all container services.
+	 */
+	dispose(): Promise<void>;
+}
+
+export class ToolAwareSequentialThinkingServer extends EventEmitter implements IToolAwareSequentialThinkingServer {
 	/**
 	 * Factory method to create a new server instance with async initialization.
 	 * This is the recommended way to create server instances.

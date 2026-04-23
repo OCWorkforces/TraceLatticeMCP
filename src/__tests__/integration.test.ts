@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ToolAwareSequentialThinkingServer, createServer } from '../index.js';
+import { ToolAwareSequentialThinkingServer, createServer } from '../lib.js';
 
 describe('ToolAwareSequentialThinkingServer Integration', () => {
 	let server: ToolAwareSequentialThinkingServer;

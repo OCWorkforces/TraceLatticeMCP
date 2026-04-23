@@ -1,3 +1,7 @@
+import type { Logger } from '../logger/StructuredLogger.js';
+import type { ServerConfig } from '../ServerConfig.js';
+import type { ConfigFileOptions } from '../config/ConfigLoader.js';
+
 import type { IDisposable } from '../types/disposable.js';
 import type { ServiceKey, ServiceRegistry } from './ServiceRegistry.js';
 
@@ -341,9 +345,9 @@ export class Container {
  * ```
  */
 export interface CreateContainerOptions {
-	logger?: unknown;
-	config?: unknown;
-	fileConfig?: Record<string, unknown>;
+	logger?: Logger;
+	config?: ServerConfig;
+	fileConfig?: ConfigFileOptions;
 }
 
 export function createDefaultContainer(options: CreateContainerOptions = {}): Container {

@@ -127,10 +127,12 @@ export class TreeOfThoughtStrategy implements IReasoningStrategy {
 	 */
 	decide(ctx: StrategyContext): StrategyDecision {
 		const cfg = configOf(this);
+		if (!ctx.graph) {
+			return { action: 'continue' };
+		}
 		const frontier = ctx.graph.leaves(ctx.sessionId);
 		const byKey = indexHistory(ctx.history);
 		const scored = scoreFrontier(frontier, byKey);
-
 		if (scored.length > 0 && bestScore(scored) >= cfg.terminationConfidence) {
 			return { action: 'terminate', reason: 'confidence threshold' };
 		}
@@ -159,6 +161,7 @@ export class TreeOfThoughtStrategy implements IReasoningStrategy {
 	/** True when the frontier is wider than the beam (diverse exploration). */
 	shouldBranch(ctx: StrategyContext): boolean {
 		const cfg = configOf(this);
+		if (!ctx.graph) return false;
 		const frontier = ctx.graph.leaves(ctx.sessionId);
 		return frontier.length > cfg.beamWidth;
 	}
@@ -166,6 +169,7 @@ export class TreeOfThoughtStrategy implements IReasoningStrategy {
 	/** True when the best frontier score crosses the threshold OR scores plateau. */
 	shouldTerminate(ctx: StrategyContext): boolean {
 		const cfg = configOf(this);
+		if (!ctx.graph) return false;
 		const frontier = ctx.graph.leaves(ctx.sessionId);
 		const byKey = indexHistory(ctx.history);
 		const scored = scoreFrontier(frontier, byKey);

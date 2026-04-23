@@ -11,7 +11,7 @@ import {
 	createMetaThought,
 	MockHistoryManager,
 	createMockFormatter,
-} from './helpers/index.js';
+} from './helpers/factories.js';
 
 describe('factories', () => {
 	describe('createMetaThought', () => {

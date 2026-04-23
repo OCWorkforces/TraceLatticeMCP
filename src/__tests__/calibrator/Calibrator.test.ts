@@ -10,6 +10,7 @@ import type {
 	VerificationOutcome,
 } from '../../contracts/interfaces.js';
 import type { ThoughtType } from '../../core/reasoning.js';
+import { asSessionId, asThoughtId } from '../../contracts/ids.js';
 
 class MockOutcomeRecorder implements IOutcomeRecorder {
 	public readonly enabled = true;
@@ -41,14 +42,14 @@ function makeOutcome(
 	predicted: number,
 	actual: 0 | 1,
 	type: ThoughtType = 'hypothesis',
-	sessionId = 's1',
-	thoughtId = 't',
+	sessionId: string = 's1',
+	thoughtId: string = 't',
 	thoughtNumber = 1,
 ): Omit<VerificationOutcome, 'recordedAt'> {
 	return {
-		thoughtId,
+		thoughtId: asThoughtId(thoughtId),
 		thoughtNumber,
-		sessionId,
+		sessionId: asSessionId(sessionId),
 		predicted,
 		actual,
 		type,

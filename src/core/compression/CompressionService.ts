@@ -78,10 +78,10 @@ export class CompressionService {
 		const thoughts = this._lookupThoughts(sessionId, coveredIds);
 		const summary: Summary = {
 			id: generateUlid(),
-			sessionId,
+			sessionId: sessionId as Summary['sessionId'],
 			branchId,
-			rootThoughtId,
-			coveredIds,
+			rootThoughtId: rootThoughtId as Summary['rootThoughtId'],
+			coveredIds: coveredIds as Summary['coveredIds'],
 			coveredRange: this._coveredRange(thoughts),
 			topics: this._extractTopics(thoughts),
 			aggregateConfidence: this._meanConfidence(thoughts),
