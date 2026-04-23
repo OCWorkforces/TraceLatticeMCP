@@ -14,15 +14,19 @@ import { asSessionId, GLOBAL_SESSION_ID } from '../contracts/ids.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
 import type { ISuspensionStore, SuspensionRecord } from '../contracts/suspension.js';
 import type { IReasoningStrategy, StrategyDecision } from '../contracts/strategy.js';
-import type { FeatureFlags } from '../contracts/features.js';
+import { DEFAULT_FLAGS, type FeatureFlags } from '../contracts/features.js';
+import type { ISessionLock, IToolRegistry } from '../contracts/interfaces.js';
 import {
 	InvalidBacktrackError,
 	InvalidToolCallError,
+	SequentialThinkingError,
 	SuspensionExpiredError,
 	SuspensionNotFoundError,
+	UnknownToolError,
 	ValidationError,
 } from '../errors.js';
-import { getErrorMessage } from '../errors.js';
+import { getErrorMessage, WARNING_CODES } from '../errors.js';
+import { enforceJsonShape, JsonShapeError } from '../sanitize.js';
 import { GraphView } from './graph/GraphView.js';
 import type { IHistoryManager } from './IHistoryManager.js';
 import { normalizeInput } from './InputNormalizer.js';
@@ -40,16 +44,6 @@ import type { CompressionService } from './compression/CompressionService.js';
  */
 type ResumableThought = ThoughtData & { _resumedFrom?: number };
 
-/** Default feature flags used when none are supplied to ThoughtProcessor. */
-const DEFAULT_FEATURES: FeatureFlags = {
-	dagEdges: true,
-	reasoningStrategy: 'sequential',
-	calibration: true,
-	compression: true,
-	toolInterleave: true,
-	newThoughtTypes: true,
-	outcomeRecording: true,
-};
 
 /**
  * The return type expected by MCP tool invocations.
@@ -117,6 +111,10 @@ export class ThoughtProcessor {
 	 * @param logger - Optional logger for diagnostics (defaults to NullLogger)
 	 * @param strategy - Reasoning strategy controlling next-action decisions (defaults to SequentialStrategy)
 	 * @param compressionService - Optional compression service for auto-compression on terminate
+	 * @param suspensionStore - Optional suspension store enabling tool interleave
+	 * @param toolRegistry - Optional tool registry for tool_name allowlist validation (required when toolInterleave is enabled)
+	 * @param features - Optional feature flags (defaults to DEFAULT_FLAGS — all opt-in flags off)
+	 * @param sessionLock - Optional per-session async lock; when provided, `process()` runs under it
 	 */
 	constructor(
 		private historyManager: IHistoryManager,
@@ -126,7 +124,9 @@ export class ThoughtProcessor {
 		private readonly strategy: IReasoningStrategy = new SequentialStrategy(),
 		private readonly _compressionService?: CompressionService,
 		private readonly _suspensionStore?: ISuspensionStore,
-		private readonly _features: FeatureFlags = DEFAULT_FEATURES
+		private readonly _toolRegistry?: IToolRegistry,
+		private readonly _features: FeatureFlags = DEFAULT_FLAGS,
+		private readonly _sessionLock?: ISessionLock,
 	) {
 		this._thoughtEvaluator = thoughtEvaluator;
 		this._logger = logger ?? new NullLogger();
@@ -244,6 +244,14 @@ export class ThoughtProcessor {
 	 * ```
 	 */
 	public async process(input: ThoughtData): Promise<CallToolResult> {
+		const lock = this._sessionLock;
+		if (lock) {
+			return lock.withLock(input.session_id, () => this._processInner(input));
+		}
+		return this._processInner(input);
+	}
+
+	private async _processInner(input: ThoughtData): Promise<CallToolResult> {
 		try {
 			// Normalize input to handle common LLM field name mistakes
 			const normalizedInput = normalizeInput(input);
@@ -359,7 +367,9 @@ export class ThoughtProcessor {
 						type: 'text' as const,
 						text: JSON.stringify(
 							{
+								...(error instanceof SequentialThinkingError && { code: error.code }),
 								error: getErrorMessage(error),
+								message: getErrorMessage(error),
 								status: 'failed',
 							},
 							null,
@@ -477,7 +487,7 @@ export class ThoughtProcessor {
 		if (input.thought_number > input.total_thoughts) {
 			const originalTotal = input.total_thoughts;
 			warnings.push(
-				`Auto-adjusted total_thoughts from ${originalTotal} to ${input.thought_number} to match thought_number`
+				`[${WARNING_CODES.TOTAL_THOUGHTS_ADJUSTED}] Auto-adjusted total_thoughts from ${originalTotal} to ${input.thought_number} to match thought_number`
 			);
 			this._logger.warn('Auto-adjusted total_thoughts to match thought_number', {
 				thought_number: input.thought_number,
@@ -628,10 +638,13 @@ export class ThoughtProcessor {
 				`Type '${t}' requires the newThoughtTypes feature flag. Set TRACELATTICE_FEATURES_NEW_THOUGHT_TYPES=true to enable it, or use '${ThoughtProcessor._getWorkaroundType(t)}' type as a workaround.`
 			);
 		}
-		if (t === 'tool_call' && !input.tool_name) {
-			throw new InvalidToolCallError(
-				'tool_call thought ' + input.thought_number + ' missing required tool_name'
-			);
+		if (t === 'tool_call') {
+			if (!input.tool_name) {
+				throw new InvalidToolCallError(
+					'tool_call thought ' + input.thought_number + ' missing required tool_name'
+				);
+			}
+			this._validateToolName(input.tool_name);
 		}
 		if (t === 'tool_observation' && !input.continuation_token) {
 			throw new ValidationError(
@@ -656,6 +669,28 @@ export class ThoughtProcessor {
 					'backtrack_target ' + input.backtrack_target + ' does not exist in session history'
 				);
 			}
+		}
+	}
+
+	/**
+	 * Validate a tool_call's tool_name against the configured allowlist.
+	 *
+	 * Fails closed: if no tool registry was wired, all tool_call invocations are
+	 * rejected. This prevents arbitrary tool name injection through the protocol.
+	 *
+	 * @param toolName - The tool name from the tool_call thought
+	 * @throws {UnknownToolError} When no registry is wired or the tool is not registered
+	 * @private
+	 */
+	private _validateToolName(toolName: string): void {
+		if (!this._toolRegistry) {
+			throw new UnknownToolError(
+				toolName,
+				`Tool '${toolName}' rejected: no tool registry configured. Tool interleave requires a registered allowlist.`
+			);
+		}
+		if (!this._toolRegistry.has(toolName)) {
+			throw new UnknownToolError(toolName);
 		}
 	}
 
@@ -702,6 +737,15 @@ export class ThoughtProcessor {
 	 * @private
 	 */
 	private _handleToolCall(input: ThoughtData, sessionId?: string): CallToolResult {
+		const args = input.tool_arguments ?? {};
+		try {
+			enforceJsonShape(args);
+		} catch (err) {
+			if (err instanceof JsonShapeError) {
+				throw new ValidationError('tool_arguments', err.reason);
+			}
+			throw err;
+		}
 		this.historyManager.addThought(input);
 		const record: SuspensionRecord = this._suspensionStore!.suspend({
 			sessionId: sessionId ? asSessionId(sessionId) : GLOBAL_SESSION_ID,
