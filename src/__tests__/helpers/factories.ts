@@ -1,4 +1,5 @@
 import type { ThoughtData } from '../../core/thought.js';
+import type { IToolRegistry } from '../../contracts/interfaces.js';
 import {
 	asSessionId,
 	asThoughtId,
@@ -254,5 +255,20 @@ export function createMockFormatter(): Pick<ThoughtFormatter, 'formatThought'> {
 			};
 			return JSON.stringify(result);
 		},
+	};
+}
+
+// === ToolRegistry Mock ===
+
+/**
+ * Create a mock IToolRegistry that allowlists the given tool names.
+ * When no names provided, defaults to a permissive 'test-tool' allowlist
+ * matching `createTestThought()`'s `available_mcp_tools`.
+ */
+export function createMockToolRegistry(allowedTools: string[] = ['test-tool']): IToolRegistry {
+	const set = new Set(allowedTools);
+	return {
+		has: (name: string): boolean => set.has(name),
+		list: (): string[] => Array.from(set),
 	};
 }
