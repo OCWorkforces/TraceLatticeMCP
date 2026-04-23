@@ -14,6 +14,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
  */
 interface RequestCtx {
 	requestId: string;
+	owner?: string;
 }
 
 /**
@@ -31,4 +32,28 @@ const store = new AsyncLocalStorage<RequestCtx>();
  */
 export function getRequestId(): string | undefined {
 	return store.getStore()?.requestId;
+}
+
+/**
+ * Run a function with the given request context. The context propagates
+ * across async boundaries via AsyncLocalStorage.
+ *
+ * @param ctx - Request context to install (requestId, optional owner)
+ * @param fn - Function to execute within the context
+ * @returns The return value of `fn`
+ */
+export function runWithContext<T>(ctx: RequestCtx, fn: () => T): T {
+	return store.run(ctx, fn);
+}
+
+/**
+ * Get the current owner identifier from context.
+ *
+ * Returns undefined when called outside of a runWithContext() call or when
+ * the context did not specify an owner (e.g. stdio transport).
+ *
+ * @returns The current owner or undefined
+ */
+export function getOwner(): string | undefined {
+	return store.getStore()?.owner;
 }

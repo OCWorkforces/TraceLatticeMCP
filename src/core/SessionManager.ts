@@ -10,9 +10,11 @@
 import type { Logger } from '../logger/StructuredLogger.js';
 import { NullLogger } from '../logger/NullLogger.js';
 
-/** Minimal session contract — anything with a `lastAccessedAt` timestamp. */
+/** Minimal session contract — anything with a `lastAccessedAt` timestamp and optional owner. */
 export interface SessionLike {
 	lastAccessedAt: number;
+	/** Owner identifier for per-owner LRU quota. Undefined for stdio/global sessions. */
+	owner?: string;
 }
 
 /** Configuration options for SessionManager. */
@@ -25,6 +27,8 @@ export interface SessionManagerConfig {
 	cleanupIntervalMs: number;
 	/** Returns the current MAX_SESSIONS limit (callable so tests can mutate). */
 	getMaxSessions: () => number;
+	/** Maximum sessions per owner (per-owner LRU bucket). @default 50 */
+	maxSessionsPerOwner?: number;
 	logger?: Logger;
 }
 
@@ -37,6 +41,7 @@ export class SessionManager<S extends SessionLike> {
 	private readonly _sessionTtlMs: number;
 	private readonly _cleanupIntervalMs: number;
 	private readonly _getMaxSessions: () => number;
+	private readonly _maxSessionsPerOwner: number;
 	private readonly _logger: Logger;
 	private _cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -45,6 +50,7 @@ export class SessionManager<S extends SessionLike> {
 		this._sessionTtlMs = config.sessionTtlMs;
 		this._cleanupIntervalMs = config.cleanupIntervalMs;
 		this._getMaxSessions = config.getMaxSessions;
+		this._maxSessionsPerOwner = config.maxSessionsPerOwner ?? 50;
 		this._logger = config.logger ?? new NullLogger();
 	}
 
@@ -95,10 +101,53 @@ export class SessionManager<S extends SessionLike> {
 	}
 
 	/**
-	 * Evicts oldest sessions when the configured maximum is exceeded (LRU).
-	 * The default session is never evicted.
+	 * Evicts oldest sessions when the configured maximums are exceeded.
+	 *
+	 * Two-stage policy:
+	 * 1. Per-owner LRU: each owner is capped at `maxSessionsPerOwner`. Sessions
+	 *    without an owner (stdio path) are exempt from per-owner quota.
+	 * 2. Global LRU cap: enforces overall `getMaxSessions()` limit.
+	 *
+	 * The default session is never evicted at either stage.
 	 */
 	public evictExcessSessions(sessions: Map<string, S>): void {
+		this._evictPerOwnerOverflow(sessions);
+		this._evictGlobalOverflow(sessions);
+	}
+
+	/** Per-owner quota enforcement: oldest sessions per owner bucket are evicted. */
+	private _evictPerOwnerOverflow(sessions: Map<string, S>): void {
+		const ownerCounts = new Map<string, number>();
+		for (const [key, session] of sessions) {
+			if (key === this._defaultSessionId) continue;
+			if (session.owner === undefined) continue;
+			ownerCounts.set(session.owner, (ownerCounts.get(session.owner) ?? 0) + 1);
+		}
+
+		const maxPerOwner = this._maxSessionsPerOwner;
+		for (const [owner, count] of ownerCounts) {
+			if (count <= maxPerOwner) continue;
+			const ownerSessions: Array<[string, S]> = [];
+			for (const [key, session] of sessions) {
+				if (key === this._defaultSessionId) continue;
+				if (session.owner !== owner) continue;
+				ownerSessions.push([key, session]);
+			}
+			ownerSessions.sort(([, a], [, b]) => a.lastAccessedAt - b.lastAccessedAt);
+			const toEvict = count - maxPerOwner;
+			for (let i = 0; i < toEvict && i < ownerSessions.length; i++) {
+				const [evictKey] = ownerSessions[i]!;
+				sessions.delete(evictKey);
+				this._logger.info('Evicted oldest session (per-owner LRU)', {
+					sessionId: evictKey,
+					owner,
+				});
+			}
+		}
+	}
+
+	/** Global LRU cap enforcement: evicts oldest until under `getMaxSessions()`. */
+	private _evictGlobalOverflow(sessions: Map<string, S>): void {
 		const max = this._getMaxSessions();
 		while (sessions.size > max) {
 			let oldestKey: string | null = null;
@@ -112,7 +161,7 @@ export class SessionManager<S extends SessionLike> {
 			}
 			if (oldestKey !== null) {
 				sessions.delete(oldestKey);
-				this._logger.info('Evicted oldest session (LRU)', { sessionId: oldestKey });
+				this._logger.info('Evicted oldest session (global LRU)', { sessionId: oldestKey });
 			} else {
 				break;
 			}

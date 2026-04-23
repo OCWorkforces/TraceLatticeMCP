@@ -111,6 +111,12 @@ export interface ServerConfigOptions {
 	 * @default 60000
 	 */
 	toolInterleaveSweepMs?: number;
+
+	/**
+	 * Maximum sessions per owner. Prevents one user from consuming all session slots.
+	 * @default 50
+	 */
+	maxSessionsPerOwner?: number;
 }
 
 /**
@@ -178,6 +184,9 @@ export class ServerConfig {
 	/** Sweep interval in milliseconds for SuspensionStore expiration cleanup. */
 	public toolInterleaveSweepMs: number;
 
+	/** Maximum sessions per owner (LRU per-owner bucket). */
+	public maxSessionsPerOwner: number;
+
 	/**
 	 * Creates a new ServerConfig instance with validation.
 	 *
@@ -217,6 +226,7 @@ export class ServerConfig {
 			60000,
 			'toolInterleaveSweepMs'
 		);
+		this.maxSessionsPerOwner = this.validateMaxSessionsPerOwner(options.maxSessionsPerOwner);
 	}
 
 	/**
@@ -448,6 +458,31 @@ export class ServerConfig {
 	}
 
 	/**
+	 * Validates the max sessions per owner value.
+	 * @param value - The value to validate
+	 * @returns The validated value or default (50)
+	 * @private
+	 */
+	private validateMaxSessionsPerOwner(value?: number): number {
+		const defaultValue = 50;
+		if (value === undefined || value === null) return defaultValue;
+		if (typeof value !== 'number' || !Number.isFinite(value)) {
+			throw new ConfigurationError(
+				`maxSessionsPerOwner must be a finite number, got ${value}`
+			);
+		}
+		if (value < 1) {
+			throw new ConfigurationError(`maxSessionsPerOwner must be at least 1, got ${value}`);
+		}
+		if (value > 10000) {
+			throw new ConfigurationError(
+				`maxSessionsPerOwner must not exceed 10000, got ${value}`
+			);
+		}
+		return value;
+	}
+
+	/**
 	 * Converts the configuration to a plain object.
 	 *
 	 * Useful for serialization, logging, or when a plain object representation
@@ -476,6 +511,7 @@ export class ServerConfig {
 			features: this.features,
 			toolInterleaveTtlMs: this.toolInterleaveTtlMs,
 			toolInterleaveSweepMs: this.toolInterleaveSweepMs,
+			maxSessionsPerOwner: this.maxSessionsPerOwner,
 		};
 	}
 }
