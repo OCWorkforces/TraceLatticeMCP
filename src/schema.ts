@@ -183,10 +183,6 @@ export const ToolRecommendationSchema = v.object({
 	suggested_inputs: v.optional(
 		v.pipe(
 			v.record(v.string(), v.union([v.string(), v.number(), v.boolean(), v.null()])),
-			v.check(
-				(value) => Object.keys(value).length <= 32,
-				'suggested_inputs exceeds max keys of 32',
-			),
 			v.description('Optional suggested parameters (flat key-value pairs only)')
 		)
 	),
@@ -341,10 +337,6 @@ export const PartialToolRecommendationSchema = v.object({
 	suggested_inputs: v.optional(
 		v.pipe(
 			v.record(v.string(), v.union([v.string(), v.number(), v.boolean(), v.null()])),
-			v.check(
-				(value) => Object.keys(value).length <= 32,
-				'suggested_inputs exceeds max keys of 32',
-			),
 			v.description('Optional suggested parameters (flat key-value pairs only)')
 		)
 	),
