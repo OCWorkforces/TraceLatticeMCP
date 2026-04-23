@@ -7,7 +7,7 @@
 /**
  * Feature flags for opt-in/out TraceLattice capabilities.
  *
- * All flags default to true (enabled).
+ * All flags default to true (enabled). Opt-out via configuration.
  */
 export interface FeatureFlags {
 	/** Enable DAG edges between thoughts. @default true */
@@ -32,7 +32,7 @@ export interface FeatureFlags {
 export type FeatureFlagKey = keyof FeatureFlags;
 
 /**
- * Default feature flag values. All features enabled.
+ * Default feature flag values. All features enabled by default.
  */
 export const DEFAULT_FLAGS: FeatureFlags = {
 	dagEdges: true,
