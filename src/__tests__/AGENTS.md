@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 2014 tests across 75 files, 16 skipped for known gaps. Coverage gates: branches 90%, functions 60%, lines 65%, statements 65%.
+Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 2100 tests across 80 files, 16 skipped for known gaps. Coverage gates: branches 90%, functions 60%, lines 65%, statements 65%.
 
 ## STRUCTURE
 
@@ -42,4 +42,4 @@ eval/fixtures/   scenarios.ts (10 canonical eval scenarios)
 
 `helpers/timers.ts` wraps Vitest timer APIs:
 - `useFakeTimers()` / `useRealTimers()`: pair them in `beforeEach` / `afterEach`.
-- `advanceTime(ms)`: thin wrapper over `vi.advanceTimersByTimeAsync` that also flushes microtasks, keeping suspension TTL and persistence buffer flush tests deterministic.
+- `advanceTime(ms)`: thin wrapper over `vi.advanceTimersByTime` (synchronous), keeping suspension TTL and persistence buffer flush tests deterministic.
