@@ -1,6 +1,6 @@
 # SRC
 
-**Updated:** 2026-04-23 | **Parent:** ../AGENTS.md
+**Updated:** 2026-04-24 | **Parent:** ../AGENTS.md
 
 ## OVERVIEW
 
@@ -10,11 +10,11 @@ TypeScript source root. Domain logic, transports, DI, infrastructure. Entry: `cl
 
 ```
 src/
-├── lib.ts            # ToolAwareSequentialThinkingServer, DI wiring, factories (577L) + public API entry
+├── lib.ts            # ToolAwareSequentialThinkingServer, DI wiring, factories (659L) + public API entry
 ├── cli.ts            # CLI bin entry (tracelattice)
-├── schema.ts         # Valibot schemas + TOOL_DESCRIPTION (718L)
-├── ServerConfig.ts   # Config validation, 10 fields + 7 feature flags (488L)
-├── errors.ts         # 20 error subclasses + ERROR_CODES const (22 codes) + getErrorMessage helper (748L)
+├── schema.ts         # Valibot schemas + TOOL_DESCRIPTION (724L)
+├── ServerConfig.ts   # Config validation, 10 fields + 7 feature flags (517L)
+├── errors.ts         # 20 error subclasses + ERROR_CODES const (22 codes) + getErrorMessage helper (829L)
 ├── core/             # Domain (13 files, 5 subsystems) — has AGENTS.md
 │   ├── graph/        # DAG edges: Edge, EdgeStore, GraphView
 │   ├── compression/  # Branch rollup + sliding-window dehydration
@@ -59,4 +59,4 @@ src/
 - **Subdirs with own AGENTS.md** (read first before navigating): `core/`, `core/evaluator/`, `transport/`, `persistence/`, `contracts/`, `__tests__/`.
 - **Coupling rule**: Cross-module type imports go through `contracts/`. Exceptions: `IHistoryManager` and `ThoughtData` live in `core/` (domain primitives).
 - **Layered**: 9 layers in `.sentrux/rules.toml` (types → crosscutting → config → core → domain → infrastructure → di → app → cli). 6 forbidden boundaries.
-- **Large files**: `schema.ts` (718L), `errors.ts` (748L), `lib.ts` (577L), `ServerConfig.ts` (488L). Split cautiously; risk public API churn.
+- **Large files**: `errors.ts` (829L), `schema.ts` (724L), `lib.ts` (659L), `ServerConfig.ts` (517L). Split cautiously; risk public API churn.
