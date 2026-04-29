@@ -1,6 +1,6 @@
 # PERSISTENCE MODULE
 
-**Updated:** 2026-04-18
+**Updated:** 2026-04-29
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW
@@ -43,5 +43,6 @@ persistence/
 
 - `HistoryManager._loadFromPersistence()` iterates **all** sessions returned by `listEdgeSessions()`, not just `__global__`.
 - `HistoryManager._flushEdges()` writes per-session, looping `_sessions.keys()` plus `DEFAULT_SESSION` (`'__global__'`).
-- Write buffering + batched flush handled by `PersistenceBuffer` in `core/`, not here. Backends are dumb sinks.
+- Write buffering + batched flush handled by `PersistenceBuffer` in `core/`, not here. Backends are dumb sinks (no buffering, no batching, no scheduling).
 - `clear()` is destructive across both thoughts and edges; tests rely on this.
+- `JSON.parse()` results are narrowed via `as unknown as T` (explicit double-cast), not `as T` directly — keeps deserialization type-safe and avoids silent type widening.

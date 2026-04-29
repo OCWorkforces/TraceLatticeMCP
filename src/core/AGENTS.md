@@ -44,7 +44,9 @@ Reasoning engine: thought ingest → graph mutation → quality signals → stra
 ## KEY INTERFACES
 
 - `IHistoryManager` (8 methods + session lifecycle): contract for the coordinator
-- `ThoughtData`: 11 optional reasoning fields + `retracted: boolean` (logical retraction via `backtrack`). Uses branded ID types (`ThoughtId`, `SessionId`, `SuspensionToken`) from `contracts/ids.ts`.
+- `ThoughtData`: 11 optional reasoning fields + `retracted: boolean` (logical retraction via `backtrack`). Now derived from `v.InferOutput<SequentialThinkingSchema>` (single source of truth). Uses branded ID types (`ThoughtId`, `SessionId`, `SuspensionToken`, `BranchId`) from `contracts/ids.ts`.
+- `ValidatedThought` (`thought.ts`): discriminated union over `kind` with 7 variants — `ToolCallThought`, `ToolObservationThought`, `BacktrackThought`, `VerificationThought`, `CritiqueThought`, `SynthesisThought`, `BaseThought`. Returned by `_validateNewTypes` so handlers no longer use `!` non-null assertions.
+- `BranchId` (branded): keys `Map<BranchId, ThoughtData[]>` for branch storage. Imported from `contracts/ids.ts`.
 - `ThoughtType`: 11-variant union. Flag gates:
   - `newThoughtTypes`: `assumption`, `decomposition`, `backtrack`
   - `toolInterleave`: `tool_call`, `tool_observation`
@@ -61,3 +63,6 @@ Reasoning engine: thought ingest → graph mutation → quality signals → stra
 - `generateUlid` is timestamp-base36 + random hex. Not a real ULID. Don't rename.
 - `HistoryManager.clear()` enforces ownership via `_getSession()` — cross-owner `reset_state` throws `SessionAccessDeniedError`. Stdio path (no owner) is unrestricted.
 - Input sanitization has two layers: `sanitizeStepField` (urgency phrases + HTML + control chars + length cap) for step-level and reasoning fields, and `sanitizeRationale` (same + 2000-char cap) for tool/skill recommendation rationales. Both use `stripUrgencyPhrases` internally.
+- `_validateNewTypes` returns a `ValidatedThought` discriminated union — `_handleToolCall` / `_handleToolObservation` / backtrack handlers consume the narrowed variant directly. No more `!` assertions in processor branches.
+- `_hintCooldowns` is typed `Map<SessionId, Map<PatternName, number>>` (inner key is `PatternName` from `reasoning.ts`, not raw string).
+- `GLOBAL_SESSION_ID` constant (in `SessionManager` / id helpers) replaces the `'__global__'` literal previously sprinkled across session code. Always use the constant.
