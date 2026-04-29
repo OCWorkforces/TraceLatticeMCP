@@ -1,9 +1,11 @@
+import { asBranchId } from '../../contracts/ids.js';
 /**
  * Tests for session ownership tracking on HistoryManager.
  *
  * WU-3.1: Bind each session_id to an owner identifier on first creation.
  * Reject cross-owner access. Stdio path (no owner) stays unaffected.
  */
+import { asSessionId } from '../../contracts/ids.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { runWithContext } from '../../context/RequestContext.js';
@@ -27,14 +29,14 @@ describe('HistoryManager — session ownership', () => {
 			hm.addThought(createTestThought({ session_id: 'session-A', thought: 'a' }));
 			hm.addThought(createTestThought({ session_id: 'session-B', thought: 'b' }));
 
-			expect(hm.getHistoryLength('session-A')).toBe(1);
-			expect(hm.getHistoryLength('session-B')).toBe(1);
+			expect(hm.getHistoryLength(asSessionId('session-A'))).toBe(1);
+			expect(hm.getHistoryLength(asSessionId('session-B'))).toBe(1);
 		});
 
 		it('does not bind an owner when accessed without context', () => {
 			hm.addThought(createTestThought({ session_id: 's1' }));
 			// Subsequent stdio access still works
-			expect(() => hm.getHistory('s1')).not.toThrow();
+			expect(() => hm.getHistory(asSessionId('s1'))).not.toThrow();
 		});
 	});
 
@@ -46,7 +48,7 @@ describe('HistoryManager — session ownership', () => {
 
 			runWithContext({ requestId: 'r2', owner: 'user-A' }, () => {
 				hm.addThought(createTestThought({ session_id: 's1', thought: 'a2' }));
-				expect(hm.getHistoryLength('s1')).toBe(2);
+				expect(hm.getHistoryLength(asSessionId('s1'))).toBe(2);
 			});
 		});
 
@@ -57,7 +59,7 @@ describe('HistoryManager — session ownership', () => {
 
 			expect(() =>
 				runWithContext({ requestId: 'r2', owner: 'user-B' }, () => {
-					hm.getHistory('s1');
+					hm.getHistory(asSessionId('s1'));
 				}),
 			).toThrow(SessionAccessDeniedError);
 		});
@@ -69,7 +71,7 @@ describe('HistoryManager — session ownership', () => {
 
 			try {
 				runWithContext({ requestId: 'r2', owner: 'user-B' }, () => {
-					hm.getHistory('s1');
+					hm.getHistory(asSessionId('s1'));
 				});
 				expect.fail('expected SessionAccessDeniedError to be thrown');
 			} catch (err) {
@@ -114,13 +116,13 @@ describe('HistoryManager — session ownership', () => {
 			});
 
 			runWithContext({ requestId: 'r2', owner: 'user-A' }, () => {
-				expect(hm.getHistoryLength('s1')).toBe(1);
-				expect(hm.getHistoryLength('s2')).toBe(1);
+				expect(hm.getHistoryLength(asSessionId('s1'))).toBe(1);
+				expect(hm.getHistoryLength(asSessionId('s2'))).toBe(1);
 			});
 
 			expect(() =>
 				runWithContext({ requestId: 'r3', owner: 'user-B' }, () => {
-					hm.getHistory('s1');
+					hm.getHistory(asSessionId('s1'));
 				}),
 			).toThrow(SessionAccessDeniedError);
 		});
@@ -128,19 +130,19 @@ describe('HistoryManager — session ownership', () => {
 		it('all owner-aware read methods enforce ownership', () => {
 			runWithContext({ requestId: 'r1', owner: 'user-A' }, () => {
 				hm.addThought(createTestThought({ session_id: 's1' }));
-				hm.registerBranch('s1', 'feature-x');
+				hm.registerBranch(asSessionId('s1'), asBranchId('feature-x'));
 			});
 
 			runWithContext({ requestId: 'r2', owner: 'user-B' }, () => {
-				expect(() => hm.getHistory('s1')).toThrow(SessionAccessDeniedError);
-				expect(() => hm.getHistoryLength('s1')).toThrow(SessionAccessDeniedError);
-				expect(() => hm.getBranches('s1')).toThrow(SessionAccessDeniedError);
-				expect(() => hm.getBranchIds('s1')).toThrow(SessionAccessDeniedError);
-				expect(() => hm.branchExists('s1', 'feature-x')).toThrow(SessionAccessDeniedError);
-				expect(() => hm.getAvailableMcpTools('s1')).toThrow(SessionAccessDeniedError);
-				expect(() => hm.getAvailableSkills('s1')).toThrow(SessionAccessDeniedError);
-				expect(() => hm.getBranch('feature-x', 's1')).toThrow(SessionAccessDeniedError);
-				expect(() => hm.registerBranch('s1', 'other')).toThrow(SessionAccessDeniedError);
+				expect(() => hm.getHistory(asSessionId('s1'))).toThrow(SessionAccessDeniedError);
+				expect(() => hm.getHistoryLength(asSessionId('s1'))).toThrow(SessionAccessDeniedError);
+				expect(() => hm.getBranches(asSessionId('s1'))).toThrow(SessionAccessDeniedError);
+				expect(() => hm.getBranchIds(asSessionId('s1'))).toThrow(SessionAccessDeniedError);
+				expect(() => hm.branchExists(asSessionId('s1'), asBranchId('feature-x'))).toThrow(SessionAccessDeniedError);
+				expect(() => hm.getAvailableMcpTools(asSessionId('s1'))).toThrow(SessionAccessDeniedError);
+				expect(() => hm.getAvailableSkills(asSessionId('s1'))).toThrow(SessionAccessDeniedError);
+				expect(() => hm.getBranch(asBranchId('feature-x'), asSessionId('s1'))).toThrow(SessionAccessDeniedError);
+				expect(() => hm.registerBranch(asSessionId('s1'), asBranchId('other'))).toThrow(SessionAccessDeniedError);
 			});
 		});
 
@@ -153,13 +155,13 @@ describe('HistoryManager — session ownership', () => {
 
 				expect(() =>
 					runWithContext({ requestId: 'r2', owner: 'user-B' }, () => {
-						hm.clear('s1');
+						hm.clear(asSessionId('s1'));
 					}),
 				).toThrow(SessionAccessDeniedError);
 
 				// Session still exists with original data under the original owner
 				runWithContext({ requestId: 'r3', owner: 'user-A' }, () => {
-					expect(hm.getHistoryLength('s1')).toBe(2);
+					expect(hm.getHistoryLength(asSessionId('s1'))).toBe(2);
 				});
 			});
 
@@ -170,9 +172,9 @@ describe('HistoryManager — session ownership', () => {
 				});
 
 				runWithContext({ requestId: 'r2', owner: 'user-A' }, () => {
-					expect(() => hm.clear('s1')).not.toThrow();
+					expect(() => hm.clear(asSessionId('s1'))).not.toThrow();
 					// Session is recreated empty on next access
-					expect(hm.getHistoryLength('s1')).toBe(0);
+					expect(hm.getHistoryLength(asSessionId('s1'))).toBe(0);
 				});
 			});
 
@@ -183,14 +185,14 @@ describe('HistoryManager — session ownership', () => {
 
 				expect(() =>
 					runWithContext({ requestId: 'r2', owner: 'user-B' }, () => {
-						hm.clearSession('s1');
+						hm.clearSession(asSessionId('s1'));
 					}),
 				).toThrow(SessionAccessDeniedError);
 			});
 
 			it('stdio path: clear(sessionId) works without owner in context', () => {
 				hm.addThought(createTestThought({ session_id: 's1' }));
-				expect(() => hm.clear('s1')).not.toThrow();
+				expect(() => hm.clear(asSessionId('s1'))).not.toThrow();
 			});
 		});
 	});
@@ -202,13 +204,13 @@ describe('HistoryManager — session ownership', () => {
 
 			// First owner-aware access binds the owner
 			runWithContext({ requestId: 'r1', owner: 'user-A' }, () => {
-				expect(hm.getHistoryLength('s1')).toBe(1);
+				expect(hm.getHistoryLength(asSessionId('s1'))).toBe(1);
 			});
 
 			// Subsequent different owner is denied
 			expect(() =>
 				runWithContext({ requestId: 'r2', owner: 'user-B' }, () => {
-					hm.getHistory('s1');
+					hm.getHistory(asSessionId('s1'));
 				}),
 			).toThrow(SessionAccessDeniedError);
 		});
@@ -219,8 +221,8 @@ describe('HistoryManager — session ownership', () => {
 			});
 
 			// No-context access (stdio) reads the session without rejection
-			expect(() => hm.getHistory('s1')).not.toThrow();
-			expect(hm.getHistoryLength('s1')).toBe(1);
+			expect(() => hm.getHistory(asSessionId('s1'))).not.toThrow();
+			expect(hm.getHistoryLength(asSessionId('s1'))).toBe(1);
 		});
 	});
 });

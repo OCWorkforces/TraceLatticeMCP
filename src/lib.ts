@@ -5,6 +5,7 @@
 import { EventEmitter } from 'node:events';
 import * as v from 'valibot';
 import { ThoughtData } from './core/thought.js';
+import { asBranchId, type BranchId } from './contracts/ids.js';
 import { SEQUENTIAL_THINKING_TOOL, SequentialThinkingSchema } from './schema.js';
 import { IDisposable } from './types/disposable.js';
 import { getErrorMessage } from './errors.js';
@@ -17,9 +18,7 @@ import { HistoryManager } from './core/HistoryManager.js';
 import { EdgeStore } from './core/graph/EdgeStore.js';
 import { InMemorySummaryStore } from './core/compression/InMemorySummaryStore.js';
 import { CompressionService } from './core/compression/CompressionService.js';
-import type { ISummaryStore } from './contracts/summary.js';
 import { InMemorySuspensionStore } from './core/tools/InMemorySuspensionStore.js';
-import type { ISuspensionStore } from './contracts/suspension.js';
 import { ThoughtEvaluator } from './core/ThoughtEvaluator.js';
 import { Calibrator } from './core/evaluator/Calibrator.js';
 import { OutcomeRecorder } from './core/reasoning/OutcomeRecorder.js';
@@ -27,7 +26,6 @@ import { createReasoningStrategy } from './core/reasoning/strategies/StrategyFac
 import { ThoughtFormatter } from './core/ThoughtFormatter.js';
 import { ThoughtProcessor, type CallToolResult } from './core/ThoughtProcessor.js';
 import { SessionLock } from './core/SessionLock.js';
-import type { ISessionLock } from './contracts/interfaces.js';
 import { Container } from './di/Container.js';
 import { StructuredLogger } from './logger/StructuredLogger.js';
 import { Metrics } from './metrics/metrics.impl.js';
@@ -35,12 +33,10 @@ import type { PersistenceBackend } from './contracts/PersistenceBackend.js';
 import { createPersistenceBackend } from './persistence/PersistenceFactory.js';
 import { SkillRegistry } from './registry/SkillRegistry.js';
 import { ToolRegistry } from './registry/ToolRegistry.js';
-import type { IToolRegistry } from './contracts/interfaces.js';
 import { ServerConfig } from './ServerConfig.js';
 import type { SseTransportOptions } from './transport/SseTransport.js';
 import { SkillWatcher } from './watchers/SkillWatcher.js';
 import { ToolWatcher } from './watchers/ToolWatcher.js';
-import type { IReasoningStrategy } from './contracts/strategy.js';
 
 export interface ServerOptions {
 	maxHistorySize?: number;
@@ -260,19 +256,19 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 		this._container = options.container;
 
 		// Resolve dependencies from container
-		this._logger = this._container.resolve<StructuredLogger>('Logger');
-		this._historyManager = this._container.resolve<HistoryManager>('HistoryManager');
-		this._thoughtProcessor = this._container.resolve<ThoughtProcessor>('ThoughtProcessor');
-		this._metrics = this._container.resolve<Metrics>('Metrics');
-		this._config = this._container.resolve<ServerConfig>('Config');
+		this._logger = this._container.resolve('Logger');
+		this._historyManager = this._container.resolve('HistoryManager');
+		this._thoughtProcessor = this._container.resolve('ThoughtProcessor');
+		this._metrics = this._container.resolve('Metrics');
+		this._config = this._container.resolve('Config');
 
 		// Expose managers as public properties (recommended API)
 		this.history = this._historyManager;
 
 		// Wire up persistence error event emitter
 		this._historyManager.setEventEmitter(this);
-		this.tools = this._container.resolve<ToolRegistry>('ToolRegistry');
-		this.skills = this._container.resolve<SkillRegistry>('SkillRegistry');
+		this.tools = this._container.resolve('ToolRegistry');
+		this.skills = this._container.resolve('SkillRegistry');
 		this.config = this._config;
 
 		// Always include the sequential thinking tool
@@ -370,10 +366,10 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 
 		// Register CompressionService as a lazy singleton (always registered; flag gates invocation)
 		container.register('compressionService', () => {
-			const historyManager = container.resolve<HistoryManager>('HistoryManager');
-			const edgeStore = container.resolve<EdgeStore>('EdgeStore');
-			const summaryStore = container.resolve<ISummaryStore>('summaryStore');
-			const log = container.resolve<StructuredLogger>('Logger');
+			const historyManager = container.resolve('HistoryManager');
+			const edgeStore = container.resolve('EdgeStore');
+			const summaryStore = container.resolve('summaryStore');
+			const log = container.resolve('Logger');
 			return new CompressionService({ historyManager, edgeStore, summaryStore, logger: log });
 		});
 
@@ -388,11 +384,11 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 
 		// Register HistoryManager with lazy initialization
 		container.register('HistoryManager', () => {
-			const cfg = container.resolve<ServerConfig>('Config');
-			const log = container.resolve<StructuredLogger>('Logger');
+			const cfg = container.resolve('Config');
+			const log = container.resolve('Logger');
 			const pers = container.resolve('Persistence') as PersistenceBackend | null;
-			const componentMetrics = container.resolve<Metrics>('Metrics');
-			const edgeStore = container.resolve<EdgeStore>('EdgeStore');
+			const componentMetrics = container.resolve('Metrics');
+			const edgeStore = container.resolve('EdgeStore');
 			return new HistoryManager({
 				maxHistorySize: cfg.maxHistorySize,
 				maxBranches: cfg.maxBranches,
@@ -435,19 +431,19 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 
 		// Register ThoughtProcessor
 		container.register('ThoughtProcessor', () => {
-			const history = container.resolve<HistoryManager>('HistoryManager');
-			const formatter = container.resolve<ThoughtFormatter>('ThoughtFormatter');
-			const evaluator = container.resolve<ThoughtEvaluator>('ThoughtEvaluator');
-			const log = container.resolve<StructuredLogger>('Logger');
-			const strategy = container.resolve<IReasoningStrategy>('reasoningStrategy');
+			const history = container.resolve('HistoryManager');
+			const formatter = container.resolve('ThoughtFormatter');
+			const evaluator = container.resolve('ThoughtEvaluator');
+			const log = container.resolve('Logger');
+			const strategy = container.resolve('reasoningStrategy');
 			const compressionService = config.features.compression
-				? container.resolve<CompressionService>('compressionService')
+				? container.resolve('compressionService')
 				: undefined;
 			const suspensionStore = config.features.toolInterleave
-				? container.resolve<ISuspensionStore>('suspensionStore')
+				? container.resolve('suspensionStore')
 				: undefined;
-			const toolRegistry = container.resolve<IToolRegistry>('ToolRegistry');
-			const sessionLock = container.resolve<ISessionLock>('sessionLock');
+			const toolRegistry = container.resolve('ToolRegistry');
+			const sessionLock = container.resolve('sessionLock');
 			return new ThoughtProcessor(
 				history,
 				formatter,
@@ -504,7 +500,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 	 * Get all branches from the history manager
 	 * @returns Record<string, ThoughtData[]> - Map of branch IDs to thought arrays
 	 */
-	public getBranches(): Record<string, ThoughtData[]> {
+	public getBranches(): Record<BranchId, ThoughtData[]> {
 		return this._historyManager.getBranches();
 	}
 
@@ -516,7 +512,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 			try {
 				this._historyManager.registerBranch(
 					thoughtInput.session_id,
-					thoughtInput.register_branch_id
+					asBranchId(thoughtInput.register_branch_id)
 				);
 			} catch (err) {
 				this._logger.warn('registerBranch skipped', {
@@ -547,7 +543,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 		// Stop suspension store sweeper if registered
 		if (this._config.features.toolInterleave && this._container.has('suspensionStore')) {
 			try {
-				const suspensionStore = this._container.resolve<ISuspensionStore>('suspensionStore');
+				const suspensionStore = this._container.resolve('suspensionStore');
 				suspensionStore.stop();
 			} catch (error) {
 				this._logger.error('Error stopping suspension store', {
@@ -566,7 +562,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 		}
 
 		// Close persistence backend if available
-		const persistence = this._container.resolve<PersistenceBackend | null>('Persistence');
+		const persistence = this._container.resolve('Persistence');
 		if (persistence) {
 			try {
 				await persistence.close();

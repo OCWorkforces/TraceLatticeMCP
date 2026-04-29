@@ -2,6 +2,7 @@ import type { ThoughtData } from '../core/thought.js';
 import type { Edge } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
 import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
+import { asBranchId, type BranchId } from '../contracts/ids.js';
 
 /**
  * Configuration options for MemoryPersistence.
@@ -58,17 +59,17 @@ export class MemoryPersistence implements PersistenceBackend {
 		return [...this._history];
 	}
 
-	public async saveBranch(branchId: string, thoughts: ThoughtData[]): Promise<void> {
+	public async saveBranch(branchId: BranchId, thoughts: ThoughtData[]): Promise<void> {
 		this._branches.set(branchId, [...thoughts]);
 	}
 
-	public async loadBranch(branchId: string): Promise<ThoughtData[] | undefined> {
+	public async loadBranch(branchId: BranchId): Promise<ThoughtData[] | undefined> {
 		const branch = this._branches.get(branchId);
 		return branch ? [...branch] : undefined;
 	}
 
-	public async listBranches(): Promise<string[]> {
-		return this.getBranchIds();
+	public async listBranches(): Promise<BranchId[]> {
+		return this.getBranchIds().map((id) => asBranchId(id));
 	}
 
 	/**

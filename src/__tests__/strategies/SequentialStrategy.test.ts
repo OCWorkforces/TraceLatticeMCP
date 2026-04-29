@@ -1,3 +1,4 @@
+import { asSessionId } from '../../contracts/ids.js';
 import { describe, it, expect } from 'vitest';
 import { SequentialStrategy } from '../../core/reasoning/strategies/SequentialStrategy.js';
 import { EdgeStore } from '../../core/graph/EdgeStore.js';
@@ -7,6 +8,7 @@ import type { StrategyContext } from '../../contracts/strategy.js';
 import type { ThoughtData } from '../../core/thought.js';
 import type { ReasoningStats } from '../../core/reasoning.js';
 
+import { asBranchId } from '../../contracts/ids.js';
 function makeStats(): ReasoningStats {
 	return {
 		total_thoughts: 0,
@@ -37,7 +39,7 @@ function makeStats(): ReasoningStats {
 function makeContext(thought: ThoughtData): StrategyContext {
 	const store = new EdgeStore();
 	return {
-		sessionId: 'test-session',
+		sessionId: asSessionId('test-session'),
 		history: [thought],
 		graph: new GraphView(store),
 		stats: makeStats(),
@@ -84,7 +86,7 @@ describe('SequentialStrategy', () => {
 	describe('shouldBranch', () => {
 		it('returns true when both branch_from_thought and branch_id present', () => {
 			const ctx = makeContext(
-				createTestThought({ branch_from_thought: 1, branch_id: 'alt-1' })
+				createTestThought({ branch_from_thought: 1, branch_id: asBranchId('alt-1') })
 			);
 			expect(strategy.shouldBranch(ctx)).toBe(true);
 		});
@@ -95,7 +97,7 @@ describe('SequentialStrategy', () => {
 		});
 
 		it('returns false when only branch_id present', () => {
-			const ctx = makeContext(createTestThought({ branch_id: 'alt-1' }));
+			const ctx = makeContext(createTestThought({ branch_id: asBranchId('alt-1') }));
 			expect(strategy.shouldBranch(ctx)).toBe(false);
 		});
 
@@ -123,7 +125,7 @@ describe('SequentialStrategy', () => {
 				createTestThought({
 					next_thought_needed: true,
 					branch_from_thought: 2,
-					branch_id: 'b',
+					branch_id: asBranchId('b'),
 				})
 			);
 			const baseline = {

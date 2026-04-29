@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolAwareSequentialThinkingServer, createServer } from '../lib.js';
 
+import { asBranchId } from '../contracts/ids.js';
 describe('ToolAwareSequentialThinkingServer Integration', () => {
 	let server: ToolAwareSequentialThinkingServer;
 
@@ -37,11 +38,11 @@ describe('ToolAwareSequentialThinkingServer Integration', () => {
 			total_thoughts: 3,
 			next_thought_needed: true,
 			branch_from_thought: 1,
-			branch_id: 'branch-a',
+			branch_id: asBranchId('branch-a'),
 		});
 
 		const branches = server.history.getBranches();
-		expect(branches['branch-a']).toHaveLength(1);
+		expect(branches[asBranchId('branch-a')]).toHaveLength(1);
 	});
 
 	it('should handle thought revisions', async () => {

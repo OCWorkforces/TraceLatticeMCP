@@ -56,15 +56,15 @@ const RATE_LIMIT_REQUESTS = 100;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 
 export interface TransportOptions {
-	port?: number;
-	host?: string;
-	allowedHosts?: string[];
-	corsOrigin?: string;
-	enableCors?: boolean;
-	enableRateLimit?: boolean;
-	maxRequestsPerMinute?: number;
-	logger?: Logger;
-	healthChecker?: HealthChecker;
+	readonly port?: number;
+	readonly host?: string;
+	readonly allowedHosts?: string[];
+	readonly corsOrigin?: string;
+	readonly enableCors?: boolean;
+	readonly enableRateLimit?: boolean;
+	readonly maxRequestsPerMinute?: number;
+	readonly logger?: Logger;
+	readonly healthChecker?: HealthChecker;
 }
 
 export abstract class BaseTransport {

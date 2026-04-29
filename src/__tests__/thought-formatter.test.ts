@@ -3,6 +3,7 @@ import { ThoughtFormatter } from '../core/ThoughtFormatter.js';
 import type { ThoughtData } from '../core/thought.js';
 import type { StepRecommendation } from '../core/step.js';
 
+import { asBranchId } from '../contracts/ids.js';
 describe('ThoughtFormatter', () => {
 	let formatter: ThoughtFormatter;
 
@@ -108,7 +109,7 @@ describe('ThoughtFormatter', () => {
 					total_thoughts: 5,
 					next_thought_needed: true,
 					branch_from_thought: 2,
-					branch_id: 'alternative-1',
+					branch_id: asBranchId('alternative-1'),
 				};
 
 				const output = formatter.formatThought(data);

@@ -1,3 +1,4 @@
+import { asBranchId, type BranchId } from '../contracts/ids.js';
 /**
  * Integration tests for the full reasoning pipeline.
  *
@@ -51,17 +52,17 @@ class BranchAwareMockHistoryManager implements IHistoryManager {
 		return this._history.length;
 	}
 
-	getBranches(): Record<string, ThoughtData[]> {
-		return this._branches;
+	getBranches(): Record<BranchId, ThoughtData[]> {
+		return this._branches as Record<BranchId, ThoughtData[]>;
 	}
 
-	getBranchIds(): string[] {
-		return Object.keys(this._branches);
+	getBranchIds(): BranchId[] {
+		return Object.keys(this._branches) as BranchId[];
 	}
 
 	registerBranch(): void {}
 
-	branchExists(_sessionId: string | undefined, branchId: string): boolean {
+	branchExists(_sessionId: string | undefined, branchId: BranchId): boolean {
 		return branchId in this._branches;
 	}
 
@@ -172,7 +173,7 @@ describe('Reasoning Integration', () => {
 				total_thoughts: 4,
 				next_thought_needed: true,
 				branch_from_thought: 1,
-				branch_id: 'alt-approach',
+				branch_id: asBranchId('alt-approach'),
 				thought_type: 'hypothesis',
 				hypothesis_id: 'alt-hyp',
 			})
@@ -187,7 +188,7 @@ describe('Reasoning Integration', () => {
 				next_thought_needed: false,
 				thought_type: 'synthesis',
 				merge_from_thoughts: [1, 2],
-				merge_branch_ids: ['alt-approach'],
+				merge_branch_ids: ['alt-approach'].map(asBranchId),
 				synthesis_sources: [1, 2],
 			})
 		);

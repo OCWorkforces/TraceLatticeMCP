@@ -1,3 +1,4 @@
+import { asBranchId } from '../../contracts/ids.js';
 /**
  * Strategy Contract Tests — enforces purity constraints on all
  * {@link IReasoningStrategy} implementations (Oracle review concern C2).
@@ -15,6 +16,7 @@
  * @module __tests__/strategies/StrategyContract.test
  */
 
+import { asSessionId } from '../../contracts/ids.js';
 import { describe, it, expect } from 'vitest';
 import type { IReasoningStrategy, StrategyContext } from '../../contracts/strategy.js';
 import { SequentialStrategy } from '../../core/reasoning/strategies/SequentialStrategy.js';
@@ -55,7 +57,7 @@ function makeStats(): ReasoningStats {
 function makeContext(thought: ThoughtData): StrategyContext {
 	const store = new EdgeStore();
 	return {
-		sessionId: 'contract-session',
+		sessionId: asSessionId('contract-session'),
 		history: [thought],
 		graph: new GraphView(store),
 		stats: makeStats(),
@@ -124,7 +126,7 @@ describe('IReasoningStrategy contract (purity guarantees)', () => {
 					createTestThought({
 						next_thought_needed: true,
 						branch_from_thought: 1,
-						branch_id: 'alt',
+						branch_id: asBranchId('alt'),
 					}),
 				];
 				for (const t of cases) {
@@ -173,7 +175,7 @@ describe('IReasoningStrategy contract (purity guarantees)', () => {
 					createTestThought({
 						next_thought_needed: true,
 						branch_from_thought: 2,
-						branch_id: 'b1',
+						branch_id: asBranchId('b1'),
 					}),
 				];
 				for (const t of thoughts) {

@@ -325,9 +325,9 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 			}
 
 			// Parse JSON
-			let jsonRpcRequest;
+			let rawBody: unknown;
 			try {
-				jsonRpcRequest = JSON.parse(body);
+				rawBody = JSON.parse(body) as unknown;
 			} catch {
 				clearTimeout(timeout);
 				this._activeRequests--;
@@ -336,13 +336,15 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 			}
 
 			// Validate JSON-RPC schema
-			const parseResult = safeParse(JsonRpcRequestSchema, jsonRpcRequest);
+			const parseResult = safeParse(JsonRpcRequestSchema, rawBody);
+			const rawId = (rawBody && typeof rawBody === 'object' && 'id' in rawBody) ? (rawBody as { id?: unknown }).id ?? null : null;
 			if (!parseResult.success) {
 				clearTimeout(timeout);
 				this._activeRequests--;
-				this._sendJsonRpcError(res, 200, -32600, 'Invalid Request', jsonRpcRequest?.id ?? null, { data: parseResult.issues });
+				this._sendJsonRpcError(res, 200, -32600, 'Invalid Request', rawId as string | number | null, { data: parseResult.issues });
 				return;
 			}
+			const jsonRpcRequest = parseResult.output;
 
 			// Session management (stateful mode)
 			let sessionId: string | undefined;
@@ -369,7 +371,7 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 			const owner = this._stateful ? (sessionId ?? randomUUID()) : randomUUID();
 			const response = await runWithContext(
 				{ requestId: randomUUID(), owner },
-				() => this._mcpServer!.receive(jsonRpcRequest, { sessionInfo: {} })
+				() => this._mcpServer!.receive(jsonRpcRequest as Parameters<McpServer['receive']>[0], { sessionInfo: {} })
 			);
 			clearTimeout(timeout);
 			this._activeRequests--;

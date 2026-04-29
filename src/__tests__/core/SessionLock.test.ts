@@ -3,6 +3,7 @@
  * ThoughtProcessor.process() calls.
  */
 
+import { asSessionId } from '../../contracts/ids.js';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SessionLock } from '../../core/SessionLock.js';
 import { LockTimeoutError } from '../../errors.js';
@@ -20,7 +21,7 @@ describe('SessionLock', () => {
 			const inFlight = { value: 0, peak: 0 };
 
 			const tasks = Array.from({ length: 100 }, (_, i) =>
-				lock.withLock('s1', async () => {
+				lock.withLock(asSessionId('s1'), async () => {
 					inFlight.value++;
 					inFlight.peak = Math.max(inFlight.peak, inFlight.value);
 					await new Promise((r) => setTimeout(r, 0));
@@ -43,7 +44,7 @@ describe('SessionLock', () => {
 			for (let i = 0; i < 20; i++) {
 				if (i % 2 === 0) {
 					tasks.push(
-						lock.withLock('s1', async () => {
+						lock.withLock(asSessionId('s1'), async () => {
 							events.push(`add-start-${i}`);
 							await new Promise((r) => setTimeout(r, 0));
 							events.push(`add-end-${i}`);
@@ -51,7 +52,7 @@ describe('SessionLock', () => {
 					);
 				} else {
 					tasks.push(
-						lock.withLock('s1', async () => {
+						lock.withLock(asSessionId('s1'), async () => {
 							events.push(`clear-start-${i}`);
 							await new Promise((r) => setTimeout(r, 0));
 							events.push(`clear-end-${i}`);
@@ -80,10 +81,10 @@ describe('SessionLock', () => {
 			});
 
 			let bRan = false;
-			const a = lock.withLock('session-a', async () => {
+			const a = lock.withLock(asSessionId('session-a'), async () => {
 				await aGate;
 			});
-			const b = lock.withLock('session-b', async () => {
+			const b = lock.withLock(asSessionId('session-b'), async () => {
 				bRan = true;
 			});
 
@@ -106,7 +107,7 @@ describe('SessionLock', () => {
 				await aGate;
 				order.push('a-end');
 			});
-			const b = lock.withLock('', async () => {
+			const b = lock.withLock('' as unknown as Parameters<typeof lock.withLock>[0], async () => {
 				order.push('b');
 			});
 
@@ -130,13 +131,13 @@ describe('SessionLock', () => {
 
 		it('throws LockTimeoutError when previous holder never releases', async () => {
 			let _stuckResolve!: () => void;
-			const stuck = lock.withLock('s1', () =>
+			const stuck = lock.withLock(asSessionId('s1'), () =>
 				new Promise<void>((r) => {
 					_stuckResolve = r;
 				}),
 			);
 
-			const waiter = lock.withLock('s1', async () => 'never', 1000);
+			const waiter = lock.withLock(asSessionId('s1'), async () => 'never', 1000);
 			// Attach a no-op rejection handler synchronously to prevent the
 			// PromiseRejectionHandledWarning that fires when vitest's `rejects`
 			// matcher attaches its handler in a later microtask.
@@ -160,24 +161,24 @@ describe('SessionLock', () => {
 	describe('error handling', () => {
 		it('releases the lock when fn throws', async () => {
 			await expect(
-				lock.withLock('s1', async () => {
+				lock.withLock(asSessionId('s1'), async () => {
 					throw new Error('boom');
 				}),
 			).rejects.toThrow('boom');
 
 			// A subsequent call should immediately acquire.
 			let ran = false;
-			await lock.withLock('s1', async () => {
+			await lock.withLock(asSessionId('s1'), async () => {
 				ran = true;
 			});
 			expect(ran).toBe(true);
 		});
 
 		it('does not poison the chain when an earlier holder rejects', async () => {
-			const failing = lock.withLock('s1', async () => {
+			const failing = lock.withLock(asSessionId('s1'), async () => {
 				throw new Error('first failed');
 			});
-			const ok = lock.withLock('s1', async () => 'second-ok');
+			const ok = lock.withLock(asSessionId('s1'), async () => 'second-ok');
 
 			await expect(failing).rejects.toThrow('first failed');
 			await expect(ok).resolves.toBe('second-ok');
@@ -187,7 +188,7 @@ describe('SessionLock', () => {
 	describe('memory hygiene', () => {
 		it('purges the lock map after release', async () => {
 			expect(lock.size).toBe(0);
-			await lock.withLock('s1', async () => {
+			await lock.withLock(asSessionId('s1'), async () => {
 				expect(lock.size).toBe(1);
 			});
 			// Allow microtasks to flush the deletion.
@@ -199,7 +200,7 @@ describe('SessionLock', () => {
 		it('keeps map bounded under heavy churn across sessions', async () => {
 			await Promise.all(
 				Array.from({ length: 50 }, (_, i) =>
-					lock.withLock(`s-${i}`, async () => {
+					lock.withLock(asSessionId(`s-${i}`), async () => {
 						/* noop */
 					}),
 				),

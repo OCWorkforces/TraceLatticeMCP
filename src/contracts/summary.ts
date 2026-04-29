@@ -9,6 +9,7 @@
  */
 
 import type { Summary } from '../core/compression/Summary.js';
+import type { BranchId } from './ids.js';
 
 export type { Summary };
 
@@ -80,7 +81,7 @@ export interface ISummaryStore {
 	 * const altSummaries = store.forBranch('sess_42', 'alt-1');
 	 * ```
 	 */
-	forBranch(sessionId: string, branchId: string): readonly Summary[];
+	forBranch(sessionId: string, branchId: BranchId): readonly Summary[];
 
 	/**
 	 * Remove all summaries for a session. Other sessions are unaffected.

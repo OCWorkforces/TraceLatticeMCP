@@ -6,6 +6,7 @@ import type { SkillRecommendation } from '../types/skill.js';
 import type { ToolRecommendation } from '../types/tool.js';
 import { asSessionId } from '../contracts/ids.js';
 
+import { asBranchId } from '../contracts/ids.js';
 /**
  * Helper function for creating test thoughts with minimal required fields
  */
@@ -108,7 +109,7 @@ describe('tracelattice MCP Tool', () => {
 				is_revision: true,
 				revises_thought: 1,
 				branch_from_thought: 1,
-				branch_id: 'test-branch',
+				branch_id: asBranchId('test-branch'),
 				needs_more_thoughts: true,
 				current_step: createStepRecommendation({
 					recommended_tools: [
@@ -445,13 +446,13 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 3,
 					next_thought_needed: false,
 					branch_from_thought: 1,
-					branch_id: 'branch-a',
+					branch_id: asBranchId('branch-a'),
 				})
 			);
 
 			const branches = server.history.getBranches();
-			expect(branches['branch-a']).toHaveLength(1);
-			expect(branches['branch-a']![0]!.thought).toBe('Branch thought');
+			expect(branches[asBranchId('branch-a')]).toHaveLength(1);
+			expect(branches[asBranchId('branch-a')]![0]!.thought).toBe('Branch thought');
 		});
 
 		it('4.2 Multiple Branches - should validate creating multiple branches from different points', async () => {
@@ -473,7 +474,7 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 4,
 					next_thought_needed: true,
 					branch_from_thought: 1,
-					branch_id: 'branch-a',
+					branch_id: asBranchId('branch-a'),
 				})
 			);
 
@@ -484,15 +485,15 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 4,
 					next_thought_needed: false,
 					branch_from_thought: 1,
-					branch_id: 'branch-b',
+					branch_id: asBranchId('branch-b'),
 				})
 			);
 
 			const branches = server.history.getBranches();
-			expect(branches['branch-a']).toHaveLength(1);
-			expect(branches['branch-b']).toHaveLength(1);
-			expect(branches['branch-a']![0]!.thought).toBe('Branch A thought');
-			expect(branches['branch-b']![0]!.thought).toBe('Branch B thought');
+			expect(branches[asBranchId('branch-a')]).toHaveLength(1);
+			expect(branches[asBranchId('branch-b')]).toHaveLength(1);
+			expect(branches[asBranchId('branch-a')]![0]!.thought).toBe('Branch A thought');
+			expect(branches[asBranchId('branch-b')]![0]!.thought).toBe('Branch B thought');
 		});
 
 		it('4.3 Branch ID Validation - Valid - should validate branch_id accepts valid characters', async () => {
@@ -516,7 +517,7 @@ describe('tracelattice MCP Tool', () => {
 						total_thoughts: 2,
 						next_thought_needed: false,
 						branch_from_thought: 1,
-						branch_id: branchId,
+						branch_id: asBranchId(branchId),
 					})
 				);
 			}
@@ -548,12 +549,12 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 2,
 					next_thought_needed: false,
 					branch_from_thought: 1,
-					branch_id: 'valid-branch_123',
+					branch_id: asBranchId('valid-branch_123'),
 				})
 			);
 
 			const branches = server.history.getBranches();
-			expect(branches['valid-branch_123']).toBeDefined();
+			expect(branches[asBranchId('valid-branch_123')]).toBeDefined();
 		});
 
 		it('4.5 Branch ID Length Limits - should validate branch_id length constraints (1-50 chars)', async () => {
@@ -574,7 +575,7 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 4,
 					next_thought_needed: true,
 					branch_from_thought: 1,
-					branch_id: 'a',
+					branch_id: asBranchId('a'),
 				})
 			);
 
@@ -587,13 +588,13 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 4,
 					next_thought_needed: true,
 					branch_from_thought: 1,
-					branch_id: fiftyCharId,
+					branch_id: asBranchId(fiftyCharId),
 				})
 			);
 
 			const branches = server.history.getBranches();
-			expect(branches['a']).toBeDefined();
-			expect(branches[fiftyCharId]).toBeDefined();
+			expect(branches[asBranchId('a')]).toBeDefined();
+			expect(branches[asBranchId(fiftyCharId)]).toBeDefined();
 
 			// Note: 51+ characters would fail Valibot's maxLength validation
 			// before reaching processThought
@@ -674,7 +675,7 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 2,
 					next_thought_needed: false,
 					branch_from_thought: 1,
-					branch_id: 'revision-branch',
+					branch_id: asBranchId('revision-branch'),
 					is_revision: true,
 					revises_thought: 1,
 				})
@@ -690,7 +691,7 @@ describe('tracelattice MCP Tool', () => {
 			expect(history[1]!.revises_thought).toBe(1);
 
 			// Branch should exist
-			expect(branches['revision-branch']).toHaveLength(1);
+			expect(branches[asBranchId('revision-branch')]).toHaveLength(1);
 		});
 	});
 
@@ -923,7 +924,7 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 5,
 					next_thought_needed: true,
 					branch_from_thought: 2,
-					branch_id: 'alternative-approach',
+					branch_id: asBranchId('alternative-approach'),
 				})
 			);
 
@@ -956,7 +957,7 @@ describe('tracelattice MCP Tool', () => {
 
 			// Verify coherent state maintained throughout
 			expect(history).toHaveLength(5);
-			expect(branches['alternative-approach']).toHaveLength(1);
+			expect(branches[asBranchId('alternative-approach')]).toHaveLength(1);
 			expect(finalResponse.thought_history_length).toBe(5);
 			expect(finalResponse.branches).toContain('alternative-approach');
 		});
@@ -999,7 +1000,7 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 2,
 					next_thought_needed: false,
 					branch_from_thought: 1,
-					branch_id: 'server1-branch',
+					branch_id: asBranchId('server1-branch'),
 				})
 			);
 
@@ -1010,7 +1011,7 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 2,
 					next_thought_needed: false,
 					branch_from_thought: 1,
-					branch_id: 'server2-branch',
+					branch_id: asBranchId('server2-branch'),
 				})
 			);
 
@@ -1018,10 +1019,10 @@ describe('tracelattice MCP Tool', () => {
 			const branches1 = server1.history.getBranches();
 			const branches2 = server2.history.getBranches();
 
-			expect(branches1['server1-branch']).toBeDefined();
-			expect(branches2['server2-branch']).toBeDefined();
-			expect(branches1['server2-branch']).toBeUndefined();
-			expect(branches2['server1-branch']).toBeUndefined();
+			expect(branches1[asBranchId('server1-branch')]).toBeDefined();
+			expect(branches2[asBranchId('server2-branch')]).toBeDefined();
+			expect(branches1[asBranchId('server2-branch')]).toBeUndefined();
+			expect(branches2[asBranchId('server1-branch')]).toBeUndefined();
 		});
 
 		it('8.3 Available Tools/Skills Registration - should validate available_mcp_tools and available_skills reflect registry', async () => {
@@ -1162,7 +1163,7 @@ describe('tracelattice MCP Tool', () => {
 					total_thoughts: 2,
 					next_thought_needed: false,
 					branch_from_thought: 1,
-					branch_id: 'chain-a-branch',
+					branch_id: asBranchId('chain-a-branch'),
 				})
 			);
 

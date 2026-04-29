@@ -244,13 +244,13 @@ describe('HistoryManager edge persistence', () => {
 
 		await manager.loadFromPersistence();
 
-		expect(edgeStore.size('test-A')).toBe(2);
-		expect(edgeStore.size('test-B')).toBe(1);
-		expect(edgeStore.edgesForSession('test-A').map((e) => e.kind)).toEqual([
+		expect(edgeStore.size(asSessionId('test-A'))).toBe(2);
+		expect(edgeStore.size(asSessionId('test-B'))).toBe(1);
+		expect(edgeStore.edgesForSession(asSessionId('test-A')).map((e) => e.kind)).toEqual([
 			'sequence',
 			'sequence',
 		]);
-		expect(edgeStore.edgesForSession('test-B').map((e) => e.kind)).toEqual(['derives_from']);
+		expect(edgeStore.edgesForSession(asSessionId('test-B')).map((e) => e.kind)).toEqual(['derives_from']);
 		await manager.shutdown();
 	});
 
@@ -279,8 +279,8 @@ describe('HistoryManager edge persistence', () => {
 
 		await fresh.loadFromPersistence();
 
-		expect(freshEdgeStore.size('test-A')).toBe(1);
-		expect(freshEdgeStore.size('test-B')).toBe(1);
+		expect(freshEdgeStore.size(asSessionId('test-A'))).toBe(1);
+		expect(freshEdgeStore.size(asSessionId('test-B'))).toBe(1);
 		await fresh.shutdown();
 	});
 });

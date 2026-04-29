@@ -13,6 +13,7 @@
  */
 
 import type { IEdgeStore } from '../../contracts/interfaces.js';
+import type { SessionId } from '../../contracts/ids.js';
 import { InvalidEdgeError } from '../../errors.js';
 import type { Edge } from './Edge.js';
 
@@ -109,7 +110,7 @@ export class EdgeStore implements IEdgeStore {
 	 * @param from - Source thought id
 	 * @returns Array of outgoing edges (empty if none / unknown session)
 	 */
-	outgoing(sessionId: string, from: string): readonly Edge[] {
+	outgoing(sessionId: SessionId, from: string): readonly Edge[] {
 		const session = this._sessions.get(sessionId);
 		if (!session) {
 			return [];
@@ -124,7 +125,7 @@ export class EdgeStore implements IEdgeStore {
 	 * @param to - Target thought id
 	 * @returns Array of incoming edges (empty if none / unknown session)
 	 */
-	incoming(sessionId: string, to: string): readonly Edge[] {
+	incoming(sessionId: SessionId, to: string): readonly Edge[] {
 		const session = this._sessions.get(sessionId);
 		if (!session) {
 			return [];
@@ -138,7 +139,7 @@ export class EdgeStore implements IEdgeStore {
 	 * @param sessionId - Session to query
 	 * @returns All edges in the session (empty if unknown session)
 	 */
-	edgesForSession(sessionId: string): readonly Edge[] {
+	edgesForSession(sessionId: SessionId): readonly Edge[] {
 		const session = this._sessions.get(sessionId);
 		if (!session) {
 			return [];
@@ -151,7 +152,7 @@ export class EdgeStore implements IEdgeStore {
 	 *
 	 * @param sessionId - Session to clear
 	 */
-	clearSession(sessionId: string): void {
+	clearSession(sessionId: SessionId): void {
 		this._sessions.delete(sessionId);
 	}
 
@@ -161,7 +162,7 @@ export class EdgeStore implements IEdgeStore {
 	 * @param sessionId - If provided, count only that session's edges
 	 * @returns Total edge count
 	 */
-	size(sessionId?: string): number {
+	size(sessionId?: SessionId): number {
 		if (sessionId !== undefined) {
 			const session = this._sessions.get(sessionId);
 			return session ? session.byId.size : 0;

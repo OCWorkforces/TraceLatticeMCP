@@ -303,15 +303,16 @@ export class SseTransport extends BaseTransport implements ITransport {
 		}
 
 		try {
-			const jsonRpcRequest = JSON.parse(body);
-			const parseResult = safeParse(JsonRpcRequestSchema, jsonRpcRequest);
+			const rawBody: unknown = JSON.parse(body) as unknown;
+			const parseResult = safeParse(JsonRpcRequestSchema, rawBody);
+			const rawId = (rawBody && typeof rawBody === 'object' && 'id' in rawBody) ? (rawBody as { id?: unknown }).id ?? null : null;
 			if (!parseResult.success) {
 				this._metrics?.counter('http_request_errors_total', 1, { transport: 'sse', error_type: 'validation' }, 'Total HTTP request errors');
 				res.writeHead(200, { 'Content-Type': 'application/json' });
 				res.end(
 					JSON.stringify({
 						jsonrpc: '2.0',
-						id: jsonRpcRequest?.id ?? null,
+						id: rawId,
 						error: {
 							code: -32600,
 							message: 'Invalid Request',
@@ -321,6 +322,7 @@ export class SseTransport extends BaseTransport implements ITransport {
 				);
 				return;
 			}
+			const jsonRpcRequest = parseResult.output;
 
 			// Process message through MCP server with owner context
 			if (this._mcpServer) {
@@ -328,7 +330,7 @@ export class SseTransport extends BaseTransport implements ITransport {
 				const owner = sessionId ?? `sse-${randomUUID()}`;
 				const response = await runWithContext(
 					{ requestId: randomUUID(), owner },
-					() => this._mcpServer!.receive(jsonRpcRequest, {
+					() => this._mcpServer!.receive(jsonRpcRequest as Parameters<McpServer['receive']>[0], {
 						sessionInfo: {},
 					})
 				);
@@ -339,7 +341,7 @@ export class SseTransport extends BaseTransport implements ITransport {
 				if (response) {
 					res.end(JSON.stringify(response));
 				} else {
-					res.end(JSON.stringify({ jsonrpc: '2.0', id: jsonRpcRequest?.id ?? null, result: null }));
+					res.end(JSON.stringify({ jsonrpc: '2.0', id: jsonRpcRequest.id ?? null, result: null }));
 				}
 			} else {
 				this._metrics?.counter('http_request_errors_total', 1, { transport: 'sse', error_type: 'server_not_ready' }, 'Total HTTP request errors');

@@ -15,7 +15,7 @@ import { ValidationError } from '../errors.js';
 import { sanitizeString, sanitizeRationale, sanitizeStepField, sanitizeSuggestedInputs } from '../sanitize.js';
 import type { ThoughtData } from './thought.js';
 import { SESSION_ID_PATTERN, MAX_SESSION_ID_LENGTH } from './ids.js';
-import { asSessionId, generateThoughtId } from '../contracts/ids.js';
+import { asBranchId, asSessionId, generateThoughtId, type BranchId } from '../contracts/ids.js';
 
 /**
  * Default values for missing partial recommendation fields.
@@ -88,7 +88,7 @@ const BRANCH_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
  * sanitizeBranchId('../etc/passwd'); // throws ValidationError
  * ```
  */
-export function sanitizeBranchId(branchId: string): string {
+export function sanitizeBranchId(branchId: string): BranchId {
 	// Validate format
 	if (!BRANCH_ID_PATTERN.test(branchId)) {
 		throw new ValidationError(
@@ -96,7 +96,7 @@ export function sanitizeBranchId(branchId: string): string {
 			'Invalid format - must be 1-64 alphanumeric characters, hyphens, or underscores only'
 		);
 	}
-	return branchId;
+	return asBranchId(branchId);
 }
 
 /**

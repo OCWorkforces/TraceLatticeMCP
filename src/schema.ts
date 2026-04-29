@@ -628,6 +628,9 @@ export const SequentialThinkingSchema = v.object({
 	),
 });
 
+/** Inferred output type of the sequential thinking schema (string IDs, no branded types). */
+export type SchemaOutput = v.InferOutput<typeof SequentialThinkingSchema>;
+
 /**
  * The sequential thinking tool definition for MCP registration.
  *

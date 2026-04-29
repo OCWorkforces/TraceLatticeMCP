@@ -1,3 +1,4 @@
+import { asBranchId, type BranchId } from '../contracts/ids.js';
 /**
  * Comprehensive tests for ThoughtProcessor.
  *
@@ -265,10 +266,10 @@ describe('ThoughtProcessor', () => {
 			getHistoryLength(): number {
 				return 0;
 			}
-			getBranches(): Record<string, ThoughtData[]> {
+			getBranches(): Record<BranchId, ThoughtData[]> {
 				return {};
 			}
-			getBranchIds(): string[] {
+			getBranchIds(): BranchId[] {
 				return [];
 			}
 			registerBranch(): void {}
@@ -1137,7 +1138,7 @@ describe('ThoughtProcessor', () => {
 				thought_number: 1,
 				total_thoughts: 1,
 				next_thought_needed: false,
-				merge_branch_ids: ['nonexistent'],
+				merge_branch_ids: ['nonexistent'].map(asBranchId),
 			});
 
 			const parsed = JSON.parse(result.content[0]!.text);
@@ -1626,8 +1627,8 @@ describe('ThoughtProcessor — uncovered branches', () => {
 				}
 				getHistory(): ThoughtData[] { return []; }
 				getHistoryLength(): number { return 0; }
-				getBranches(): Record<string, ThoughtData[]> { return {}; }
-				getBranchIds(): string[] { return []; }
+				getBranches(): Record<BranchId, ThoughtData[]> { return {}; }
+				getBranchIds(): BranchId[] { return []; }
 				registerBranch(): void {}
 				branchExists(): boolean { return false; }
 				clear(): void {}

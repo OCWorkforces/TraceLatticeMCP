@@ -1,3 +1,4 @@
+import { asSessionId } from '../contracts/ids.js';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { ABSOLUTE_MAX_HISTORY_SIZE, HistoryManager } from '../core/HistoryManager.js';
 import { EdgeStore } from '../core/graph/EdgeStore.js';
@@ -7,6 +8,7 @@ import { useFakeTimers, useRealTimers } from './helpers/timers.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { ThoughtData } from '../core/thought.js';
 
+import { asBranchId, type BranchId } from '../contracts/ids.js';
 /** Test-only interface to access private fields of HistoryManager. */
 interface HistoryManagerTestAccess {
 	_maxHistorySize: number;
@@ -14,7 +16,7 @@ interface HistoryManagerTestAccess {
 
 class MockPersistence implements PersistenceBackend {
 	private _history: ThoughtData[] = [];
-	private _branches: Record<string, ThoughtData[]> = {};
+	private _branches: Record<BranchId, ThoughtData[]> = {} as Record<BranchId, ThoughtData[]>;
 	saveThoughtFailCount = 0;
 	healthyResult = true;
 	clearFail = false;
@@ -32,7 +34,7 @@ class MockPersistence implements PersistenceBackend {
 		return [...this._history];
 	}
 
-	async saveBranch(branchId: string, thoughts: ThoughtData[]): Promise<void> {
+	async saveBranch(branchId: BranchId, thoughts: ThoughtData[]): Promise<void> {
 		if (this.saveBranchFailCount > 0) {
 			this.saveBranchFailCount--;
 			throw new Error('Branch save failed');
@@ -40,12 +42,12 @@ class MockPersistence implements PersistenceBackend {
 		this._branches[branchId] = thoughts;
 	}
 
-	async loadBranch(branchId: string): Promise<ThoughtData[] | undefined> {
+	async loadBranch(branchId: BranchId): Promise<ThoughtData[] | undefined> {
 		return this._branches[branchId] ? [...this._branches[branchId]] : undefined;
 	}
 
-	async listBranches(): Promise<string[]> {
-		return Object.keys(this._branches);
+	async listBranches(): Promise<BranchId[]> {
+		return Object.keys(this._branches) as BranchId[];
 	}
 
 	async clear(): Promise<void> {
@@ -142,12 +144,12 @@ describe('HistoryManager', () => {
 				createTestThought({
 					thought_number: 1,
 					branch_from_thought: 1,
-					branch_id: 'alt-1',
+					branch_id: asBranchId('alt-1'),
 				})
 			);
 
 			expect(manager.getBranchIds()).toEqual(['alt-1']);
-			expect(manager.getBranch('alt-1')).toHaveLength(1);
+			expect(manager.getBranch(asBranchId('alt-1'))).toHaveLength(1);
 		});
 
 		it('should add multiple thoughts to the same branch', () => {
@@ -157,12 +159,12 @@ describe('HistoryManager', () => {
 					createTestThought({
 						thought_number: i,
 						branch_from_thought: 1,
-						branch_id: 'alt-1',
+						branch_id: asBranchId('alt-1'),
 					})
 				);
 			}
 
-			expect(manager.getBranch('alt-1')).toHaveLength(3);
+			expect(manager.getBranch(asBranchId('alt-1'))).toHaveLength(3);
 		});
 
 		it('should trim branch when maxBranchSize is exceeded', () => {
@@ -172,25 +174,25 @@ describe('HistoryManager', () => {
 					createTestThought({
 						thought_number: i,
 						branch_from_thought: 1,
-						branch_id: 'alt-1',
+						branch_id: asBranchId('alt-1'),
 					})
 				);
 			}
 
-			expect(manager.getBranch('alt-1')).toHaveLength(3);
-			expect(manager.getBranch('alt-1')![0]!.thought_number).toBe(2);
+			expect(manager.getBranch(asBranchId('alt-1'))).toHaveLength(3);
+			expect(manager.getBranch(asBranchId('alt-1'))![0]!.thought_number).toBe(2);
 		});
 
 		it('should remove oldest branches when maxBranches is exceeded', () => {
 			const manager = new HistoryManager({ maxBranches: 2 });
 			manager.addThought(
-				createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: 'branch-a' })
+				createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: asBranchId('branch-a') })
 			);
 			manager.addThought(
-				createTestThought({ thought_number: 2, branch_from_thought: 1, branch_id: 'branch-b' })
+				createTestThought({ thought_number: 2, branch_from_thought: 1, branch_id: asBranchId('branch-b') })
 			);
 			manager.addThought(
-				createTestThought({ thought_number: 3, branch_from_thought: 1, branch_id: 'branch-c' })
+				createTestThought({ thought_number: 3, branch_from_thought: 1, branch_id: asBranchId('branch-c') })
 			);
 
 			expect(manager.getBranchIds()).toHaveLength(2);
@@ -200,7 +202,7 @@ describe('HistoryManager', () => {
 
 		it('should return undefined for non-existent branch', () => {
 			const manager = new HistoryManager();
-			expect(manager.getBranch('non-existent')).toBeUndefined();
+			expect(manager.getBranch(asBranchId('non-existent'))).toBeUndefined();
 		});
 	});
 
@@ -398,12 +400,12 @@ describe('HistoryManager', () => {
 				createTestThought({
 					thought_number: 1,
 					branch_from_thought: 1,
-					branch_id: 'branch-1',
+					branch_id: asBranchId('branch-1'),
 				})
 			);
 
 			await new Promise((r) => setTimeout(r, 0));
-			const loaded = await persistence.loadBranch('branch-1');
+			const loaded = await persistence.loadBranch(asBranchId('branch-1'));
 			expect(loaded).toBeDefined();
 			expect(loaded).toHaveLength(1);
 		});
@@ -417,11 +419,11 @@ describe('HistoryManager', () => {
 				createTestThought({
 					thought_number: 1,
 					branch_from_thought: 1,
-					branch_id: 'branch-1',
+					branch_id: asBranchId('branch-1'),
 				})
 			);
 
-			expect(manager.getBranch('branch-1')).toHaveLength(1);
+			expect(manager.getBranch(asBranchId('branch-1'))).toHaveLength(1);
 		});
 	});
 
@@ -429,7 +431,7 @@ describe('HistoryManager', () => {
 		it('should load history and branches from persistence', async () => {
 			const persistence = new MockPersistence();
 			await persistence.saveThought(createTestThought({ thought_number: 1 }));
-			await persistence.saveBranch('branch-1', [createTestThought({ thought_number: 1 })]);
+			await persistence.saveBranch(asBranchId('branch-1'), [createTestThought({ thought_number: 1 })]);
 
 			const manager = new HistoryManager({ persistence });
 			await manager.loadFromPersistence();
@@ -555,7 +557,7 @@ describe('HistoryManager', () => {
 			const manager = new HistoryManager();
 			const thought = createTestThought({
 				merge_from_thoughts: [1, 3],
-				merge_branch_ids: ['branch-a', 'branch-b'],
+				merge_branch_ids: ['branch-a', 'branch-b'].map(asBranchId),
 			});
 			manager.addThought(thought);
 
@@ -581,8 +583,8 @@ describe('HistoryManager', () => {
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'session-a' }));
 			manager.addThought(createTestThought({ thought_number: 2, session_id: 'session-b' }));
 
-			expect(manager.getHistoryLength('session-a')).toBe(1);
-			expect(manager.getHistoryLength('session-b')).toBe(1);
+			expect(manager.getHistoryLength(asSessionId('session-a'))).toBe(1);
+			expect(manager.getHistoryLength(asSessionId('session-b'))).toBe(1);
 		});
 
 		it('uses __global__ session when session_id is omitted', () => {
@@ -590,14 +592,14 @@ describe('HistoryManager', () => {
 			manager.addThought(createTestThought({ thought_number: 1 }));
 
 			expect(manager.getHistoryLength()).toBe(1);
-			expect(manager.getHistoryLength('__global__')).toBe(1);
+			expect(manager.getHistoryLength(asSessionId('__global__'))).toBe(1);
 		});
 
 		it('returns empty history for new session', () => {
 			const manager = new HistoryManager();
 			manager.addThought(createTestThought({ thought_number: 1 }));
 
-			expect(manager.getHistoryLength('new-session')).toBe(0);
+			expect(manager.getHistoryLength(asSessionId('new-session'))).toBe(0);
 		});
 
 		it('does not leak thoughts between sessions', () => {
@@ -606,8 +608,8 @@ describe('HistoryManager', () => {
 			manager.addThought(createTestThought({ thought_number: 2, session_id: 'a', thought: 'A2' }));
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b', thought: 'B1' }));
 
-			const historyA = manager.getHistory('a');
-			const historyB = manager.getHistory('b');
+			const historyA = manager.getHistory(asSessionId('a'));
+			const historyB = manager.getHistory(asSessionId('b'));
 
 			expect(historyA).toHaveLength(2);
 			expect(historyB).toHaveLength(1);
@@ -622,13 +624,13 @@ describe('HistoryManager', () => {
 					thought_number: 1,
 					session_id: 'a',
 					branch_from_thought: 1,
-					branch_id: 'branch-a',
+					branch_id: asBranchId('branch-a'),
 				})
 			);
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b' }));
 
-			expect(manager.getBranchIds('a')).toContain('branch-a');
-			expect(manager.getBranchIds('b')).toHaveLength(0);
+			expect(manager.getBranchIds(asSessionId('a'))).toContain('branch-a');
+			expect(manager.getBranchIds(asSessionId('b'))).toHaveLength(0);
 		});
 
 		it('tracks available_mcp_tools per session', () => {
@@ -648,8 +650,8 @@ describe('HistoryManager', () => {
 				})
 			);
 
-			expect(manager.getAvailableMcpTools('a')).toEqual(['tool-a']);
-			expect(manager.getAvailableMcpTools('b')).toEqual(['tool-b']);
+			expect(manager.getAvailableMcpTools(asSessionId('a'))).toEqual(['tool-a']);
+			expect(manager.getAvailableMcpTools(asSessionId('b'))).toEqual(['tool-b']);
 		});
 
 		it('tracks available_skills per session', () => {
@@ -669,8 +671,8 @@ describe('HistoryManager', () => {
 				})
 			);
 
-			expect(manager.getAvailableSkills('a')).toEqual(['skill-a']);
-			expect(manager.getAvailableSkills('b')).toEqual(['skill-b']);
+			expect(manager.getAvailableSkills(asSessionId('a'))).toEqual(['skill-a']);
+			expect(manager.getAvailableSkills(asSessionId('b'))).toEqual(['skill-b']);
 		});
 
 		it('clears only the target session on clear(sessionId)', () => {
@@ -678,10 +680,10 @@ describe('HistoryManager', () => {
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a' }));
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b' }));
 
-			manager.clear('a');
+			manager.clear(asSessionId('a'));
 
-			expect(manager.getHistoryLength('a')).toBe(0);
-			expect(manager.getHistoryLength('b')).toBe(1);
+			expect(manager.getHistoryLength(asSessionId('a'))).toBe(0);
+			expect(manager.getHistoryLength(asSessionId('b'))).toBe(1);
 		});
 
 		it('clears all sessions on clear() without sessionId', () => {
@@ -692,8 +694,8 @@ describe('HistoryManager', () => {
 
 			manager.clear();
 
-			expect(manager.getHistoryLength('a')).toBe(0);
-			expect(manager.getHistoryLength('b')).toBe(0);
+			expect(manager.getHistoryLength(asSessionId('a'))).toBe(0);
+			expect(manager.getHistoryLength(asSessionId('b'))).toBe(0);
 			expect(manager.getHistoryLength()).toBe(0);
 		});
 
@@ -722,7 +724,7 @@ describe('HistoryManager', () => {
 			const manager = new HistoryManager();
 
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'old' }));
-			expect(manager.getHistoryLength('old')).toBe(1);
+			expect(manager.getHistoryLength(asSessionId('old'))).toBe(1);
 
 			// Advance past TTL (30 minutes) + cleanup interval (5 minutes)
 			vi.advanceTimersByTime(31 * 60 * 1000);
@@ -763,7 +765,7 @@ describe('HistoryManager', () => {
 			// Trigger cleanup
 			vi.advanceTimersByTime(5 * 60 * 1000);
 
-			expect(manager.getHistoryLength('active')).toBe(2);
+			expect(manager.getHistoryLength(asSessionId('active'))).toBe(2);
 		});
 	});
 
@@ -843,10 +845,10 @@ describe('HistoryManager', () => {
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'x' }));
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'y' }));
 
-			manager.clearSession('x');
+			manager.clearSession(asSessionId('x'));
 
-			expect(manager.getHistoryLength('x')).toBe(0);
-			expect(manager.getHistoryLength('y')).toBe(1);
+			expect(manager.getHistoryLength(asSessionId('x'))).toBe(0);
+			expect(manager.getHistoryLength(asSessionId('y'))).toBe(1);
 		});
 	});
 
@@ -869,15 +871,15 @@ describe('HistoryManager', () => {
 			const manager = new HistoryManager();
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a' }));
 
-			expect(manager.getBranch('non-existent', 'a')).toBeUndefined();
-			expect(manager.getBranch('non-existent', 'b')).toBeUndefined();
+			expect(manager.getBranch(asBranchId('non-existent'), asSessionId('a'))).toBeUndefined();
+			expect(manager.getBranch(asBranchId('non-existent'), asSessionId('b'))).toBeUndefined();
 		});
 
 		it('getAvailableMcpTools returns undefined for fresh session', () => {
 			const manager = new HistoryManager();
 
-			expect(manager.getAvailableMcpTools('nonexistent')).toBeUndefined();
-			expect(manager.getAvailableSkills('nonexistent')).toBeUndefined();
+			expect(manager.getAvailableMcpTools(asSessionId('nonexistent'))).toBeUndefined();
+			expect(manager.getAvailableSkills(asSessionId('nonexistent'))).toBeUndefined();
 		});
 	});
 });
@@ -1059,7 +1061,7 @@ describe('HistoryManager — uncovered branches', () => {
 
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'old', id: 'old-1' }));
 			manager.addThought(createTestThought({ thought_number: 2, session_id: 'old', id: 'old-2' }));
-			const sizeBefore = edgeStore.size('old');
+			const sizeBefore = edgeStore.size(asSessionId('old'));
 			expect(sizeBefore).toBeGreaterThan(0);
 
 			// Trigger TTL eviction
@@ -1069,7 +1071,7 @@ describe('HistoryManager — uncovered branches', () => {
 			// Session is gone from manager...
 			expect(manager.getSessionIds()).not.toContain('old');
 			// ...but EdgeStore entries persist (no auto-cleanup wired)
-			expect(edgeStore.size('old')).toBe(sizeBefore);
+			expect(edgeStore.size(asSessionId('old'))).toBe(sizeBefore);
 		});
 
 		it('LRU-evicted session leaves EdgeStore entries intact (current behavior)', () => {
@@ -1091,7 +1093,7 @@ describe('HistoryManager — uncovered branches', () => {
 				manager.addThought(createTestThought({ thought_number: 1, session_id: 's2', id: 's2-1' }));
 				vi.advanceTimersByTime(1);
 
-				const s1EdgesBefore = edgeStore.size('s1');
+				const s1EdgesBefore = edgeStore.size(asSessionId('s1'));
 				expect(s1EdgesBefore).toBeGreaterThan(0);
 
 				// Add a 3rd session — MAX_SESSIONS=2 (excluding __global__) → s1 evicted as oldest
@@ -1099,7 +1101,7 @@ describe('HistoryManager — uncovered branches', () => {
 
 				expect(manager.getSessionIds()).not.toContain('s1');
 				// EdgeStore entries persist after LRU eviction
-				expect(edgeStore.size('s1')).toBe(s1EdgesBefore);
+				expect(edgeStore.size(asSessionId('s1'))).toBe(s1EdgesBefore);
 			} finally {
 				Object.defineProperty(HistoryManager, 'MAX_SESSIONS', {
 					value: 100,
@@ -1116,13 +1118,13 @@ describe('HistoryManager — uncovered branches', () => {
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'a', id: 'a-1' }));
 			manager.addThought(createTestThought({ thought_number: 2, session_id: 'a', id: 'a-2' }));
 			manager.addThought(createTestThought({ thought_number: 1, session_id: 'b', id: 'b-1' }));
-			expect(edgeStore.size('a')).toBeGreaterThan(0);
+			expect(edgeStore.size(asSessionId('a'))).toBeGreaterThan(0);
 
-			manager.clearSession('a');
+			manager.clearSession(asSessionId('a'));
 
-			expect(edgeStore.size('a')).toBe(0);
+			expect(edgeStore.size(asSessionId('a'))).toBe(0);
 			// Other session edges untouched
-			expect(edgeStore.size('b')).toBeGreaterThanOrEqual(0);
+			expect(edgeStore.size(asSessionId('b'))).toBeGreaterThanOrEqual(0);
 		});
 	});
 
@@ -1189,69 +1191,69 @@ describe('HistoryManager — declarative branch registration', () => {
 
 	it('registerBranch creates an empty branch that branchExists detects', () => {
 		const manager = new HistoryManager();
-		expect(manager.branchExists(undefined, 'alt-1')).toBe(false);
+		expect(manager.branchExists(undefined, asBranchId('alt-1'))).toBe(false);
 
-		manager.registerBranch(undefined, 'alt-1');
+		manager.registerBranch(undefined, asBranchId('alt-1'));
 
-		expect(manager.branchExists(undefined, 'alt-1')).toBe(true);
+		expect(manager.branchExists(undefined, asBranchId('alt-1'))).toBe(true);
 		expect(manager.getBranchIds()).toContain('alt-1');
 		// Registered-only branches do not have thoughts attached
-		expect(manager.getBranch('alt-1')).toBeUndefined();
+		expect(manager.getBranch(asBranchId('alt-1'))).toBeUndefined();
 	});
 
 	it('branchExists returns true for branches created via addThought', () => {
 		const manager = new HistoryManager();
 		manager.addThought(
-			createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: 'alt-2' })
+			createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: asBranchId('alt-2') })
 		);
-		expect(manager.branchExists(undefined, 'alt-2')).toBe(true);
+		expect(manager.branchExists(undefined, asBranchId('alt-2'))).toBe(true);
 	});
 
 	it('registerBranch throws ValidationError on duplicate (existing thought-backed branch)', () => {
 		const manager = new HistoryManager();
 		manager.addThought(
-			createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: 'dup' })
+			createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: asBranchId('dup') })
 		);
 
-		expect(() => manager.registerBranch(undefined, 'dup')).toThrowError(
+		expect(() => manager.registerBranch(undefined, asBranchId('dup'))).toThrowError(
 			/Branch already exists: dup/
 		);
 	});
 
 	it('registerBranch throws ValidationError on duplicate (already registered)', () => {
 		const manager = new HistoryManager();
-		manager.registerBranch(undefined, 'alt-3');
+		manager.registerBranch(undefined, asBranchId('alt-3'));
 
-		expect(() => manager.registerBranch(undefined, 'alt-3')).toThrowError(
+		expect(() => manager.registerBranch(undefined, asBranchId('alt-3'))).toThrowError(
 			/Branch already exists: alt-3/
 		);
 	});
 
 	it('registerBranch throws ValidationError on empty branchId', () => {
 		const manager = new HistoryManager();
-		expect(() => manager.registerBranch(undefined, '')).toThrowError(
+		expect(() => manager.registerBranch(undefined, asBranchId(''))).toThrowError(
 			/branch_id must be a non-empty string/
 		);
 	});
 
 	it('registerBranch is session-scoped (independent across sessions)', () => {
 		const manager = new HistoryManager();
-		manager.registerBranch('session-a', 'shared-name');
+		manager.registerBranch(asSessionId('session-a'), asBranchId('shared-name'));
 
-		expect(manager.branchExists('session-a', 'shared-name')).toBe(true);
-		expect(manager.branchExists('session-b', 'shared-name')).toBe(false);
+		expect(manager.branchExists(asSessionId('session-a'), asBranchId('shared-name'))).toBe(true);
+		expect(manager.branchExists(asSessionId('session-b'), asBranchId('shared-name'))).toBe(false);
 
 		// Same name can be registered in a different session without conflict
-		expect(() => manager.registerBranch('session-b', 'shared-name')).not.toThrow();
-		expect(manager.branchExists('session-b', 'shared-name')).toBe(true);
+		expect(() => manager.registerBranch(asSessionId('session-b'), asBranchId('shared-name'))).not.toThrow();
+		expect(manager.branchExists(asSessionId('session-b'), asBranchId('shared-name'))).toBe(true);
 	});
 
 	it('getBranchIds merges thought-backed and registered branches without duplicates', () => {
 		const manager = new HistoryManager();
 		manager.addThought(
-			createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: 'with-thoughts' })
+			createTestThought({ thought_number: 1, branch_from_thought: 1, branch_id: asBranchId('with-thoughts') })
 		);
-		manager.registerBranch(undefined, 'registered-only');
+		manager.registerBranch(undefined, asBranchId('registered-only'));
 
 		const ids = manager.getBranchIds();
 		expect(ids).toContain('with-thoughts');

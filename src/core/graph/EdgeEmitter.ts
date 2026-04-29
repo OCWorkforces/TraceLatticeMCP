@@ -13,12 +13,12 @@ import type { Logger } from '../../logger/StructuredLogger.js';
 import { NullLogger } from '../../logger/NullLogger.js';
 import type { ThoughtData } from '../thought.js';
 import type { Edge, EdgeKind } from './Edge.js';
-import { generateEdgeId } from '../../contracts/ids.js';
+import { generateEdgeId, type BranchId } from '../../contracts/ids.js';
 
 /** Minimal session view needed for edge emission. */
 export interface EdgeEmissionSession {
 	thought_history: ThoughtData[];
-	branches: Record<string, ThoughtData[]>;
+	branches: Record<BranchId, ThoughtData[]>;
 }
 
 /** Configuration options for EdgeEmitter. */

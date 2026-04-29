@@ -14,6 +14,7 @@
  */
 
 import type { IEdgeStore } from '../../contracts/interfaces.js';
+import type { SessionId } from '../../contracts/ids.js';
 import { CycleDetectedError } from '../../errors.js';
 import type { Edge } from './Edge.js';
 
@@ -60,7 +61,7 @@ export class GraphView {
 	 * const ids = view.chronological('s1');
 	 * ```
 	 */
-	chronological(sessionId: string): readonly string[] {
+	chronological(sessionId: SessionId): readonly string[] {
 		const edges = this._store.edgesForSession(sessionId);
 		if (edges.length === 0) {
 			return [];
@@ -86,7 +87,7 @@ export class GraphView {
 	 * const branchIds = view.branchThoughts('s1', 'thought-root');
 	 * ```
 	 */
-	branchThoughts(sessionId: string, rootThoughtId: string): readonly string[] {
+	branchThoughts(sessionId: SessionId, rootThoughtId: string): readonly string[] {
 		const visited = new Set<string>([rootThoughtId]);
 		const order: string[] = [rootThoughtId];
 		const queue: string[] = [rootThoughtId];
@@ -117,7 +118,7 @@ export class GraphView {
 	 * const order = view.topological('s1');
 	 * ```
 	 */
-	topological(sessionId: string): readonly string[] {
+	topological(sessionId: SessionId): readonly string[] {
 		const edges = this._store.edgesForSession(sessionId);
 		if (edges.length === 0) {
 			return [];
@@ -160,7 +161,7 @@ export class GraphView {
 	 * const parents = view.ancestors('s1', 'thought-id', 1);
 	 * ```
 	 */
-	ancestors(sessionId: string, thoughtId: string, maxDepth?: number): readonly string[] {
+	ancestors(sessionId: SessionId, thoughtId: string, maxDepth?: number): readonly string[] {
 		return this._bfsClosure(sessionId, thoughtId, maxDepth, 'incoming');
 	}
 
@@ -179,7 +180,7 @@ export class GraphView {
 	 * const children = view.descendants('s1', 'thought-id');
 	 * ```
 	 */
-	descendants(sessionId: string, thoughtId: string, maxDepth?: number): readonly string[] {
+	descendants(sessionId: SessionId, thoughtId: string, maxDepth?: number): readonly string[] {
 		return this._bfsClosure(sessionId, thoughtId, maxDepth, 'outgoing');
 	}
 
@@ -194,7 +195,7 @@ export class GraphView {
 	 * const tips = view.leaves('s1');
 	 * ```
 	 */
-	leaves(sessionId: string): readonly string[] {
+	leaves(sessionId: SessionId): readonly string[] {
 		const edges = this._store.edgesForSession(sessionId);
 		if (edges.length === 0) {
 			return [];
@@ -254,7 +255,7 @@ export class GraphView {
 	/**
 	 * BFS from a list of root ids, visiting each node at most once.
 	 */
-	private _bfsFromRoots(sessionId: string, roots: readonly string[]): readonly string[] {
+	private _bfsFromRoots(sessionId: SessionId, roots: readonly string[]): readonly string[] {
 		const visited = new Set<string>();
 		const order: string[] = [];
 		const queue: string[] = [];
@@ -293,7 +294,7 @@ export class GraphView {
 	 * from the result and respects an optional depth cap.
 	 */
 	private _bfsClosure(
-		sessionId: string,
+		sessionId: SessionId,
 		startId: string,
 		maxDepth: number | undefined,
 		direction: 'incoming' | 'outgoing'

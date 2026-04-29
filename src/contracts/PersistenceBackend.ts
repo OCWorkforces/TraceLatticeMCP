@@ -1,6 +1,7 @@
 import type { ThoughtData } from '../core/thought.js';
 import type { Edge } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
+import type { BranchId } from './ids.js';
 
 /**
  * Persistence backend interface for storing thought history and branches.
@@ -30,7 +31,7 @@ export interface PersistenceBackend {
 	 * @param branchId - The unique identifier for the branch
 	 * @param thoughts - Array of thoughts in branch
 	 */
-	saveBranch(branchId: string, thoughts: ThoughtData[]): Promise<void>;
+	saveBranch(branchId: BranchId, thoughts: ThoughtData[]): Promise<void>;
 
 	/**
 	 * Load all thoughts for a specific branch.
@@ -38,14 +39,14 @@ export interface PersistenceBackend {
 	 * @param branchId - The unique identifier for the branch
 	 * @returns Array of thoughts in branch, or undefined if branch doesn't exist
 	 */
-	loadBranch(branchId: string): Promise<ThoughtData[] | undefined>;
+	loadBranch(branchId: BranchId): Promise<ThoughtData[] | undefined>;
 
 	/**
 	 * List all branch IDs that are persisted.
 	 *
 	 * @returns Array of branch identifiers
 	 */
-	listBranches(): Promise<string[]>;
+	listBranches(): Promise<BranchId[]>;
 
 	/**
 	 * Check if backend is healthy.

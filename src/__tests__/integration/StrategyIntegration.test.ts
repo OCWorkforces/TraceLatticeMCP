@@ -1,3 +1,4 @@
+import { asBranchId } from '../../contracts/ids.js';
 /**
  * End-to-end integration tests for the Strategy layer.
  *
@@ -178,7 +179,7 @@ describe('Strategy Integration (ThoughtProcessor + SequentialStrategy)', () => {
 				total_thoughts: 3,
 				next_thought_needed: true,
 				branch_from_thought: 1,
-				branch_id: 'alt-1',
+				branch_id: asBranchId('alt-1'),
 			})
 		);
 

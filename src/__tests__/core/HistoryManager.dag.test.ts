@@ -1,3 +1,4 @@
+import { asBranchId } from '../../contracts/ids.js';
 /**
  * Tests for flag-gated DAG edge emission in HistoryManager.
  *
@@ -76,7 +77,7 @@ describe('HistoryManager DAG edge emission', () => {
 			manager.addThought(t2);
 			manager.addThought(t3);
 
-			const edges = edgeStore.edgesForSession('__global__');
+			const edges = edgeStore.edgesForSession(asSessionId('__global__'));
 			expect(edges).toHaveLength(2);
 			expect(edges.every((e) => e.kind === 'sequence')).toBe(true);
 			expect(edges[0]!.from).toBe(t1.id);
@@ -97,13 +98,13 @@ describe('HistoryManager DAG edge emission', () => {
 			const { manager, edgeStore } = setup();
 			const t1 = makeThought(1);
 			const t2 = makeThought(2);
-			const t3 = makeThought(3, { branch_from_thought: 2, branch_id: 'b1' });
+			const t3 = makeThought(3, { branch_from_thought: 2, branch_id: asBranchId('b1') });
 			manager.addThought(t1);
 			manager.addThought(t2);
 			manager.addThought(t3);
 
 			const branchEdges = edgeStore
-				.edgesForSession('__global__')
+				.edgesForSession(asSessionId('__global__'))
 				.filter((e) => e.kind === 'branch');
 			expect(branchEdges).toHaveLength(1);
 			expect(branchEdges[0]!.from).toBe(t2.id);
@@ -124,7 +125,7 @@ describe('HistoryManager DAG edge emission', () => {
 			manager.addThought(t4);
 
 			const mergeEdges = edgeStore
-				.edgesForSession('__global__')
+				.edgesForSession(asSessionId('__global__'))
 				.filter((e) => e.kind === 'merge');
 			expect(mergeEdges).toHaveLength(2);
 			const fromIds = mergeEdges.map((e) => e.from).sort();
@@ -150,7 +151,7 @@ describe('HistoryManager DAG edge emission', () => {
 			manager.addThought(verifier);
 
 			const verifies = edgeStore
-				.edgesForSession('__global__')
+				.edgesForSession(asSessionId('__global__'))
 				.filter((e) => e.kind === 'verifies');
 			expect(verifies).toHaveLength(1);
 			expect(verifies[0]!.from).toBe(verifier.id);
@@ -175,7 +176,7 @@ describe('HistoryManager DAG edge emission', () => {
 			manager.addThought(critic);
 
 			const critiques = edgeStore
-				.edgesForSession('__global__')
+				.edgesForSession(asSessionId('__global__'))
 				.filter((e) => e.kind === 'critiques');
 			expect(critiques).toHaveLength(1);
 			expect(critiques[0]!.from).toBe(critic.id);
@@ -197,7 +198,7 @@ describe('HistoryManager DAG edge emission', () => {
 			manager.addThought(synth);
 
 			const derives = edgeStore
-				.edgesForSession('__global__')
+				.edgesForSession(asSessionId('__global__'))
 				.filter((e) => e.kind === 'derives_from');
 			expect(derives).toHaveLength(2);
 			const fromIds = derives.map((e) => e.from).sort();
@@ -219,7 +220,7 @@ describe('HistoryManager DAG edge emission', () => {
 			manager.addThought(rev);
 
 			const revises = edgeStore
-				.edgesForSession('__global__')
+				.edgesForSession(asSessionId('__global__'))
 				.filter((e) => e.kind === 'revises');
 			expect(revises).toHaveLength(1);
 			expect(revises[0]!.from).toBe(rev.id);
@@ -237,7 +238,7 @@ describe('HistoryManager DAG edge emission', () => {
 			).not.toThrow();
 
 			const merges = edgeStore
-				.edgesForSession('__global__')
+				.edgesForSession(asSessionId('__global__'))
 				.filter((e) => e.kind === 'merge');
 			expect(merges).toHaveLength(0);
 		});
@@ -259,12 +260,12 @@ describe('HistoryManager DAG edge emission', () => {
 			const { manager, edgeStore } = setup();
 			const t1 = makeThought(1);
 			const t2 = makeThought(2);
-			const t3 = makeThought(3, { branch_from_thought: 1, branch_id: 'b1' });
+			const t3 = makeThought(3, { branch_from_thought: 1, branch_id: asBranchId('b1') });
 			manager.addThought(t1);
 			manager.addThought(t2);
 			manager.addThought(t3);
 
-			const all = edgeStore.edgesForSession('__global__');
+			const all = edgeStore.edgesForSession(asSessionId('__global__'));
 			// t1->t2 sequence + t1->t3 branch (no t2->t3 sequence).
 			expect(all).toHaveLength(2);
 			expect(all.filter((e) => e.kind === 'sequence')).toHaveLength(1);
@@ -279,9 +280,9 @@ describe('HistoryManager DAG edge emission', () => {
 			manager.addThought(makeThought(2, { session_id: asSessionId('A') }));
 			manager.addThought(makeThought(1, { session_id: asSessionId('B') }));
 
-			expect(edgeStore.size('A')).toBe(1);
-			expect(edgeStore.size('B')).toBe(0);
-			const aEdges = edgeStore.edgesForSession('A');
+			expect(edgeStore.size(asSessionId('A'))).toBe(1);
+			expect(edgeStore.size(asSessionId('B'))).toBe(0);
+			const aEdges = edgeStore.edgesForSession(asSessionId('A'));
 			expect(aEdges[0]!.sessionId).toBe('A');
 		});
 	});
@@ -290,14 +291,14 @@ describe('HistoryManager DAG edge emission', () => {
 		it('resolves branch parent that lives on another branch', () => {
 			const { manager, edgeStore } = setup();
 			const t1 = makeThought(1);
-			const t2 = makeThought(2, { branch_from_thought: 1, branch_id: 'A' });
-			const t3 = makeThought(3, { branch_from_thought: 2, branch_id: 'B' });
+			const t2 = makeThought(2, { branch_from_thought: 1, branch_id: asBranchId('A') });
+			const t3 = makeThought(3, { branch_from_thought: 2, branch_id: asBranchId('B') });
 			manager.addThought(t1);
 			manager.addThought(t2);
 			manager.addThought(t3);
 
 			const branchEdges = edgeStore
-				.edgesForSession('__global__')
+				.edgesForSession(asSessionId('__global__'))
 				.filter((e) => e.kind === 'branch');
 			expect(branchEdges).toHaveLength(2);
 			const t3BranchEdge = branchEdges.find((e) => e.to === t3.id);

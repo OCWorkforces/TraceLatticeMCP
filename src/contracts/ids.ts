@@ -38,6 +38,9 @@ export type EdgeId = Brand<string, 'EdgeId'>;
 /** Branded suspension token. */
 export type SuspensionToken = Brand<string, 'SuspensionToken'>;
 
+/** Branded branch identifier. */
+export type BranchId = Brand<string, 'BranchId'>;
+
 /**
  * Validate and brand a string as a {@link SessionId}.
  *
@@ -81,6 +84,11 @@ export function asEdgeId(value: string): EdgeId {
 /** Brand a string as a {@link SuspensionToken} without validation. */
 export function asSuspensionToken(value: string): SuspensionToken {
 	return value as SuspensionToken;
+}
+
+/** Brand a string as a {@link BranchId} without validation. */
+export function asBranchId(value: string): BranchId {
+	return value as BranchId;
 }
 
 /** Generate a fresh {@link ThoughtId}. */

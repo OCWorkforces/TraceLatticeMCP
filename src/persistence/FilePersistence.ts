@@ -7,6 +7,7 @@ import type { ThoughtData } from '../core/thought.js';
 import type { Edge } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
 import type { PersistenceBackend, PersistenceConfig } from '../contracts/PersistenceBackend.js';
+import { asBranchId, type BranchId } from '../contracts/ids.js';
 
 /**
  * File-based persistence backend using JSON files.
@@ -127,7 +128,7 @@ export class FilePersistence implements PersistenceBackend {
 			}
 
 			const content = await readFile(this._historyPath, 'utf-8');
-			const data = JSON.parse(content) as ThoughtData[];
+			const data = JSON.parse(content) as unknown as ThoughtData[];
 
 			// Validate and filter
 			return Array.isArray(data) ? data : [];
@@ -139,7 +140,7 @@ export class FilePersistence implements PersistenceBackend {
 		}
 	}
 
-	public async saveBranch(branchId: string, thoughts: ThoughtData[]): Promise<void> {
+	public async saveBranch(branchId: BranchId, thoughts: ThoughtData[]): Promise<void> {
 		const startTime = Date.now();
 		try {
 			if (!this._persistBranches) {
@@ -155,7 +156,7 @@ export class FilePersistence implements PersistenceBackend {
 		}
 	}
 
-	public async loadBranch(branchId: string): Promise<ThoughtData[] | undefined> {
+	public async loadBranch(branchId: BranchId): Promise<ThoughtData[] | undefined> {
 		const startTime = Date.now();
 		try {
 			if (!this._persistBranches) {
@@ -170,7 +171,7 @@ export class FilePersistence implements PersistenceBackend {
 				}
 
 				const content = await readFile(branchPath, 'utf-8');
-				const data = JSON.parse(content) as ThoughtData[];
+				const data = JSON.parse(content) as unknown as ThoughtData[];
 
 				return Array.isArray(data) ? data : undefined;
 			} catch {
@@ -181,8 +182,8 @@ export class FilePersistence implements PersistenceBackend {
 		}
 	}
 
-	public async listBranches(): Promise<string[]> {
-		return this.getBranchIds();
+	public async listBranches(): Promise<BranchId[]> {
+		return (await this.getBranchIds()).map((id) => asBranchId(id));
 	}
 
 	public async clear(): Promise<void> {
@@ -339,7 +340,7 @@ export class FilePersistence implements PersistenceBackend {
 
 			try {
 				const content = await readFile(edgePath, 'utf-8');
-				const data = JSON.parse(content) as Edge[];
+				const data = JSON.parse(content) as unknown as Edge[];
 				return Array.isArray(data) ? data : [];
 			} catch {
 				return [];
@@ -439,7 +440,7 @@ export class FilePersistence implements PersistenceBackend {
 
 			try {
 				const content = await readFile(summaryPath, 'utf-8');
-				const data = JSON.parse(content) as Summary[];
+				const data = JSON.parse(content) as unknown as Summary[];
 				if (!Array.isArray(data)) return [];
 				return [...data].sort((a, b) => a.createdAt - b.createdAt);
 			} catch {

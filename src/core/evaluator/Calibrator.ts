@@ -28,6 +28,8 @@ import type {
 } from '../../contracts/calibrator.js';
 import type { IOutcomeRecorder, VerificationOutcome } from '../../contracts/interfaces.js';
 import type { ThoughtType } from '../reasoning.js';
+import type { SessionId } from '../../contracts/ids.js';
+import { GLOBAL_SESSION_ID } from '../../contracts/ids.js';
 
 const THOUGHT_TYPES: readonly ThoughtType[] = [
 	'regular',
@@ -48,7 +50,7 @@ const MIN_OUTCOMES_FOR_TEMPERATURE = 10;
 const ECE_BINS = 10;
 
 /** Sentinel used in the per-session temperature map for global state. */
-const GLOBAL_KEY = '__global__';
+const GLOBAL_KEY: SessionId = GLOBAL_SESSION_ID;
 
 /** Small epsilon to keep log() finite when probabilities approach 0 or 1. */
 const EPSILON = 1e-9;
@@ -252,7 +254,7 @@ export class Calibrator implements ICalibrator {
 	public calibrate(
 		rawConfidence: number,
 		type: ThoughtType,
-		sessionId: string,
+		sessionId: SessionId,
 	): CalibrationResult {
 		const raw = Math.min(1, Math.max(0, rawConfidence));
 		if (!this.enabled) {
@@ -273,7 +275,7 @@ export class Calibrator implements ICalibrator {
 		return { raw, calibrated, temperature, priorWeight };
 	}
 
-	public metrics(sessionId?: string): CalibrationMetrics {
+	public metrics(sessionId?: SessionId): CalibrationMetrics {
 		if (!this.enabled) return emptyMetrics();
 		const outcomes =
 			sessionId === undefined
@@ -287,7 +289,7 @@ export class Calibrator implements ICalibrator {
 		};
 	}
 
-	public refit(sessionId?: string): void {
+	public refit(sessionId?: SessionId): void {
 		if (!this.enabled) return;
 		const key = sessionId ?? GLOBAL_KEY;
 		const outcomes =

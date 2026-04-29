@@ -10,7 +10,7 @@
 
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
-import { asSessionId, GLOBAL_SESSION_ID } from '../contracts/ids.js';
+import { asSessionId, GLOBAL_SESSION_ID, type BranchId, type SessionId } from '../contracts/ids.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
 import type { ISuspensionStore, SuspensionRecord } from '../contracts/suspension.js';
 import type { IReasoningStrategy, StrategyDecision } from '../contracts/strategy.js';
@@ -28,12 +28,13 @@ import {
 import { getErrorMessage, WARNING_CODES } from '../errors.js';
 import { enforceJsonShape, JsonShapeError } from '../sanitize.js';
 import { GraphView } from './graph/GraphView.js';
+import { assertNever } from '../utils.js';
 import type { IHistoryManager } from './IHistoryManager.js';
 import { normalizeInput } from './InputNormalizer.js';
-import type { ThoughtData } from './thought.js';
+import type { ThoughtData, ToolCallThought, ToolObservationThought, ValidatedThought } from './thought.js';
 import type { ThoughtEvaluator } from './ThoughtEvaluator.js';
 import { ThoughtFormatter } from './ThoughtFormatter.js';
-import type { PatternSignal } from './reasoning.js';
+import type { PatternName, PatternSignal } from './reasoning.js';
 import { SequentialStrategy } from './reasoning/strategies/SequentialStrategy.js';
 import type { CompressionService } from './compression/CompressionService.js';
 
@@ -100,7 +101,7 @@ export class ThoughtProcessor {
 	 * Per-session cooldown tracker: session_id → pattern → last_fired_thought_number.
 	 * Prevents re-firing the same pattern hint within 3 thoughts.
 	 */
-	private _hintCooldowns = new Map<string, Map<string, number>>();
+	private _hintCooldowns = new Map<SessionId, Map<PatternName, number>>();
 
 	/**
 	 * Creates a new ThoughtProcessor instance.
@@ -146,7 +147,7 @@ export class ThoughtProcessor {
 	 * Priority ordering for warning patterns (lower = higher priority).
 	 * Ensures the most actionable patterns fill the hint cap first.
 	 */
-	private static readonly _HINT_PRIORITY: Readonly<Record<string, number>> = {
+	private static readonly _HINT_PRIORITY: Readonly<Partial<Record<PatternName, number>>> = {
 		confidence_drift: 1, // Most actionable — degrading confidence
 		unverified_hypothesis: 2, // Important for quality
 		no_alternatives_explored: 3, // Breadth gap
@@ -168,7 +169,7 @@ export class ThoughtProcessor {
 	private _generateHints(
 		patterns: PatternSignal[],
 		currentThoughtNumber: number,
-		sessionId?: string
+		sessionId?: SessionId
 	): string[] {
 		const warnings = patterns.filter((p) => p.severity === 'warning');
 		if (warnings.length === 0) return [];
@@ -180,7 +181,7 @@ export class ThoughtProcessor {
 			return pa - pb;
 		});
 
-		const sessionKey = sessionId ?? '__global__';
+		const sessionKey = sessionId ?? GLOBAL_SESSION_ID;
 		if (!this._hintCooldowns.has(sessionKey)) {
 			this._hintCooldowns.set(sessionKey, new Map());
 		}
@@ -255,12 +256,14 @@ export class ThoughtProcessor {
 		try {
 			// Normalize input to handle common LLM field name mistakes
 			const normalizedInput = normalizeInput(input);
-			const sessionId = normalizedInput.session_id;
+			const sessionId: SessionId | undefined = normalizedInput.session_id
+				? asSessionId(normalizedInput.session_id)
+				: undefined;
 
 			// Handle reset_state: clear session before processing
 			if (normalizedInput.reset_state) {
 				this.historyManager.clear(sessionId);
-				this.log('State reset for session', { sessionId: sessionId ?? '__global__' });
+				this.log('State reset for session', { sessionId: sessionId ?? GLOBAL_SESSION_ID });
 			}
 
 			// Persist available_mcp_tools/available_skills across calls within a session.
@@ -279,24 +282,24 @@ export class ThoughtProcessor {
 			const allWarnings = [...validateWarnings, ...refWarnings];
 
 			// Validate new thought types and tool-interleave invariants.
-			this._validateNewTypes(checkedInput, sessionId);
+			const validated = this._validateNewTypes(checkedInput, sessionId);
 
 			// Tool-interleave suspend path: persist the tool_call thought, then return
 			// a `suspended` envelope without running strategy/evaluator.
-			if (checkedInput.thought_type === 'tool_call' && this._suspensionStore) {
-				return this._handleToolCall(checkedInput, sessionId);
+			if (validated.thought_type === 'tool_call' && this._suspensionStore) {
+				return this._handleToolCall(validated, sessionId);
 			}
 
 			// Tool-interleave resume path: consume the suspension and continue the
 			// normal pipeline (addThought → format → evaluate → strategy).
-			if (checkedInput.thought_type === 'tool_observation' && this._suspensionStore) {
-				this._handleToolObservation(checkedInput, sessionId);
+			if (validated.thought_type === 'tool_observation' && this._suspensionStore) {
+				this._handleToolObservation(validated, sessionId);
 			}
 
 			this.historyManager.addThought(checkedInput);
 
 			const formattedThought = this.thoughtFormatter.formatThought(checkedInput);
-			this.log(formattedThought, { sessionId: sessionId ?? '__global__' });
+			this.log(formattedThought, { sessionId: sessionId ?? GLOBAL_SESSION_ID });
 
 			// Compute quality signals — fetch history/branches once
 			const history = this.historyManager.getHistory(sessionId);
@@ -391,14 +394,14 @@ export class ThoughtProcessor {
 		currentThought: ThoughtData,
 		history: ThoughtData[],
 		stats: ReturnType<ThoughtEvaluator['computeReasoningStats']>,
-		sessionId?: string
+		sessionId?: SessionId
 	): StrategyDecision {
 		let decision: StrategyDecision;
 		try {
 			const edgeStore = this._getEdgeStore();
 			const graph = edgeStore ? new GraphView(edgeStore) : undefined;
 			decision = this.strategy.decide({
-				sessionId: sessionId ?? '__global__',
+				sessionId: sessionId ?? GLOBAL_SESSION_ID,
 				history,
 				graph,
 				stats,
@@ -421,7 +424,7 @@ export class ThoughtProcessor {
 			currentThought.branch_id
 		) {
 			try {
-				const sid = sessionId ?? '__global__';
+				const sid = sessionId ?? GLOBAL_SESSION_ID;
 				const branchRoot = this._findBranchRoot(sid, currentThought.branch_id);
 				if (branchRoot) {
 					this._compressionService.compressBranch(sid, currentThought.branch_id, branchRoot);
@@ -442,7 +445,7 @@ export class ThoughtProcessor {
 	 * falls back to historyManager.getBranches()[branchId][0].id.
 	 * @private
 	 */
-	private _findBranchRoot(sessionId: string, branchId: string): string | undefined {
+	private _findBranchRoot(sessionId: SessionId, branchId: BranchId): string | undefined {
 		const edgeStore = this._getEdgeStore();
 		const branches = this.historyManager.getBranches(sessionId);
 		const branchList = branches[branchId];
@@ -516,7 +519,7 @@ export class ThoughtProcessor {
 	 * // warnings === ['Dropped dangling verification_target: 999 (history has 3 thoughts)']
 	 * ```
 	 */
-	private _validateCrossReferences(input: ThoughtData, sessionId?: string): {
+	private _validateCrossReferences(input: ThoughtData, sessionId?: SessionId): {
 		result: ThoughtData;
 		warnings: string[];
 	} {
@@ -597,12 +600,12 @@ export class ThoughtProcessor {
 
 		// merge_branch_ids: filter to existing branches only (includes pre-registered)
 		if (input.merge_branch_ids?.length) {
-			const valid = input.merge_branch_ids.filter((id: string) =>
+			const valid = input.merge_branch_ids.filter((id: BranchId) =>
 				this.historyManager.branchExists(sessionId, id)
 			);
 			if (valid.length < input.merge_branch_ids.length) {
 				const dropped = input.merge_branch_ids.filter(
-					(id: string) => !this.historyManager.branchExists(sessionId, id)
+					(id: BranchId) => !this.historyManager.branchExists(sessionId, id)
 				);
 				warnings.push(`Filtered dangling merge_branch_ids: [${dropped.join(', ')}]`);
 				this._logger.warn('Filtered dangling merge_branch_ids', {
@@ -621,7 +624,7 @@ export class ThoughtProcessor {
 	 * Validate new thought-type invariants behind feature flags.
 	 * @private
 	 */
-	private _validateNewTypes(input: ThoughtData, sessionId?: string): void {
+	private _validateNewTypes(input: ThoughtData, sessionId?: SessionId): ValidatedThought {
 		const t = input.thought_type;
 		if ((t === 'tool_call' || t === 'tool_observation') && !this._features.toolInterleave) {
 			throw new ValidationError(
@@ -670,6 +673,7 @@ export class ThoughtProcessor {
 				);
 			}
 		}
+		return input as ValidatedThought;
 	}
 
 	/**
@@ -698,7 +702,7 @@ export class ThoughtProcessor {
 	 * Checks whether a given thought_number exists in the session history or any branch.
 	 * @private
 	 */
-	private _thoughtNumberExists(thoughtNumber: number, sessionId?: string): boolean {
+	private _thoughtNumberExists(thoughtNumber: number, sessionId?: SessionId): boolean {
 		const history = this.historyManager.getHistory(sessionId);
 		for (const t of history) {
 			if (t.thought_number === thoughtNumber) return true;
@@ -724,10 +728,8 @@ export class ThoughtProcessor {
 				return 'hypothesis';
 			case 'backtrack':
 				return 'regular';
-			default: {
-				const _exhaust: never = t;
-				throw new Error(`Unhandled type: ${_exhaust as string}`);
-			}
+			default:
+				assertNever(t);
 		}
 	}
 
@@ -736,7 +738,7 @@ export class ThoughtProcessor {
 	 * Strategy/evaluator are intentionally skipped.
 	 * @private
 	 */
-	private _handleToolCall(input: ThoughtData, sessionId?: string): CallToolResult {
+	private _handleToolCall(input: ToolCallThought, sessionId?: SessionId): CallToolResult {
 		const args = input.tool_arguments ?? {};
 		try {
 			enforceJsonShape(args);
@@ -747,10 +749,13 @@ export class ThoughtProcessor {
 			throw err;
 		}
 		this.historyManager.addThought(input);
-		const record: SuspensionRecord = this._suspensionStore!.suspend({
-			sessionId: sessionId ? asSessionId(sessionId) : GLOBAL_SESSION_ID,
+		if (!this._suspensionStore) {
+			throw new ValidationError('thought_type', 'tool_call requires suspensionStore');
+		}
+		const record: SuspensionRecord = this._suspensionStore.suspend({
+			sessionId: sessionId ? sessionId : GLOBAL_SESSION_ID,
 			toolCallThoughtNumber: input.thought_number,
-			toolName: input.tool_name!,
+			toolName: input.tool_name,
 			toolArguments: input.tool_arguments ?? {},
 			ttlMs: 5 * 60_000,
 			expiresAt: 0,
@@ -783,13 +788,16 @@ export class ThoughtProcessor {
 	 * Distinguishes missing vs expired via peek().
 	 * @private
 	 */
-	private _handleToolObservation(input: ThoughtData, _sessionId?: string): void {
-		const token = input.continuation_token!;
-		const peeked = this._suspensionStore!.peek(token);
+	private _handleToolObservation(input: ToolObservationThought, _sessionId?: SessionId): void {
+		if (!this._suspensionStore) {
+			throw new ValidationError('thought_type', 'tool_observation requires suspensionStore');
+		}
+		const token = input.continuation_token;
+		const peeked = this._suspensionStore.peek(token);
 		if (peeked && peeked.expiresAt <= Date.now()) {
 			throw new SuspensionExpiredError('Suspension token expired: ' + token);
 		}
-		const record = this._suspensionStore!.resume(token);
+		const record = this._suspensionStore.resume(token);
 		if (!record) {
 			throw new SuspensionNotFoundError('Suspension token not found: ' + token);
 		}

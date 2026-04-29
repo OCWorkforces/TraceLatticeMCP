@@ -111,46 +111,46 @@ export interface PatternSignal {
  */
 export interface ConfidenceSignals {
 	/** Length of thought chain to this point. */
-	reasoning_depth: number;
+	readonly reasoning_depth: number;
 
 	/** How many revisions in this chain. */
-	revision_count: number;
+	readonly revision_count: number;
 
 	/** Active branches. */
-	branch_count: number;
+	readonly branch_count: number;
 
 	/** Distribution of thought types used. */
-	thought_type_distribution: Record<ThoughtType, number>;
+	readonly thought_type_distribution: Record<ThoughtType, number>;
 
 	/** Whether any hypothesis exists in chain. */
-	has_hypothesis: boolean;
+	readonly has_hypothesis: boolean;
 
 	/** Whether any verification exists. */
-	has_verification: boolean;
+	readonly has_verification: boolean;
 
 	/** Mean of explicit confidence values, null if none. */
-	average_confidence: number | null;
+	readonly average_confidence: number | null;
 
 	/**
 	 * Composite structural quality score (0-1).
 	 * Geometric mean of quality_components with floor of 0.01 per component.
 	 * Only present when history has ≥1 thought.
 	 */
-	structural_quality?: number;
+	readonly structural_quality?: number;
 
 	/**
 	 * Individual quality components that feed into structural_quality.
 	 * Only present when structural_quality is present.
 	 */
-	quality_components?: {
+	readonly quality_components?: {
 		/** Shannon entropy of thought_type distribution / log2(6), normalized 0-1. */
-		type_diversity: number;
+		readonly type_diversity: number;
 		/** verified_hypotheses / total_hypotheses. 1.0 if no hypotheses exist. */
-		verification_coverage: number;
+		readonly verification_coverage: number;
 		/** max(chain_depth, branch_count + 1) / total_thoughts, clamped to [0, 1]. Branching is desirable. */
-		depth_efficiency: number;
+		readonly depth_efficiency: number;
 		/** 1 - stddev(confidence values). Defaults to 0.5 if no confidence values. Null when fewer than 2 confidence values. */
-		confidence_stability: number | null;
+		readonly confidence_stability: number | null;
 	};
 
 	/**
@@ -158,15 +158,15 @@ export interface ConfidenceSignals {
 	 * Only present when quality_components is present.
 	 * Useful for debugging quality score calculations.
 	 */
-	quality_components_raw?: {
+	readonly quality_components_raw?: {
 		/** Shannon entropy / log2(6) — may be below 0.01 floor. */
-		type_diversity: number;
+		readonly type_diversity: number;
 		/** verified / total hypotheses — may be below 0.01 floor. */
-		verification_coverage: number;
+		readonly verification_coverage: number;
 		/** depth / total — may be below 0.01 floor. */
-		depth_efficiency: number;
+		readonly depth_efficiency: number;
 		/** 1 - stddev — may be below 0.01 floor. Null when fewer than 2 confidence values. */
-		confidence_stability: number | null;
+		readonly confidence_stability: number | null;
 	};
 
 	/** Calibrated confidence score (post temperature scaling + prior shrinkage). Only present when features.calibration=true. */
@@ -208,35 +208,35 @@ export interface ConfidenceSignals {
  */
 export interface ReasoningStats {
 	/** Total thoughts in session. */
-	total_thoughts: number;
+	readonly total_thoughts: number;
 
 	/** Total branches created. */
-	total_branches: number;
+	readonly total_branches: number;
 
 	/** Total revision operations. */
-	total_revisions: number;
+	readonly total_revisions: number;
 
 	/** Total merge operations (DAG topology). */
-	total_merges: number;
+	readonly total_merges: number;
 
 	/** Longest sequential chain depth. */
-	chain_depth: number;
+	readonly chain_depth: number;
 
 	/** Count of each thought type. */
-	thought_type_counts: Record<ThoughtType, number>;
+	readonly thought_type_counts: Record<ThoughtType, number>;
 
 	/** Hypotheses created. */
-	hypothesis_count: number;
+	readonly hypothesis_count: number;
 
 	/** Hypotheses that have been verified. */
-	verified_hypothesis_count: number;
+	readonly verified_hypothesis_count: number;
 
 	/** Hypotheses without verification. */
-	unresolved_hypothesis_count: number;
+	readonly unresolved_hypothesis_count: number;
 
 	/** Average quality score across thoughts with scores, null if none. */
-	average_quality_score: number | null;
+	readonly average_quality_score: number | null;
 
 	/** Average confidence across thoughts with confidence, null if none. */
-	average_confidence: number | null;
+	readonly average_confidence: number | null;
 }

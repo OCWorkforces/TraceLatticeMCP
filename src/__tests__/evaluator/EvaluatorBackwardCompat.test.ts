@@ -1,3 +1,4 @@
+import { asBranchId } from '../../contracts/ids.js';
 /**
  * Backward-compatibility snapshot tests for the {@link ThoughtEvaluator} facade.
  *
@@ -61,7 +62,7 @@ function branchingFixture(): Fixture {
 			thought_number: 4,
 			total_thoughts: 5,
 			branch_from_thought: 2,
-			branch_id: 'branch-a',
+			branch_id: asBranchId('branch-a'),
 			confidence: 0.65,
 		}),
 		createTestThought({
@@ -69,7 +70,7 @@ function branchingFixture(): Fixture {
 			thought_number: 5,
 			total_thoughts: 5,
 			branch_from_thought: 2,
-			branch_id: 'branch-a',
+			branch_id: asBranchId('branch-a'),
 			confidence: 0.7,
 		}),
 	];

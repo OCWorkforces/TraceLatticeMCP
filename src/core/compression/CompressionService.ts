@@ -21,6 +21,7 @@ import type { ThoughtData } from '../thought.js';
 import type { ConfidenceSignals } from '../reasoning.js';
 import { GraphView } from '../graph/GraphView.js';
 import { generateUlid } from '../ids.js';
+import { asSessionId, type BranchId } from '../../contracts/ids.js';
 
 /** Stopwords excluded from topic extraction (lowercase). */
 const STOPWORDS: ReadonlySet<string> = new Set([
@@ -70,7 +71,7 @@ export class CompressionService {
 	 * exists in the store, the existing summary is returned unchanged — same
 	 * inputs always yield the same Summary identity.
 	 */
-	compressBranch(sessionId: string, branchId: string, rootThoughtId: string): Summary {
+	compressBranch(sessionId: string, branchId: BranchId, rootThoughtId: string): Summary {
 		const existing = this._findExistingForRoot(sessionId, branchId, rootThoughtId);
 		if (existing) return existing;
 
@@ -78,7 +79,7 @@ export class CompressionService {
 		const thoughts = this._lookupThoughts(sessionId, coveredIds);
 		const summary: Summary = {
 			id: generateUlid(),
-			sessionId: sessionId as Summary['sessionId'],
+			sessionId: asSessionId(sessionId),
 			branchId,
 			rootThoughtId: rootThoughtId as Summary['rootThoughtId'],
 			coveredIds: coveredIds as Summary['coveredIds'],
@@ -102,7 +103,7 @@ export class CompressionService {
 	/** Look up an existing summary on this branch with a matching root. */
 	private _findExistingForRoot(
 		sessionId: string,
-		branchId: string,
+		branchId: BranchId,
 		rootThoughtId: string
 	): Summary | undefined {
 		for (const s of this._deps.summaryStore.forBranch(sessionId, branchId)) {
@@ -113,7 +114,7 @@ export class CompressionService {
 
 	/** Collect the root and all of its descendants (chronological BFS). */
 	private _collectCovered(sessionId: string, rootThoughtId: string): readonly string[] {
-		const descendants = this._graph.descendants(sessionId, rootThoughtId);
+		const descendants = this._graph.descendants(asSessionId(sessionId), rootThoughtId);
 		return [rootThoughtId, ...descendants];
 	}
 
