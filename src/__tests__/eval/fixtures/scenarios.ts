@@ -1,3 +1,4 @@
+import { asBranchId } from '../../../contracts/ids.js';
 /**
  * Eval fixture scenarios — handcrafted thought sequences exercising
  * different reasoning trajectories (convergence, plateau, divergence, …).
@@ -93,16 +94,16 @@ export const scenarios: readonly EvalScenario[] = [
 			t(2, 'branch-a step', 0.4, {
 				total_thoughts: 4,
 				branch_from_thought: 1,
-				branch_id: 'a',
+				branch_id: asBranchId('a'),
 			}),
 			t(3, 'branch-b step', 0.8, {
 				total_thoughts: 4,
 				branch_from_thought: 1,
-				branch_id: 'b',
+				branch_id: asBranchId('b'),
 			}),
 			t(4, 'branch-b deepen', 0.95, {
 				total_thoughts: 4,
-				branch_id: 'b',
+				branch_id: asBranchId('b'),
 			}),
 		],
 		branchEdges: [
@@ -133,15 +134,15 @@ export const scenarios: readonly EvalScenario[] = [
 		name: 'Multi-Branch',
 		thoughts: [
 			t(1, 'root', 0.4, { total_thoughts: 10 }),
-			t(2, 'a-1', 0.45, { total_thoughts: 10, branch_from_thought: 1, branch_id: 'a' }),
-			t(3, 'a-2', 0.5, { total_thoughts: 10, branch_id: 'a' }),
-			t(4, 'a-3', 0.55, { total_thoughts: 10, branch_id: 'a' }),
-			t(5, 'a-4', 0.6, { total_thoughts: 10, branch_id: 'a' }),
-			t(6, 'b-1', 0.4, { total_thoughts: 10, branch_from_thought: 1, branch_id: 'b' }),
-			t(7, 'b-2', 0.5, { total_thoughts: 10, branch_id: 'b' }),
-			t(8, 'b-3', 0.55, { total_thoughts: 10, branch_id: 'b' }),
-			t(9, 'b-4', 0.6, { total_thoughts: 10, branch_id: 'b' }),
-			t(10, 'b-5', 0.65, { total_thoughts: 10, branch_id: 'b' }),
+			t(2, 'a-1', 0.45, { total_thoughts: 10, branch_from_thought: 1, branch_id: asBranchId('a') }),
+			t(3, 'a-2', 0.5, { total_thoughts: 10, branch_id: asBranchId('a') }),
+			t(4, 'a-3', 0.55, { total_thoughts: 10, branch_id: asBranchId('a') }),
+			t(5, 'a-4', 0.6, { total_thoughts: 10, branch_id: asBranchId('a') }),
+			t(6, 'b-1', 0.4, { total_thoughts: 10, branch_from_thought: 1, branch_id: asBranchId('b') }),
+			t(7, 'b-2', 0.5, { total_thoughts: 10, branch_id: asBranchId('b') }),
+			t(8, 'b-3', 0.55, { total_thoughts: 10, branch_id: asBranchId('b') }),
+			t(9, 'b-4', 0.6, { total_thoughts: 10, branch_id: asBranchId('b') }),
+			t(10, 'b-5', 0.65, { total_thoughts: 10, branch_id: asBranchId('b') }),
 		],
 		branchEdges: [
 			['t-1', 't-2'],

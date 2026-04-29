@@ -17,6 +17,7 @@
 import type { ThoughtData } from '../../thought.js';
 import type { ConfidenceSignals, ThoughtType } from '../../reasoning.js';
 import type { GraphView } from '../../graph/GraphView.js';
+import type { SessionId } from '../../../contracts/ids.js';
 
 /**
  * Optional `confidence_signals` carried alongside a thought. The core
@@ -157,7 +158,7 @@ export function selectBeam(
  */
 export function breadthFirstFrontier(
 	graph: GraphView,
-	sessionId: string,
+	sessionId: SessionId,
 	roots: readonly string[],
 	depthCap: number
 ): readonly string[] {

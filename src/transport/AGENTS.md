@@ -1,11 +1,11 @@
 # TRANSPORT MODULE
 
-**Updated:** 2026-04-18
+**Updated:** 2026-04-29
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW
 
-MCP transport implementations: 3 transport types + shared base. Communication channels between MCP server and clients. Factory pattern, async lifecycle, security baked in.
+MCP transport implementations: 3 transport types + shared base. Communication channels between MCP server and clients. Factory pattern, async lifecycle, security baked in. `ITransport` contract: `src/contracts/transport.ts`.
 
 ## STRUCTURE
 
@@ -20,10 +20,10 @@ src/transport/
 
 ## TRANSPORTS
 
-### StreamableHttpTransport (most complex)
-Full MCP Streamable HTTP. Dual mode: stateful (per-client `SessionState` keyed by `Mcp-Session-Id` header) or stateless. Request streaming, graceful shutdown, session reaper.
+### StreamableHttpTransport (production, most complex)
+Production MCP transport (replaced SSE as of MCP spec March 2025). Dual mode: stateful (per-client `SessionState` keyed by `Mcp-Session-Id` header) or stateless. Request streaming, graceful shutdown, session reaper.
 
-### SseTransport
+### SseTransport (legacy)
 Server-Sent Events for multi-user streaming. `Set<ServerResponse>` connection pool, message queue for late joiners, auto client IDs. Endpoints: `GET {path}` (SSE), `POST {path}/message`, `GET /health`.
 
 ### HttpTransport (simplest)
@@ -32,6 +32,12 @@ Stateless JSON-RPC 2.0 over HTTP. Pipeline: rate limit → CORS → body size �
 ## SHARED BASE
 
 `BaseTransport` provides cross-cutting security:
+- Rate limiting (100 req/min per-IP, `X-Forwarded-For` aware)
+- CORS preflight + headers
+- Session ID validation (`SESSION_ID_PATTERN` from `core/ids.ts`)
+- Host header allowlist (`ALLOWED_HOSTS`)
+- Query param sanitization, path traversal prevention, request size caps
+- JSON-RPC parsing via `safeParse(JsonRpcRequestSchema, rawBody)` (valibot) — never raw `JSON.parse(...) as unknown`
 - Rate limiting (100 req/min per-IP, `X-Forwarded-For` aware)
 - CORS preflight + headers
 - Session ID validation, query sanitization

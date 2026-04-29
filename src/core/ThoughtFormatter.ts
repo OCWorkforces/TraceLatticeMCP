@@ -13,6 +13,7 @@ import type { IThoughtFormatter } from './IThoughtFormatter.js';
 import type { ThoughtType } from './reasoning.js';
 import type { StepRecommendation } from './step.js';
 import type { ThoughtData } from './thought.js';
+import { assertNever } from '../utils.js';
 
 /**
  * Formatter for thought data and step recommendations.
@@ -224,12 +225,8 @@ export class ThoughtFormatter implements IThoughtFormatter {
 				case 'regular':
 					icon = chalk.blue('💭');
 					break;
-				default: {
-					const _exhaust: never = thoughtType;
-					void _exhaust;
-					icon = chalk.blue('💭');
-					break;
-				}
+				default:
+					assertNever(thoughtType);
 			}
 		}
 

@@ -135,10 +135,6 @@ export class SkillRegistry extends BaseRegistry<Skill> {
 		this.add(skill);
 	}
 
-	/** @deprecated Use `remove()` instead */
-	public removeSkillByName(name: string): void {
-		this.remove(name);
-	}
 
 	public updateSkill(name: string, updates: Partial<Skill>): void {
 		this.update(name, updates);

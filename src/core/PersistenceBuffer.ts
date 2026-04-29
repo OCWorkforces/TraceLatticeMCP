@@ -10,6 +10,7 @@
  */
 
 import type { IEdgeStore } from '../contracts/interfaces.js';
+import { asSessionId } from '../contracts/ids.js';
 import { getErrorMessage } from '../errors.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import { NullLogger } from '../logger/NullLogger.js';
@@ -187,7 +188,7 @@ export class PersistenceBuffer<S extends BufferedSession> {
 		const sessionKeys = new Set<string>(this._getSessions().keys());
 		sessionKeys.add(this._defaultSessionId);
 		for (const sessionId of sessionKeys) {
-			const edges = this._edgeStore.edgesForSession(sessionId);
+			const edges = this._edgeStore.edgesForSession(asSessionId(sessionId));
 			if (edges.length === 0) continue;
 			try {
 				await this._persistence.saveEdges(sessionId, edges);

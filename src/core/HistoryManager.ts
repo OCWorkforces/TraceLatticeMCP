@@ -14,6 +14,7 @@
 
 import type { IMetrics } from '../contracts/interfaces.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
+import { asSessionId, type BranchId } from '../contracts/ids.js';
 import type { ISummaryStore } from '../contracts/summary.js';
 import { ValidationError, SessionAccessDeniedError, getErrorMessage } from '../errors.js';
 import { NullLogger } from '../logger/NullLogger.js';
@@ -42,7 +43,7 @@ interface SessionState {
 	availableSkills: string[] | undefined;
 	writeBuffer: ThoughtData[];
 	lastAccessedAt: number;
-	registeredBranches: Set<string>;
+	registeredBranches: Set<BranchId>;
 	/** Owner identifier set on first owner-aware access. Immutable thereafter. */
 	owner?: string;
 }
@@ -214,7 +215,7 @@ export class HistoryManager implements IHistoryManager {
 				availableSkills: undefined,
 				writeBuffer: [],
 				lastAccessedAt: Date.now(),
-				registeredBranches: new Set<string>(),
+				registeredBranches: new Set<BranchId>(),
 				owner,
 			};
 			this._sessions.set(key, session);
@@ -311,7 +312,7 @@ export class HistoryManager implements IHistoryManager {
 		}
 	}
 
-	private _addToSessionBranch(session: SessionState, branchId: string, thought: ThoughtData): void {
+	private _addToSessionBranch(session: SessionState, branchId: BranchId, thought: ThoughtData): void {
 		if (!session.branches[branchId]) {
 			session.branches[branchId] = [];
 		}
@@ -334,9 +335,9 @@ export class HistoryManager implements IHistoryManager {
 	}
 
 	private _cleanupSessionBranches(session: SessionState): void {
-		const branchCount = Object.keys(session.branches).length;
+		const branchCount = (Object.keys(session.branches) as BranchId[]).length;
 		if (branchCount > this._maxBranches) {
-			const branchesToRemove = Object.keys(session.branches).slice(
+			const branchesToRemove = (Object.keys(session.branches) as BranchId[]).slice(
 				0,
 				branchCount - this._maxBranches
 			);
@@ -347,7 +348,7 @@ export class HistoryManager implements IHistoryManager {
 		}
 	}
 
-	private _trimSessionBranchSize(session: SessionState, branchId: string): void {
+	private _trimSessionBranchSize(session: SessionState, branchId: BranchId): void {
 		if ((session.branches[branchId] ?? []).length > this._maxBranchSize) {
 			const removed = session.branches[branchId]!.length - this._maxBranchSize;
 			session.branches[branchId] = session.branches[branchId]!.slice(-this._maxBranchSize);
@@ -383,19 +384,19 @@ export class HistoryManager implements IHistoryManager {
 		return this._getSession(sessionId, this._getCurrentOwner()).thought_history.length;
 	}
 
-	public getBranches(sessionId?: string): Record<string, ThoughtData[]> {
+	public getBranches(sessionId?: string): Record<BranchId, ThoughtData[]> {
 		return this._getSession(sessionId, this._getCurrentOwner()).branches;
 	}
 
-	public getBranchIds(sessionId?: string): string[] {
+	public getBranchIds(sessionId?: string): BranchId[] {
 		const session = this._getSession(sessionId, this._getCurrentOwner());
-		const ids = new Set<string>(Object.keys(session.branches));
+		const ids = new Set<BranchId>(Object.keys(session.branches) as BranchId[]);
 		for (const id of session.registeredBranches) ids.add(id);
 		return Array.from(ids);
 	}
 
 	/** @throws {ValidationError} If branchId is empty or already exists. */
-	public registerBranch(sessionId: string | undefined, branchId: string): void {
+	public registerBranch(sessionId: string | undefined, branchId: BranchId): void {
 		if (typeof branchId !== 'string' || branchId.length === 0) {
 			throw new ValidationError('branch_id', 'branch_id must be a non-empty string');
 		}
@@ -407,7 +408,7 @@ export class HistoryManager implements IHistoryManager {
 		this.log('Registered branch', { branchId, sessionId: sessionId ?? null });
 	}
 
-	public branchExists(sessionId: string | undefined, branchId: string): boolean {
+	public branchExists(sessionId: string | undefined, branchId: BranchId): boolean {
 		const session = this._getSession(sessionId, this._getCurrentOwner());
 		return branchId in session.branches || session.registeredBranches.has(branchId);
 	}
@@ -420,7 +421,7 @@ export class HistoryManager implements IHistoryManager {
 		return this._getSession(sessionId, this._getCurrentOwner()).availableSkills;
 	}
 
-	public getBranch(branchId: string, sessionId?: string): ThoughtData[] | undefined {
+	public getBranch(branchId: BranchId, sessionId?: string): ThoughtData[] | undefined {
 		return this._getSession(sessionId, this._getCurrentOwner()).branches[branchId];
 	}
 
@@ -437,7 +438,7 @@ export class HistoryManager implements IHistoryManager {
 				this._edgeStore.clearSession(sessionId);
 			} else {
 				for (const sid of this._sessions.keys()) {
-					this._edgeStore.clearSession(sid);
+					this._edgeStore.clearSession(asSessionId(sid));
 				}
 				// Also clear the default session in case no session entries exist yet
 				this._edgeStore.clearSession(HistoryManager.DEFAULT_SESSION);

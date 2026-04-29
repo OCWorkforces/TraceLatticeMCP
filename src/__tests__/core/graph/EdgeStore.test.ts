@@ -2,6 +2,7 @@
  * Tests for the EdgeStore implementation.
  */
 
+import { asSessionId } from '../../../contracts/ids.js';
 import { describe, it, expect } from 'vitest';
 import { EdgeStore } from '../../../core/graph/EdgeStore.js';
 import { generateUlid } from '../../../core/ids.js';
@@ -42,7 +43,7 @@ describe('EdgeStore', () => {
 			const store = new EdgeStore();
 			const edge = createTestEdge({ from: 'a', to: 'b', sessionId: 's1' });
 			store.addEdge(edge);
-			const outgoing = store.outgoing('s1', 'a');
+			const outgoing = store.outgoing(asSessionId('s1'), 'a');
 			expect(outgoing).toHaveLength(1);
 			expect(outgoing[0]).toEqual(edge);
 		});
@@ -51,7 +52,7 @@ describe('EdgeStore', () => {
 			const store = new EdgeStore();
 			const edge = createTestEdge({ from: 'a', to: 'b', sessionId: 's1' });
 			store.addEdge(edge);
-			const incoming = store.incoming('s1', 'b');
+			const incoming = store.incoming(asSessionId('s1'), 'b');
 			expect(incoming).toHaveLength(1);
 			expect(incoming[0]).toEqual(edge);
 		});
@@ -64,7 +65,7 @@ describe('EdgeStore', () => {
 			store.addEdge(e1);
 			store.addEdge(e2);
 			store.addEdge(e3);
-			const outgoing = store.outgoing('s1', 'a');
+			const outgoing = store.outgoing(asSessionId('s1'), 'a');
 			expect(outgoing.map((e) => e.createdAt)).toEqual([100, 200, 300]);
 		});
 
@@ -76,24 +77,24 @@ describe('EdgeStore', () => {
 			store.addEdge(e1);
 			store.addEdge(e2);
 			store.addEdge(e3);
-			const incoming = store.incoming('s1', 'z');
+			const incoming = store.incoming(asSessionId('s1'), 'z');
 			expect(incoming.map((e) => e.createdAt)).toEqual([100, 200, 300]);
 		});
 
 		it('outgoing returns empty array for unknown session', () => {
 			const store = new EdgeStore();
-			expect(store.outgoing('nope', 'a')).toEqual([]);
+			expect(store.outgoing(asSessionId('nope'), 'a')).toEqual([]);
 		});
 
 		it('incoming returns empty array for unknown session', () => {
 			const store = new EdgeStore();
-			expect(store.incoming('nope', 'a')).toEqual([]);
+			expect(store.incoming(asSessionId('nope'), 'a')).toEqual([]);
 		});
 
 		it('outgoing returns empty array for unknown source thought', () => {
 			const store = new EdgeStore();
 			store.addEdge(createTestEdge({ from: 'a', to: 'b', sessionId: 's1' }));
-			expect(store.outgoing('s1', 'unknown')).toEqual([]);
+			expect(store.outgoing(asSessionId('s1'), 'unknown')).toEqual([]);
 		});
 	});
 
@@ -124,12 +125,12 @@ describe('EdgeStore', () => {
 			const second = createTestEdge({ from: 'a', to: 'b', sessionId: 's1', kind: 'sequence' });
 			store.addEdge(first);
 			store.addEdge(second);
-			expect(store.size('s1')).toBe(1);
+			expect(store.size(asSessionId('s1'))).toBe(1);
 			// First wins; second's id is not present.
 			expect(store.getEdge(first.id)).toEqual(first);
 			expect(store.getEdge(second.id)).toBeUndefined();
-			expect(store.outgoing('s1', 'a')).toHaveLength(1);
-			expect(store.incoming('s1', 'b')).toHaveLength(1);
+			expect(store.outgoing(asSessionId('s1'), 'a')).toHaveLength(1);
+			expect(store.incoming(asSessionId('s1'), 'b')).toHaveLength(1);
 		});
 
 		it('addEdge allows same (from, to) with different kind', () => {
@@ -138,8 +139,8 @@ describe('EdgeStore', () => {
 			const e2 = createTestEdge({ from: 'a', to: 'b', sessionId: 's1', kind: 'verifies' });
 			store.addEdge(e1);
 			store.addEdge(e2);
-			expect(store.size('s1')).toBe(2);
-			expect(store.outgoing('s1', 'a')).toHaveLength(2);
+			expect(store.size(asSessionId('s1'))).toBe(2);
+			expect(store.outgoing(asSessionId('s1'), 'a')).toHaveLength(2);
 		});
 
 		it('addEdge allows same (from, to, kind) in different sessions', () => {
@@ -148,8 +149,8 @@ describe('EdgeStore', () => {
 			const e2 = createTestEdge({ from: 'a', to: 'b', sessionId: 's2', kind: 'sequence' });
 			store.addEdge(e1);
 			store.addEdge(e2);
-			expect(store.size('s1')).toBe(1);
-			expect(store.size('s2')).toBe(1);
+			expect(store.size(asSessionId('s1'))).toBe(1);
+			expect(store.size(asSessionId('s2'))).toBe(1);
 			expect(store.size()).toBe(2);
 		});
 	});
@@ -159,11 +160,11 @@ describe('EdgeStore', () => {
 			const store = new EdgeStore();
 			store.addEdge(createTestEdge({ from: 'a', to: 'b', sessionId: 's1' }));
 			store.addEdge(createTestEdge({ from: 'c', to: 'd', sessionId: 's1' }));
-			store.clearSession('s1');
-			expect(store.size('s1')).toBe(0);
-			expect(store.outgoing('s1', 'a')).toEqual([]);
-			expect(store.incoming('s1', 'b')).toEqual([]);
-			expect(store.edgesForSession('s1')).toEqual([]);
+			store.clearSession(asSessionId('s1'));
+			expect(store.size(asSessionId('s1'))).toBe(0);
+			expect(store.outgoing(asSessionId('s1'), 'a')).toEqual([]);
+			expect(store.incoming(asSessionId('s1'), 'b')).toEqual([]);
+			expect(store.edgesForSession(asSessionId('s1'))).toEqual([]);
 		});
 
 		it('clearSession does not affect other sessions', () => {
@@ -171,17 +172,17 @@ describe('EdgeStore', () => {
 			const keep = createTestEdge({ from: 'x', to: 'y', sessionId: 's2' });
 			store.addEdge(createTestEdge({ from: 'a', to: 'b', sessionId: 's1' }));
 			store.addEdge(keep);
-			store.clearSession('s1');
-			expect(store.size('s1')).toBe(0);
-			expect(store.size('s2')).toBe(1);
+			store.clearSession(asSessionId('s1'));
+			expect(store.size(asSessionId('s1'))).toBe(0);
+			expect(store.size(asSessionId('s2'))).toBe(1);
 			expect(store.getEdge(keep.id)).toEqual(keep);
 		});
 
 		it('clearSession on unknown session is a no-op', () => {
 			const store = new EdgeStore();
 			store.addEdge(createTestEdge({ from: 'a', to: 'b', sessionId: 's1' }));
-			expect(() => store.clearSession('unknown')).not.toThrow();
-			expect(store.size('s1')).toBe(1);
+			expect(() => store.clearSession(asSessionId('unknown'))).not.toThrow();
+			expect(store.size(asSessionId('s1'))).toBe(1);
 		});
 	});
 
@@ -191,9 +192,9 @@ describe('EdgeStore', () => {
 			store.addEdge(createTestEdge({ from: 'a', to: 'b', sessionId: 's1' }));
 			store.addEdge(createTestEdge({ from: 'c', to: 'd', sessionId: 's1' }));
 			store.addEdge(createTestEdge({ from: 'e', to: 'f', sessionId: 's2' }));
-			expect(store.size('s1')).toBe(2);
-			expect(store.size('s2')).toBe(1);
-			expect(store.size('unknown')).toBe(0);
+			expect(store.size(asSessionId('s1'))).toBe(2);
+			expect(store.size(asSessionId('s2'))).toBe(1);
+			expect(store.size(asSessionId('unknown'))).toBe(0);
 		});
 
 		it('size() without sessionId returns total count', () => {
@@ -207,7 +208,7 @@ describe('EdgeStore', () => {
 		it('size() returns 0 on empty store', () => {
 			const store = new EdgeStore();
 			expect(store.size()).toBe(0);
-			expect(store.size('any')).toBe(0);
+			expect(store.size(asSessionId('any'))).toBe(0);
 		});
 	});
 
@@ -220,13 +221,13 @@ describe('EdgeStore', () => {
 			store.addEdge(e1);
 			store.addEdge(e2);
 			store.addEdge(e3);
-			const edges = store.edgesForSession('s1');
+			const edges = store.edgesForSession(asSessionId('s1'));
 			expect(edges.map((e) => e.createdAt)).toEqual([100, 200, 300]);
 		});
 
 		it('edgesForSession returns empty array for unknown session', () => {
 			const store = new EdgeStore();
-			expect(store.edgesForSession('nope')).toEqual([]);
+			expect(store.edgesForSession(asSessionId('nope'))).toEqual([]);
 		});
 	});
 });

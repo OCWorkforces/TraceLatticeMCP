@@ -14,7 +14,6 @@ import type { ToolAwareSequentialThinkingServer } from './lib.js';
 import { initializeServer } from './lib.js';
 import { StructuredLogger } from './logger/StructuredLogger.js';
 import { getErrorMessage } from './errors.js';
-import { Metrics } from './metrics/metrics.impl.js';
 import { SEQUENTIAL_THINKING_TOOL, SequentialThinkingSchema } from './schema.js';
 
 // Get version from package.json
@@ -76,7 +75,7 @@ async function startSseTransport(server: McpServer, thinkingServer: ToolAwareSeq
     const { createConnectionPool } = await import('./pool/ConnectionPool.js');
     const port = parseInt(process.env.SSE_PORT || '3000', 10);
     const host = process.env.SSE_HOST || 'localhost';
-    const transportMetrics = thinkingServer.getContainer().resolve<Metrics>('Metrics');
+    const transportMetrics = thinkingServer.getContainer().resolve('Metrics');
     const enablePool = process.env.SSE_ENABLE_POOL !== 'false';
     const maxSessions = parseInt(process.env.SSE_MAX_SESSIONS || '100', 10);
     const sessionTimeout = parseInt(process.env.SSE_SESSION_TIMEOUT || '300000', 10);
@@ -119,7 +118,7 @@ async function startStreamableHttpTransport(server: McpServer, thinkingServer: T
     const { StreamableHttpTransport } = await import('./transport/StreamableHttpTransport.js');
     const port = parseInt(process.env.STREAMABLE_HTTP_PORT || process.env.SSE_PORT || '3000', 10);
     const host = process.env.STREAMABLE_HTTP_HOST || process.env.SSE_HOST || 'localhost';
-    const transportMetrics = thinkingServer.getContainer().resolve<Metrics>('Metrics');
+    const transportMetrics = thinkingServer.getContainer().resolve('Metrics');
     const stateful = process.env.STREAMABLE_HTTP_STATEFUL !== 'false';
     const streamableTransport = new StreamableHttpTransport({
 	    port,

@@ -14,6 +14,7 @@
 
 import { SequentialThinkingError } from '../../errors.js';
 import type { ISummaryStore, Summary } from '../../contracts/summary.js';
+import type { BranchId } from '../../contracts/ids.js';
 
 /**
  * Compose the composite branch key used by the per-branch index.
@@ -22,7 +23,7 @@ import type { ISummaryStore, Summary } from '../../contracts/summary.js';
  * and is safe because session/branch ids are constrained to alphanumeric,
  * hyphen and underscore characters.
  */
-function branchKey(sessionId: string, branchId: string): string {
+function branchKey(sessionId: string, branchId: BranchId): string {
 	return `${sessionId}:${branchId}`;
 }
 
@@ -127,7 +128,7 @@ export class InMemorySummaryStore implements ISummaryStore {
 	 * const branch = store.forBranch('s1', 'alt-1');
 	 * ```
 	 */
-	forBranch(sessionId: string, branchId: string): readonly Summary[] {
+	forBranch(sessionId: string, branchId: BranchId): readonly Summary[] {
 		return this._byBranch.get(branchKey(sessionId, branchId)) ?? [];
 	}
 

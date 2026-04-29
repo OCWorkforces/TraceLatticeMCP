@@ -56,7 +56,7 @@ describe('Container', () => {
 			const logger = new ConsoleLogger('[TEST] ');
 			container.registerInstance('Logger', logger);
 
-			const resolved = container.resolve<ConsoleLogger>('Logger');
+			const resolved = container.resolve('Logger') as unknown as ConsoleLogger;
 
 			expect(resolved).toBe(logger);
 			expect(resolved.prefix).toBe('[TEST] ');
@@ -66,8 +66,8 @@ describe('Container', () => {
 			const logger = new ConsoleLogger('[TEST] ');
 			container.registerInstance('Logger', logger);
 
-			const first = container.resolve<ConsoleLogger>('Logger');
-			const second = container.resolve<ConsoleLogger>('Logger');
+			const first = container.resolve('Logger') as unknown as ConsoleLogger;
+			const second = container.resolve('Logger') as unknown as ConsoleLogger;
 
 			expect(first).toBe(second);
 			expect(first).toBe(logger);
@@ -78,7 +78,7 @@ describe('Container', () => {
 		it('should register and resolve a factory', () => {
 			container.register('Logger', () => new ConsoleLogger('[FACTORY] '));
 
-			const resolved = container.resolve<ConsoleLogger>('Logger');
+			const resolved = container.resolve('Logger') as unknown as ConsoleLogger;
 
 			expect(resolved).toBeInstanceOf(ConsoleLogger);
 			expect(resolved.prefix).toBe('[FACTORY] ');
@@ -91,8 +91,8 @@ describe('Container', () => {
 				return new ConsoleLogger(`[CALL-${callCount}] `);
 			});
 
-			const first = container.resolve<ConsoleLogger>('Logger');
-			const second = container.resolve<ConsoleLogger>('Logger');
+			const first = container.resolve('Logger') as unknown as ConsoleLogger;
+			const second = container.resolve('Logger') as unknown as ConsoleLogger;
 
 			expect(callCount).toBe(1);
 			expect(first).toBe(second);
@@ -104,11 +104,11 @@ describe('Container', () => {
 			container.registerInstance('Logger', logger);
 
 			container.register('Service', () => {
-				const resolvedLogger = container.resolve<ILogger>('Logger');
+				const resolvedLogger = container.resolve('Logger') as unknown as ConsoleLogger;
 				return new ServiceWithDependencies(resolvedLogger, new TestConfig({ key: 'value' }));
 			});
 
-			const service = container.resolve<ServiceWithDependencies>('Service');
+			const service = (container.resolveDynamic('Service') as ServiceWithDependencies);
 
 			expect(service).toBeInstanceOf(ServiceWithDependencies);
 			expect(service.logger).toBe(logger);
@@ -120,8 +120,8 @@ describe('Container', () => {
 		it('should create new instance on each resolve', () => {
 			container.registerFactory('Logger', () => new ConsoleLogger('[TRANSIENT] '));
 
-			const first = container.resolve<ConsoleLogger>('Logger');
-			const second = container.resolve<ConsoleLogger>('Logger');
+			const first = container.resolve('Logger') as unknown as ConsoleLogger;
+			const second = container.resolve('Logger') as unknown as ConsoleLogger;
 
 			expect(first).not.toBe(second);
 			expect(first).toBeInstanceOf(ConsoleLogger);
@@ -135,9 +135,9 @@ describe('Container', () => {
 				return { count: callCount };
 			});
 
-			const first = container.resolve<{ count: number }>('Counter');
-			const second = container.resolve<{ count: number }>('Counter');
-			const third = container.resolve<{ count: number }>('Counter');
+			const first = container.resolveDynamic('Counter') as { count: number };
+			const second = container.resolveDynamic('Counter') as { count: number };
+			const third = container.resolveDynamic('Counter') as { count: number };
 
 			expect(first.count).toBe(1);
 			expect(second.count).toBe(2);
@@ -187,13 +187,13 @@ describe('Container', () => {
 	describe('Service Not Found', () => {
 		it('should throw error when resolving unregistered service', () => {
 			expect(() => {
-				container.resolve('NonExistent');
+				container.resolveDynamic('NonExistent');
 			}).toThrow('Service not found: NonExistent');
 		});
 
 		it('should include helpful message in error', () => {
 			expect(() => {
-				container.resolve('MyService');
+				container.resolveDynamic('MyService');
 			}).toThrow('Service not found: MyService. Did you forget to register it?');
 		});
 	});
@@ -220,7 +220,7 @@ describe('Container', () => {
 
 		it('should return true after factory is resolved (cached)', () => {
 			container.register('Logger', () => new ConsoleLogger());
-			container.resolve('Logger');
+			container.resolve('Logger') as unknown as ConsoleLogger;
 			expect(container.has('Logger')).toBe(true);
 		});
 	});
@@ -268,7 +268,7 @@ describe('Container', () => {
 			// Should not throw
 			container.registerInstance('Logger', new ConsoleLogger('second'));
 
-			const resolved = container.resolve<ConsoleLogger>('Logger');
+			const resolved = container.resolve('Logger') as unknown as ConsoleLogger;
 			expect(resolved.prefix).toBe('second');
 		});
 	});
@@ -356,7 +356,7 @@ describe('Container', () => {
 
 			expect(container.size).toBe(1);
 
-			container.resolve('Logger');
+			container.resolve('Logger') as unknown as ConsoleLogger;
 
 			expect(container.size).toBe(1);
 		});
@@ -629,7 +629,7 @@ describe('createDefaultContainer', () => {
 		const container = createDefaultContainer({ logger });
 
 		expect(container.has('Logger')).toBe(true);
-		const resolved = container.resolve<ConsoleLogger>('Logger');
+		const resolved = container.resolve('Logger') as unknown as ConsoleLogger;
 		expect(resolved).toBe(logger);
 	});
 
@@ -638,7 +638,7 @@ describe('createDefaultContainer', () => {
 		const container = createDefaultContainer({ config });
 
 		expect(container.has('Config')).toBe(true);
-		const resolved = container.resolve<ServerConfig>('Config');
+		const resolved = container.resolve('Config');
 		expect(resolved).toBe(config);
 	});
 
@@ -669,14 +669,14 @@ describe('Complex Scenarios', () => {
 		// Register a service that will later depend on another
 		container.register('Service', () => {
 			// Resolve dependency at factory call time, not registration time
-			const logger = container.resolve<ILogger>('Logger');
+			const logger = container.resolve('Logger') as unknown as ConsoleLogger;
 			return { logger };
 		});
 
 		// Register the dependency after the service
 		container.registerInstance('Logger', new ConsoleLogger('[LAZY] '));
 
-		const service = container.resolve<{ logger: ILogger }>('Service');
+		const service = container.resolveDynamic('Service') as { logger: ILogger };
 
 		expect(service.logger).toBeInstanceOf(ConsoleLogger);
 		expect((service.logger as ConsoleLogger).prefix).toBe('[LAZY] ');
@@ -686,21 +686,21 @@ describe('Complex Scenarios', () => {
 		const container = new Container();
 
 		container.registerInstance('Logger', new ConsoleLogger('v1'));
-		expect(container.resolve<ConsoleLogger>('Logger').prefix).toBe('v1');
+		expect((container.resolve('Logger') as unknown as ConsoleLogger).prefix).toBe('v1');
 
 		container.unregister('Logger');
 		container.registerInstance('Logger', new ConsoleLogger('v2'));
-		expect(container.resolve<ConsoleLogger>('Logger').prefix).toBe('v2');
+		expect((container.resolve('Logger') as unknown as ConsoleLogger).prefix).toBe('v2');
 	});
 
 	it('should throw descriptive error on circular dependency resolution', () => {
 		const container = new Container();
 
-		container.register('A', () => ({ b: container.resolve('B') }));
-		container.register('B', () => ({ a: container.resolve('A') }));
+		container.register('A', () => ({ b: container.resolveDynamic('B') }));
+		container.register('B', () => ({ a: container.resolveDynamic('A') }));
 
 		expect(() => {
-			container.resolve('A');
+			container.resolveDynamic('A');
 		}).toThrow('Circular dependency detected while resolving service: A');
 	});
 
@@ -711,11 +711,11 @@ describe('Complex Scenarios', () => {
 		container1.registerInstance('Logger', new ConsoleLogger('C1'));
 		container2.registerInstance('Logger', new ConsoleLogger('C2'));
 
-		const logger1 = container1.resolve<ConsoleLogger>('Logger');
-		const logger2 = container2.resolve<ConsoleLogger>('Logger');
+		const logger1 = container1.resolve('Logger');
+		const logger2 = container2.resolve('Logger');
 
-		expect(logger1.prefix).toBe('C1');
-		expect(logger2.prefix).toBe('C2');
+		expect((logger1 as unknown as ConsoleLogger).prefix).toBe('C1');
+		expect((logger2 as unknown as ConsoleLogger).prefix).toBe('C2');
 		expect(logger1).not.toBe(logger2);
 	});
 });

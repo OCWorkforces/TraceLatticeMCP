@@ -18,6 +18,7 @@
 import type { ISummaryStore, Summary } from '../../contracts/summary.js';
 import type { ThoughtData } from '../thought.js';
 
+
 /** Default value for {@link DehydrationOptions.keepLastK}. */
 const DEFAULT_KEEP_LAST_K = 50;
 

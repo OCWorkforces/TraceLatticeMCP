@@ -1,3 +1,4 @@
+import { asBranchId } from '../../contracts/ids.js';
 /**
  * Integration tests for the auto-compression trigger in ThoughtProcessor.
  *
@@ -114,13 +115,13 @@ describe('Compression Auto-Trigger Integration', () => {
 				total_thoughts: 2,
 				next_thought_needed: false,
 				branch_from_thought: 1,
-				branch_id: 'alt-1',
+				branch_id: asBranchId('alt-1'),
 			})
 		);
 
 		expect(result.isError).toBeUndefined();
 
-		const summaries = deps.summaryStore.forBranch('__global__', 'alt-1');
+		const summaries = deps.summaryStore.forBranch('__global__', asBranchId('alt-1'));
 		expect(summaries.length).toBe(1);
 		expect(summaries[0]!.branchId).toBe('alt-1');
 		expect(summaries[0]!.sessionId).toBe('__global__');
@@ -151,7 +152,7 @@ describe('Compression Auto-Trigger Integration', () => {
 				total_thoughts: 2,
 				next_thought_needed: false,
 				branch_from_thought: 1,
-				branch_id: 'alt-2',
+				branch_id: asBranchId('alt-2'),
 			})
 		);
 
@@ -206,7 +207,7 @@ describe('Compression Auto-Trigger Integration', () => {
 				total_thoughts: 2,
 				next_thought_needed: true,
 				branch_from_thought: 1,
-				branch_id: 'alt-3',
+				branch_id: asBranchId('alt-3'),
 			})
 		);
 
@@ -245,7 +246,7 @@ describe('Compression Auto-Trigger Integration', () => {
 				total_thoughts: 2,
 				next_thought_needed: false,
 				branch_from_thought: 1,
-				branch_id: 'alt-4',
+				branch_id: asBranchId('alt-4'),
 			})
 		);
 
@@ -283,7 +284,7 @@ describe('Compression → Dehydration Roundtrip', () => {
 					thought_number: i,
 					total_thoughts: 8,
 					next_thought_needed: i < 8,
-					branch_id: 'b1',
+					branch_id: asBranchId('b1'),
 					confidence: 0.6,
 				})
 			);
@@ -301,7 +302,7 @@ describe('Compression → Dehydration Roundtrip', () => {
 		}
 
 		// Compress: produces a Summary covering thoughts 1..8.
-		const summary = compression.compressBranch(sessionId, 'b1', 't-1');
+		const summary = compression.compressBranch(sessionId, asBranchId('b1'), 't-1');
 		expect(summary.coveredRange).toEqual([1, 8]);
 		expect(summary.coveredIds.length).toBe(8);
 

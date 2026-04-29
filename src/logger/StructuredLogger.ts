@@ -82,22 +82,22 @@ export interface Logger {
  */
 export interface LogEntry {
 	/** Severity level of the log entry. */
-	level: LogLevel;
+	readonly level: LogLevel;
 
 	/** The primary log message. */
-	message: string;
+	readonly message: string;
 
 	/** ISO 8601 timestamp of when the log was created. */
-	timestamp: string;
+	readonly timestamp: string;
 
 	/** Optional context/module name for categorization. */
-	context?: string;
+	readonly context?: string;
 
 	/** Optional request correlation ID for tracing. */
-	requestId?: string;
+	readonly requestId?: string;
 
 	/** Additional structured metadata to include with the log. */
-	meta?: Record<string, unknown>;
+	readonly meta?: Record<string, unknown>;
 }
 
 /**

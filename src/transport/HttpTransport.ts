@@ -246,9 +246,9 @@ export class HttpTransport extends BaseTransport implements ITransport {
 				return;
 			}
 
-			let jsonRpcRequest;
+			let rawBody: unknown;
 			try {
-				jsonRpcRequest = JSON.parse(body);
+				rawBody = JSON.parse(body) as unknown;
 			} catch {
 				clearTimeout(timeout);
 				this._activeRequests--;
@@ -257,7 +257,8 @@ export class HttpTransport extends BaseTransport implements ITransport {
 				return;
 			}
 
-			const parseResult = safeParse(JsonRpcRequestSchema, jsonRpcRequest);
+			const parseResult = safeParse(JsonRpcRequestSchema, rawBody);
+			const rawId = (rawBody && typeof rawBody === 'object' && 'id' in rawBody) ? (rawBody as { id?: unknown }).id ?? null : null;
 			if (!parseResult.success) {
 				clearTimeout(timeout);
 				this._activeRequests--;
@@ -267,24 +268,25 @@ export class HttpTransport extends BaseTransport implements ITransport {
 					200,
 					-32600,
 					'Invalid Request',
-					jsonRpcRequest?.id ?? null,
+					rawId as string | number | null,
 					parseResult.issues
 				);
 				return;
 			}
+			const jsonRpcRequest = parseResult.output;
 
 			if (!this._mcpServer) {
 				clearTimeout(timeout);
 				this._activeRequests--;
 				this._trackError('server_not_ready');
-				sendJsonRpcError(res, 200, -32603, 'Server not ready', jsonRpcRequest?.id ?? null);
+				sendJsonRpcError(res, 200, -32603, 'Server not ready', jsonRpcRequest.id ?? null);
 				return;
 			}
 
 			const owner = randomUUID();
 			const response = await runWithContext(
 				{ requestId: randomUUID(), owner },
-				() => this._mcpServer!.receive(jsonRpcRequest, {
+				() => this._mcpServer!.receive(jsonRpcRequest as Parameters<McpServer['receive']>[0], {
 					sessionInfo: {},
 				})
 			);

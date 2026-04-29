@@ -16,6 +16,8 @@ import type { PersistenceConfig } from '../contracts/PersistenceBackend.js';
 import { getErrorMessage } from '../errors.js';
 import type { FeatureFlags } from '../contracts/features.js';
 
+type Mutable<T> = { -readonly [K in keyof T]: T[K] };
+
 /**
  * Configuration options loaded from config files.
  *
@@ -47,83 +49,83 @@ export interface ConfigFileOptions {
 	 * Maximum number of thoughts to keep in history.
 	 * Can be overridden by `MAX_HISTORY_SIZE` environment variable.
 	 */
-	maxHistorySize?: number;
+	readonly maxHistorySize?: number;
 
 	/**
 	 * Maximum number of branches to maintain.
 	 * Can be overridden by `MAX_BRANCHES` environment variable.
 	 */
-	maxBranches?: number;
+	readonly maxBranches?: number;
 
 	/**
 	 * Maximum size of each branch.
 	 * Can be overridden by `MAX_BRANCH_SIZE` environment variable.
 	 */
-	maxBranchSize?: number;
+	readonly maxBranchSize?: number;
 
 	/**
 	 * Logging level for the application.
 	 * Can be overridden by `LOG_LEVEL` environment variable.
 	 */
-	logLevel?: 'debug' | 'info' | 'warn' | 'error';
+	readonly logLevel?: 'debug' | 'info' | 'warn' | 'error';
 
 	/**
 	 * Whether to enable pretty (formatted) logging output.
 	 * Can be overridden by `PRETTY_LOG` environment variable (set to "false" to disable).
 	 */
-	prettyLog?: boolean;
+	readonly prettyLog?: boolean;
 
 	/**
 	 * Directory paths to search for skills.
 	 * Can be overridden by `SKILL_DIRS` environment variable (colon-separated).
 	 */
-	skillDirs?: string[];
+	readonly skillDirs?: string[];
 
 	/**
 	 * Discovery cache configuration.
 	 * Can be overridden by `DISCOVERY_CACHE_TTL` and `DISCOVERY_CACHE_MAX_SIZE` environment variables.
 	 */
-	discoveryCache?: {
+	readonly discoveryCache?: {
 		/**
 		 * Time-to-live for cache entries in milliseconds.
 		 * Environment variable `DISCOVERY_CACHE_TTL` accepts seconds.
 		 */
-		ttl?: number;
+		readonly ttl?: number;
 		/**
 		 * Maximum number of entries in the cache.
 		 */
-		maxSize?: number;
+		readonly maxSize?: number;
 	};
 
 	/**
 	 * Persistence configuration for storing history and state.
 	 */
-	persistence?: PersistenceConfig;
+	readonly persistence?: PersistenceConfig;
 
 	/**
 	 * Feature flag overrides. Each field can be set independently.
 	 * Can be overridden by `TRACELATTICE_FEATURES_*` environment variables.
 	 */
-	features?: Partial<FeatureFlags>;
+	readonly features?: Partial<FeatureFlags>;
 
 	/**
 	 * TTL in milliseconds for suspended tool-interleave entries.
 	 * Can be overridden by `TRACELATTICE_TOOL_INTERLEAVE_TTL_MS` environment variable.
 	 */
-	toolInterleaveTtlMs?: number;
+	readonly toolInterleaveTtlMs?: number;
 
 	/**
 	 * Sweep interval in milliseconds for SuspensionStore expiration cleanup.
 	 * Can be overridden by `TRACELATTICE_TOOL_INTERLEAVE_SWEEP_MS` environment variable.
 	 */
-	toolInterleaveSweepMs?: number;
+	readonly toolInterleaveSweepMs?: number;
 
 	/**
 	 * Maximum sessions per owner. Per-owner LRU bucket prevents one user from
 	 * consuming all session slots.
 	 * Can be overridden by `SESSION_MAX_PER_OWNER` environment variable.
 	 */
-	maxSessionsPerOwner?: number;
+	readonly maxSessionsPerOwner?: number;
 }
 
 /**
@@ -257,7 +259,7 @@ export class ConfigLoader {
 	 * @private
 	 */
 	private applyEnvironmentOverrides(config: ConfigFileOptions): ConfigFileOptions {
-		const result: ConfigFileOptions = { ...config };
+		const result: Mutable<ConfigFileOptions> = { ...config };
 
 		if (process.env.MAX_HISTORY_SIZE) {
 			const parsed = parseInt(process.env.MAX_HISTORY_SIZE, 10);
@@ -292,15 +294,13 @@ export class ConfigLoader {
 		if (process.env.DISCOVERY_CACHE_TTL) {
 			const parsed = parseInt(process.env.DISCOVERY_CACHE_TTL, 10);
 			if (Number.isFinite(parsed)) {
-				result.discoveryCache = result.discoveryCache || {};
-				result.discoveryCache.ttl = parsed * 1000;
+				result.discoveryCache = { ...(result.discoveryCache ?? {}), ttl: parsed * 1000 };
 			}
 		}
 		if (process.env.DISCOVERY_CACHE_MAX_SIZE) {
 			const parsed = parseInt(process.env.DISCOVERY_CACHE_MAX_SIZE, 10);
 			if (Number.isFinite(parsed)) {
-				result.discoveryCache = result.discoveryCache || {};
-				result.discoveryCache.maxSize = parsed;
+				result.discoveryCache = { ...(result.discoveryCache ?? {}), maxSize: parsed };
 			}
 		}
 		if (process.env.TRACELATTICE_TOOL_INTERLEAVE_TTL_MS) {
@@ -335,7 +335,7 @@ export class ConfigLoader {
 	 * @param result - Configuration object to mutate with feature flag overrides
 	 * @private
 	 */
-	private applyFeatureFlagOverrides(result: ConfigFileOptions): void {
+	private applyFeatureFlagOverrides(result: Mutable<ConfigFileOptions>): void {
 		const boolMap: Record<string, Exclude<keyof FeatureFlags, 'reasoningStrategy'>> = {
 			TRACELATTICE_FEATURES_DAG_EDGES: 'dagEdges',
 			TRACELATTICE_FEATURES_CALIBRATION: 'calibration',

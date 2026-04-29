@@ -41,7 +41,7 @@ describe('GraphView', () => {
 	describe('chronological', () => {
 		it('returns empty array when session has no edges', () => {
 			const view = setup([]);
-			expect(view.chronological('empty')).toEqual([]);
+			expect(view.chronological(asSessionId('empty'))).toEqual([]);
 		});
 
 		it('returns thoughts ordered by BFS from roots following createdAt', () => {
@@ -116,7 +116,7 @@ describe('GraphView', () => {
 
 		it('returns empty array when session has no edges', () => {
 			const view = setup([]);
-			expect(view.topological('nope')).toEqual([]);
+			expect(view.topological(asSessionId('nope'))).toEqual([]);
 		});
 	});
 
@@ -202,7 +202,7 @@ describe('GraphView', () => {
 
 		it('returns empty for empty session', () => {
 			const view = setup([]);
-			expect(view.leaves('nope')).toEqual([]);
+			expect(view.leaves(asSessionId('nope'))).toEqual([]);
 		});
 	});
 

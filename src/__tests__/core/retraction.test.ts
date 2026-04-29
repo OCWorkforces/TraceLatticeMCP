@@ -9,6 +9,7 @@ import type { FeatureFlags } from '../../contracts/features.js';
 import type { SessionId } from '../../contracts/ids.js';
 import { createMockToolRegistry } from '../helpers/factories.js';
 
+import { asBranchId } from '../../contracts/ids.js';
 function makeFeatures(overrides: Partial<FeatureFlags> = {}): FeatureFlags {
 	return {
 		dagEdges: false,
@@ -159,7 +160,7 @@ describe('Logical retraction via backtrack', () => {
 			total_thoughts: 5,
 			next_thought_needed: true,
 			branch_from_thought: 1,
-			branch_id: 'alt',
+			branch_id: asBranchId('alt'),
 		});
 		await proc.process({
 			thought: 'retract branch',
@@ -171,8 +172,8 @@ describe('Logical retraction via backtrack', () => {
 		});
 
 		const branches = history.getBranches();
-		expect(branches.alt).toBeDefined();
-		const branchThought = branches.alt!.find((t) => t.thought_number === 2);
+		expect(branches[asBranchId('alt')]).toBeDefined();
+		const branchThought = branches[asBranchId('alt')]!.find((t) => t.thought_number === 2);
 		expect(branchThought).toBeDefined();
 		expect(branchThought!.retracted).toBe(true);
 		// Also retracted in main history

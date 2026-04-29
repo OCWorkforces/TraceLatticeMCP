@@ -5,6 +5,7 @@ import type { ThoughtData } from '../core/thought.js';
 import type { Edge, EdgeKind } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
 import type { PersistenceBackend, PersistenceConfig } from '../contracts/PersistenceBackend.js';
+import { asBranchId, type BranchId } from '../contracts/ids.js';
 
 /**
  * Type definition for the better-sqlite3 Database interface.
@@ -201,7 +202,7 @@ export class SqlitePersistence implements PersistenceBackend {
 		return rows
 			.map((row) => {
 				try {
-					return JSON.parse(row.data) as ThoughtData;
+					return JSON.parse(row.data) as unknown as ThoughtData;
 				} catch {
 					return null;
 				}
@@ -209,7 +210,7 @@ export class SqlitePersistence implements PersistenceBackend {
 			.filter((t): t is ThoughtData => t !== null);
 	}
 
-	public async saveBranch(branchId: string, thoughts: ThoughtData[]): Promise<void> {
+	public async saveBranch(branchId: BranchId, thoughts: ThoughtData[]): Promise<void> {
 		if (!this._persistBranches) {
 			return;
 		}
@@ -220,7 +221,7 @@ export class SqlitePersistence implements PersistenceBackend {
 		stmt.run(branchId, JSON.stringify(thoughts));
 	}
 
-	public async loadBranch(branchId: string): Promise<ThoughtData[] | undefined> {
+	public async loadBranch(branchId: BranchId): Promise<ThoughtData[] | undefined> {
 		if (!this._persistBranches) {
 			return undefined;
 		}
@@ -233,21 +234,21 @@ export class SqlitePersistence implements PersistenceBackend {
 		}
 
 		try {
-			const data = JSON.parse(row.data) as ThoughtData[];
+			const data = JSON.parse(row.data) as unknown as ThoughtData[];
 			return Array.isArray(data) ? data : undefined;
 		} catch {
 			return undefined;
 		}
 	}
 
-	public async listBranches(): Promise<string[]> {
+	public async listBranches(): Promise<BranchId[]> {
 		if (!this._persistBranches) {
 			return [];
 		}
 
 		const stmt = this._db.prepare('SELECT branch_id FROM branches ORDER BY branch_id ASC');
 		const rows = stmt.all() as { branch_id: string }[];
-		return rows.map((row) => row.branch_id);
+		return rows.map((row) => asBranchId(row.branch_id));
 	}
 
 	public async clear(): Promise<void> {
@@ -347,7 +348,7 @@ export class SqlitePersistence implements PersistenceBackend {
 			to: row.to_id as Edge['to'],
 			kind: row.kind as EdgeKind,
 			createdAt: row.created_at,
-			...(row.metadata ? { metadata: JSON.parse(row.metadata) as Record<string, unknown> } : {}),
+			...(row.metadata ? { metadata: JSON.parse(row.metadata) as unknown as Record<string, unknown> } : {}),
 		}));
 	}
 
@@ -430,14 +431,14 @@ export class SqlitePersistence implements PersistenceBackend {
 		return rows.map((row) => ({
 			id: row.id,
 			sessionId: row.session_id as Summary['sessionId'],
-			...(row.branch_id !== null ? { branchId: row.branch_id } : {}),
+			...(row.branch_id !== null ? { branchId: asBranchId(row.branch_id) } : {}),
 			rootThoughtId: row.root_thought_id as Summary['rootThoughtId'],
-			coveredIds: JSON.parse(row.covered_ids) as Summary['coveredIds'],
+			coveredIds: JSON.parse(row.covered_ids) as unknown as Summary['coveredIds'],
 			coveredRange: [row.covered_range_start, row.covered_range_end] as [number, number],
-			topics: JSON.parse(row.topics) as string[],
+			topics: JSON.parse(row.topics) as unknown as string[],
 			aggregateConfidence: row.aggregate_confidence,
 			createdAt: row.created_at,
-			...(row.meta ? { meta: JSON.parse(row.meta) as Record<string, unknown> } : {}),
+			...(row.meta ? { meta: JSON.parse(row.meta) as unknown as Record<string, unknown> } : {}),
 		}));
 	}
 

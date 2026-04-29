@@ -9,9 +9,11 @@
  * @module contracts/strategy
  */
 
+import type { SessionId } from './ids.js';
 import type { ThoughtData } from '../core/thought.js';
 import type { ReasoningStats } from '../core/reasoning.js';
 import type { GraphView } from '../core/graph/GraphView.js';
+
 
 /**
  * Read-only snapshot of session state passed to a reasoning strategy.
@@ -33,7 +35,7 @@ import type { GraphView } from '../core/graph/GraphView.js';
  */
 export interface StrategyContext {
 	/** Session identifier this context belongs to. */
-	readonly sessionId: string;
+	readonly sessionId: SessionId;
 	/** Chronological list of thoughts recorded in this session. */
 	readonly history: readonly ThoughtData[];
 	/** Read-only graph view for traversal (ancestors, descendants, etc.). Undefined when DAG edges are disabled. */

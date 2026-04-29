@@ -3,6 +3,7 @@ import { SqlitePersistence } from '../persistence/SqlitePersistence.js';
 import { createTestThought } from './helpers/factories.js';
 
 // Shared mock state accessible to both mock factory and tests
+import { asBranchId } from '../contracts/ids.js';
 const mockState = vi.hoisted(() => {
 	let thoughts: Array<{ id: number; data: string }> = [];
 	let branches = new Map<string, string>();
@@ -245,35 +246,35 @@ describe('SqlitePersistence', () => {
 
 		it('should save and load a branch', async () => {
 			const thoughts = [createTestThought({ thought: 'branch-thought' })];
-			await persistence.saveBranch('branch-1', thoughts);
+			await persistence.saveBranch(asBranchId('branch-1'), thoughts);
 
-			const loaded = await persistence.loadBranch('branch-1');
+			const loaded = await persistence.loadBranch(asBranchId('branch-1'));
 			expect(loaded).toHaveLength(1);
 			expect(loaded![0]!.thought).toBe('branch-thought');
 		});
 
 		it('should return undefined for non-existent branch', async () => {
-			const loaded = await persistence.loadBranch('non-existent');
+			const loaded = await persistence.loadBranch(asBranchId('non-existent'));
 			expect(loaded).toBeUndefined();
 		});
 
 		it('should handle corrupt JSON in loadBranch', async () => {
 			mockState.setBranch('corrupt', 'not-valid-json');
 
-			const loaded = await persistence.loadBranch('corrupt');
+			const loaded = await persistence.loadBranch(asBranchId('corrupt'));
 			expect(loaded).toBeUndefined();
 		});
 
 		it('should handle non-array JSON in loadBranch', async () => {
 			mockState.setBranch('not-array', '"string-value"');
 
-			const loaded = await persistence.loadBranch('not-array');
+			const loaded = await persistence.loadBranch(asBranchId('not-array'));
 			expect(loaded).toBeUndefined();
 		});
 
 		it('should list all branches', async () => {
-			await persistence.saveBranch('branch-a', []);
-			await persistence.saveBranch('branch-b', []);
+			await persistence.saveBranch(asBranchId('branch-a'), []);
+			await persistence.saveBranch(asBranchId('branch-b'), []);
 
 			const branches = await persistence.listBranches();
 			expect(branches).toContain('branch-a');
@@ -282,9 +283,9 @@ describe('SqlitePersistence', () => {
 
 		it('should skip save when persistBranches is false', async () => {
 			const noBranch = await SqlitePersistence.create({ persistBranches: false });
-			await noBranch.saveBranch('branch-1', [createTestThought()]);
+			await noBranch.saveBranch(asBranchId('branch-1'), [createTestThought()]);
 
-			const loaded = await noBranch.loadBranch('branch-1');
+			const loaded = await noBranch.loadBranch(asBranchId('branch-1'));
 			expect(loaded).toBeUndefined();
 		});
 
@@ -299,7 +300,7 @@ describe('SqlitePersistence', () => {
 		it('should clear all thoughts and branches', async () => {
 			persistence = await SqlitePersistence.create({ persistBranches: true });
 			await persistence.saveThought(createTestThought());
-			await persistence.saveBranch('branch-1', [createTestThought()]);
+			await persistence.saveBranch(asBranchId('branch-1'), [createTestThought()]);
 
 			await persistence.clear();
 
@@ -337,7 +338,7 @@ describe('SqlitePersistence', () => {
 		it('should return statistics with thoughts and branches', async () => {
 			persistence = await SqlitePersistence.create({ persistBranches: true });
 			await persistence.saveThought(createTestThought());
-			await persistence.saveBranch('branch-1', []);
+			await persistence.saveBranch(asBranchId('branch-1'), []);
 
 			const stats = persistence.getStats();
 			expect(stats.thoughtCount).toBe(1);

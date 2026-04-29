@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Updated:** 2026-04-24
-**Commit:** 11381a4
+**Updated:** 2026-04-29
+**Commit:** 9828538 v1.3.6
 **Branch:** feat/rslib-rsbuild-migration
 
 ## OVERVIEW
@@ -75,7 +75,7 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `ThoughtEvaluator` | class | src/core/ThoughtEvaluator.ts | Stateless quality signals + reasoning analytics (150L) |
 | `normalizeInput`                    | function  | src/core/InputNormalizer.ts              | Field correction, default filling, sanitization of `branch_id`, step-level urgency phrase stripping (460L) |
 | `ThoughtFormatter` | class | src/core/ThoughtFormatter.ts | Chalk display: 💭🔄🌿🔬✅🔍🧬🧠📝 (264L) |
-| `ThoughtData` | interface | src/core/thought.ts | Core data structure with 11 optional reasoning fields + `retracted` boolean (262L) |
+| `ThoughtData` | interface | src/core/thought.ts | Core data structure with 11 optional reasoning fields + `retracted` boolean. Now derived from `v.InferOutput<SequentialThinkingSchema>` (single source of truth). (262L) |
 | `ThoughtType`                       | union     | src/core/reasoning.ts                    | `'regular'\|'hypothesis'\|'verification'\|'critique'\|'synthesis'\|'meta'\|'tool_call'\|'tool_observation'\|'assumption'\|'decomposition'\|'backtrack'` |
 | `ConfidenceSignals`                 | interface | src/core/reasoning.ts                    | Computed quality indicators (depth, revision count, type distribution)               |
 | `ReasoningStats`                    | interface | src/core/reasoning.ts                    | Aggregated session analytics (totals, hypothesis chains, averages)                   |
@@ -87,8 +87,8 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `StreamableHttpTransport`           | class     | src/transport/StreamableHttpTransport.ts | MCP Streamable HTTP transport (stateful/stateless)                                   |
 | `SseTransport`                      | class     | src/transport/SseTransport.ts            | SSE transport for multi-user streaming                                               |
 | `HttpTransport`                     | class     | src/transport/HttpTransport.ts           | HTTP JSON-RPC transport (stateless)                                                  |
-| `DIContainer`                       | class     | src/di/Container.ts                      | IoC container (singleton/transient/lazy, circular detection)                         |
-| `ServiceRegistry`                   | interface | src/di/ServiceRegistry.ts                | Typed service key map (18 services: includes EdgeStore, reasoningStrategy, outcomeRecorder, calibrator, summaryStore, compressionService, suspensionStore) |
+| `DIContainer`                       | class     | src/di/Container.ts                      | IoC container (singleton/transient/lazy, circular detection). `resolveDynamic(name)` escape hatch replaces deprecated `resolve<T>(string)` overload. |
+| `ServiceRegistry`                   | interface | src/di/ServiceRegistry.ts                | Typed service key map (18 services: `ToolRegistry: ToolRegistry` concrete; includes EdgeStore, reasoningStrategy, outcomeRecorder, calibrator, summaryStore, compressionService, suspensionStore) |
 | `DiscoveryCache`                    | class     | src/cache/DiscoveryCache.ts              | LRU+TTL cache (TTL 300s, max 100 entries)                                            |
 | `Metrics`                           | class     | src/metrics/Metrics.impl.ts              | Prometheus counters, gauges, histograms                                              |
 | `ConfigLoader`                      | class     | src/config/ConfigLoader.ts               | YAML + env var config (env > project > user > defaults)                              |
@@ -129,7 +129,10 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `EdgeEmitter`                       | class     | src/core/EdgeEmitter.ts                  | Extracted from HistoryManager: edge creation, _resolveThoughtId (searches history + branches), _addEdgeIfValid |
 | `PersistenceBuffer`                 | class     | src/core/PersistenceBuffer.ts            | Extracted from HistoryManager: write buffer, flush timer, batched persistence |
 | `SessionManager`                    | class     | src/core/SessionManager.ts               | Extracted from HistoryManager: session lifecycle, TTL eviction, LRU tracking |
-| `SessionId` / `ThoughtId` / `EdgeId` / `SuspensionToken` | branded types | src/contracts/ids.ts | Branded ID types preventing wrong-ID-passing. Constructors validate at trust boundaries. `generateThoughtId/EdgeId/SuspensionToken` wrap `generateUlid`. |
+| `SessionId` / `ThoughtId` / `EdgeId` / `BranchId` / `SuspensionToken` | branded types | src/contracts/ids.ts | Branded ID types preventing wrong-ID-passing. `asBranchId()` constructor validates branch IDs. `SessionId` + `ThoughtData` branded end-to-end through HistoryManager. `generateThoughtId/EdgeId/SuspensionToken` wrap `generateUlid`. |
+| `GLOBAL_SESSION_ID`                | constant  | src/contracts/ids.ts                     | Branded `SessionId` constant replacing literal `'__global__'` for stdio/global session path. |
+| `ValidatedThought`                 | union     | src/core/thought.ts                      | Discriminated union over 7 thought-type variants for exhaustive type-narrowed handling. |
+| `assertNever`                      | function  | src/utils.ts                             | Exhaustiveness helper: throws on unreachable union branches. |
 | `FeatureFlags`                     | interface | src/contracts/features.ts                | 7 readonly feature flags + `DEFAULT_FLAGS` + `hasFeature()` type guard. Re-exported from `ServerConfig.ts`. |
 | `ITransport`                       | interface | src/contracts/transport.ts               | Shared transport lifecycle: `kind`, `connect`, `stop`, `clientCount`, `isShuttingDown`, `serverUrl`. |
 | `stripUrgencyPhrases`              | function  | src/sanitize.ts                          | Strips urgency/imperative phrases (URGENT, IMMEDIATELY, etc.) from strings to prevent prompt injection. Used by `sanitizeRationale` and `sanitizeStepField`. |

@@ -1,3 +1,4 @@
+import { asBranchId } from '../../contracts/ids.js';
 /**
  * End-to-end integration tests for the {@link TreeOfThoughtStrategy}.
  *
@@ -192,7 +193,7 @@ describe('TreeOfThoughtStrategy Integration (ThoughtProcessor + ToT + DAG)', () 
 				total_thoughts: 5,
 				next_thought_needed: true,
 				branch_from_thought: 1,
-				branch_id: 'alt-A',
+				branch_id: asBranchId('alt-A'),
 				confidence: 0.8,
 				quality_score: 0.5, // score 0.40
 			})
@@ -207,7 +208,7 @@ describe('TreeOfThoughtStrategy Integration (ThoughtProcessor + ToT + DAG)', () 
 				total_thoughts: 5,
 				next_thought_needed: true,
 				branch_from_thought: 1,
-				branch_id: 'alt-B',
+				branch_id: asBranchId('alt-B'),
 				confidence: 0.1,
 				quality_score: 0.1, // score 0.01 — outside beam
 			})

@@ -1,3 +1,4 @@
+import { asBranchId } from '../../contracts/ids.js';
 /**
  * Integration tests for compression persistence across all 3 backends.
  *
@@ -14,6 +15,7 @@
  * SQLite: skipped at module level when `better-sqlite3` is unavailable.
  */
 
+import { asSessionId } from '../../contracts/ids.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -32,7 +34,7 @@ import type { ThoughtData } from '../../core/thought.js';
 import { createTestThought } from '../helpers/factories.js';
 
 const SESSION = 'compression-persistence-sess';
-const BRANCH = 'alt-1';
+const BRANCH = asBranchId('alt-1');
 
 // SQLite persistence requires the optional `better-sqlite3` package.
 const SQLITE_AVAILABLE = await (async () => {
@@ -149,7 +151,7 @@ describe('Compression persistence integration', () => {
 				const { branchRootId } = seedBranchedSession(manager);
 
 				// Compress the branch — flag-ON path.
-				const summary = compression.compressBranch(SESSION, BRANCH, branchRootId);
+				const summary = compression.compressBranch(asSessionId(SESSION), BRANCH, branchRootId);
 				expect(summary.sessionId).toBe(SESSION);
 				expect(summary.branchId).toBe(BRANCH);
 				expect(summary.rootThoughtId).toBe(branchRootId);

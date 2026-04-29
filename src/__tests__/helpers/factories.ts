@@ -10,6 +10,7 @@ import {
 	type EdgeId,
 	type SuspensionToken,
 } from '../../contracts/ids.js';
+import { asBranchId, type BranchId } from '../../contracts/ids.js';
 import type { ToolRecommendation } from '../../types/tool.js';
 import type { SkillRecommendation } from '../../types/skill.js';
 import type { StepRecommendation } from '../../core/step.js';
@@ -141,7 +142,7 @@ export function createSynthesisThought(overrides?: Partial<ThoughtData>): Though
 		confidence: 0.8,
 		synthesis_sources: [1, 2, 3],
 		merge_from_thoughts: [1, 3],
-		merge_branch_ids: ['branch-a'],
+		merge_branch_ids: [asBranchId('branch-a')],
 		...overrides,
 	});
 }
@@ -203,19 +204,19 @@ export class MockHistoryManager implements IHistoryManager {
 		return this._getSession(sessionId).history.length;
 	}
 
-	getBranches(sessionId?: string): Record<string, ThoughtData[]> {
-		return this._getSession(sessionId).branches;
+	getBranches(sessionId?: string): Record<BranchId, ThoughtData[]> {
+		return this._getSession(sessionId).branches as Record<BranchId, ThoughtData[]>;
 	}
 
-	getBranchIds(sessionId?: string): string[] {
-		return Object.keys(this._getSession(sessionId).branches);
+	getBranchIds(sessionId?: string): BranchId[] {
+		return Object.keys(this._getSession(sessionId).branches) as BranchId[];
 	}
 
-	registerBranch(_sessionId: string | undefined, _branchId: string): void {
+	registerBranch(_sessionId: string | undefined, _branchId: BranchId): void {
 		/* no-op for mock */
 	}
 
-	branchExists(sessionId: string | undefined, branchId: string): boolean {
+	branchExists(sessionId: string | undefined, branchId: BranchId): boolean {
 		return branchId in this._getSession(sessionId).branches;
 	}
 

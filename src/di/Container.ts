@@ -146,13 +146,9 @@ export class Container {
 	 * // Type-safe: ServiceRegistry provides autocomplete
 	 * const logger = container.resolve('Logger');  // Type: StructuredLogger
 	 * const config = container.resolve('Config');  // Type: ServerConfig
-	 *
-	 * // Dynamic: For services not in ServiceRegistry
-	 * const service = container.resolve<MyService>('MyService');
-	 * ```
-	 */
+ * ```
+ */
 	resolve<K extends ServiceKey>(name: K): ServiceRegistry[K];
-	resolve<T>(name: string): T;
 	resolve(name: string): unknown {
 		if (this._resolving.has(name)) {
 			throw new Error(`Circular dependency detected while resolving service: ${name}`);
@@ -186,6 +182,17 @@ export class Container {
 		} finally {
 			this._resolving.delete(name);
 		}
+	}
+
+	/**
+	 * Resolve a service by name with an `unknown` return type.
+	 * Use this when the service key is not in ServiceRegistry.
+	 *
+	 * @param name - The name/identifier of the service
+	 * @returns The service instance as `unknown` — caller must narrow
+	 */
+	resolveDynamic(name: string): unknown {
+		return this.resolve(name as never);
 	}
 
 	/**

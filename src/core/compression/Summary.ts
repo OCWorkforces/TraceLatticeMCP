@@ -9,7 +9,7 @@
  *
  * @module core/compression/Summary
  */
-import type { SessionId, ThoughtId } from '../../contracts/ids.js';
+import type { BranchId, SessionId, ThoughtId } from '../../contracts/ids.js';
 
 /**
  * Immutable record describing a compressed group of thoughts.
@@ -38,7 +38,7 @@ export interface Summary {
 	/** Session this summary belongs to. */
 	readonly sessionId: SessionId;
 	/** Optional branch id; `undefined` indicates main-chain compression. */
-	readonly branchId?: string;
+	readonly branchId?: BranchId;
 	/** `id` of the thought that anchors the compressed subtree. */
 	readonly rootThoughtId: ThoughtId;
 	/** Thought ids included in this summary, in chronological order. */

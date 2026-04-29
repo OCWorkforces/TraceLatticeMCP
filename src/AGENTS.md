@@ -1,6 +1,6 @@
 # SRC
 
-**Updated:** 2026-04-24 | **Parent:** ../AGENTS.md
+**Updated:** 2026-04-29 | **Parent:** ../AGENTS.md
 
 ## OVERVIEW
 
@@ -15,6 +15,7 @@ src/
 ├── schema.ts         # Valibot schemas + TOOL_DESCRIPTION (724L)
 ├── ServerConfig.ts   # Config validation, 10 fields + 7 feature flags (517L)
 ├── errors.ts         # 20 error subclasses + ERROR_CODES const (22 codes) + getErrorMessage helper (829L)
+├── utils.ts          # `assertNever(x: never): never` exhaustiveness helper
 ├── core/             # Domain (13 files, 5 subsystems) — has AGENTS.md
 │   ├── graph/        # DAG edges: Edge, EdgeStore, GraphView
 │   ├── compression/  # Branch rollup + sliding-window dehydration
@@ -49,6 +50,8 @@ src/
 | Add MCP tool input schema  | `schema.ts` (valibot) + `TOOL_DESCRIPTION` |
 | Wire a new transport       | `transport/` factory + `contracts/transport.ts` (implements ITransport) |
 | Public API surface         | `lib.ts` (`ToolAwareSequentialThinkingServer`, `createServer`, `initializeServer`)              |
+| Add a branded ID type      | `contracts/ids.ts` (SessionId, ThoughtId, EdgeId, SuspensionToken, BranchId + `GLOBAL_SESSION_ID`) |
+| Exhaustiveness check       | `utils.ts:assertNever(x)` in default branch of discriminated unions |
 
 ## NOTES
 
@@ -60,3 +63,6 @@ src/
 - **Coupling rule**: Cross-module type imports go through `contracts/`. Exceptions: `IHistoryManager` and `ThoughtData` live in `core/` (domain primitives).
 - **Layered**: 9 layers in `.sentrux/rules.toml` (types → crosscutting → config → core → domain → infrastructure → di → app → cli). 6 forbidden boundaries.
 - **Large files**: `errors.ts` (829L), `schema.ts` (724L), `lib.ts` (659L), `ServerConfig.ts` (517L). Split cautiously; risk public API churn.
+- **DI escape hatch**: `Container.resolveDynamic(name: string): unknown` for runtime-keyed lookups. The deprecated `resolve<T>(string)` string overload was removed — use typed `resolve(key)` against `ServiceRegistry` (e.g. `ToolRegistry: ToolRegistry` is the concrete type, not an interface).
+- **SkillRegistry**: `removeSkillByName()` was removed; remove via id only.
+- **Branded IDs**: `SessionId`/`ThoughtId`/`EdgeId`/`SuspensionToken`/`BranchId` from `contracts/ids.ts` prevent wrong-ID-passing. Use `GLOBAL_SESSION_ID` constant for stdio/global path instead of literal `'__global__'`.

@@ -4,10 +4,9 @@
  * @module types/thought
  */
 
-import type { SessionId, ThoughtId, SuspensionToken } from '../contracts/ids.js';
-import type { ThoughtType } from './reasoning.js';
+import type { BranchId, SessionId, ThoughtId, SuspensionToken } from '../contracts/ids.js';
+import type { SchemaOutput } from '../schema.js';
 import type { StepRecommendation } from './step.js';
-
 /**
  * Core data structure for a thought in the sequential thinking process.
  *
@@ -43,213 +42,37 @@ import type { StepRecommendation } from './step.js';
  * };
  * ```
  */
-export interface ThoughtData {
-	/** Array of MCP tool names available for recommendation. */
-	available_mcp_tools?: string[];
-
-	/** Array of skill names available for recommendation. */
-	available_skills?: string[];
-
-	/** The current thinking step or reasoning content. */
-	thought: string;
-
-	/**
-	 * Unique identifier for this thought (ulid).
-	 * Auto-generated when not provided. Used as stable DAG node identity.
-	 * Required for DAG edge references; falls back to thought_number for backward compat.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, id: '01H0X0X0X0X0X0X0X0X0X0X0X0' };
-	 * ```
-	 */
+export type ThoughtData = Omit<
+	SchemaOutput,
+	| 'id'
+	| 'session_id'
+	| 'continuation_token'
+	| 'register_branch_id'
+	| 'branch_id'
+	| 'merge_branch_ids'
+| 'current_step'
+| 'previous_steps'
+> & {
+	/** Unique identifier for this thought (branded ThoughtId). Auto-generated when not provided. */
 	id?: ThoughtId;
 
-	/** Current thought number in the sequence (1-indexed). */
-	thought_number: number;
-
-	/** Estimated total number of thoughts (can be adjusted during processing). */
-	total_thoughts: number;
-
-	/** Whether this thought revises a previous thought. */
-	is_revision?: boolean;
-
-	/** If revising, the thought number being revised. */
-	revises_thought?: number;
-
-	/** If branching, the thought number to branch from. */
-	branch_from_thought?: number;
-
-	/** Unique identifier for the branch this thought belongs to. */
-	branch_id?: string;
-
-	/** Whether more thoughts are needed beyond the current `total_thoughts`. */
-	needs_more_thoughts?: boolean;
-
-	/** Whether another thought should be generated (required field). */
-	next_thought_needed: boolean;
-
-	/** The current step recommendation being considered. */
-	current_step?: StepRecommendation;
-
-	/** Steps that have already been recommended in previous thoughts. */
-	previous_steps?: StepRecommendation[];
-
-	/** High-level descriptions of upcoming steps yet to be recommended. */
-	remaining_steps?: string[];
-
-	/**
-	 * Classified purpose of this thought step.
-	 * Enables type-specific formatting, evaluation, and analytics.
-	 * Default: 'regular'.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, thought_type: 'hypothesis' };
-	 * ```
-	 */
-	thought_type?: ThoughtType;
-
-	/**
-	 * LLM's self-assessed quality score for this thought (0-1).
-	 * Higher values indicate better quality.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, quality_score: 0.85 };
-	 * ```
-	 */
-	quality_score?: number;
-
-	/**
-	 * LLM's explicit confidence in this thought's correctness (0-1).
-	 * Higher values indicate more certainty.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, confidence: 0.9 };
-	 * ```
-	 */
-	confidence?: number;
-
-	/**
-	 * Links this thought to a hypothesis for tracking verification chains.
-	 * Format: alphanumeric, hyphens, underscores, 1-50 chars.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, hypothesis_id: 'perf-bottleneck-1' };
-	 * ```
-	 */
-	hypothesis_id?: string;
-
-	/**
-	 * If verification or critique, which thought_number is being evaluated.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, thought_type: 'verification', verification_target: 3 };
-	 * ```
-	 */
-	verification_target?: number;
-
-	/**
-	 * If synthesis, which thought_numbers are being combined.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, thought_type: 'synthesis', synthesis_sources: [2, 5, 7] };
-	 * ```
-	 */
-	synthesis_sources?: number[];
-
-	/**
-	 * For DAG merge: thought_numbers from other branches being merged into current context.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, merge_from_thoughts: [4, 8] };
-	 * ```
-	 */
-	merge_from_thoughts?: number[];
-
-	/**
-	 * For DAG merge: branch_ids being merged into current context.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, merge_branch_ids: ['explore-a', 'explore-b'] };
-	 * ```
-	 */
-	merge_branch_ids?: string[];
-
-	/**
-	 * Free-form metacognitive observation about the reasoning process itself.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, meta_observation: 'I am over-exploring branches' };
-	 * ```
-	 */
-	meta_observation?: string;
-
-	/**
-	 * Effort signal: how deep should reasoning go for this thought.
-	 * Default: 'moderate'.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, reasoning_depth: 'deep' };
-	 * ```
-	 */
-	reasoning_depth?: 'shallow' | 'moderate' | 'deep';
-
-	/**
-	 * Optional session identifier for state isolation.
-	 * When provided, thought history, branches, and statistics are scoped to this session.
-	 * Format: alphanumeric, hyphens, underscores, 1-100 chars.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, session_id: 'analysis-task-42' };
-	 * ```
-	 */
+	/** Session identifier (branded SessionId) for state isolation. */
 	session_id?: SessionId;
 
-	/**
-	 * When true, clears all state for the target session before processing this thought.
-	 * The thought is then processed as the first in a fresh session.
-	 *
-	 * @example
-	 * ```typescript
-	 * const thought: ThoughtData = { ...base, session_id: 'task-1', reset_state: true };
-	 * ```
-	 */
-	reset_state?: boolean;
-
-	/** Tool name for tool_call thoughts */
-	tool_name?: string;
-
-	/** Arguments for the tool invocation */
-	tool_arguments?: Record<string, unknown>;
-
-	/** Result returned by the tool (for tool_observation) */
-	tool_result?: unknown;
-
-	/** Continuation token linking tool_observation back to suspended tool_call */
+	/** Continuation token (branded SuspensionToken) linking tool_observation back to suspended tool_call. */
 	continuation_token?: SuspensionToken;
 
-	/** Sub-problem labels for decomposition thoughts */
-	decomposition_children?: string[];
+	/** Branch identifier (branded BranchId) for branching reasoning paths. */
+	branch_id?: BranchId;
 
-	/** Thought number being backtracked from */
-	backtrack_target?: number;
+	/** Branch identifiers (branded BranchId[]) being merged into current context. */
+	merge_branch_ids?: BranchId[];
 
 	/**
 	 * When true, this thought has been logically retracted by a subsequent
 	 * `backtrack` thought. The thought remains in history (append-only,
 	 * event-sourcing) but is excluded from quality calculations.
-	 * Default: false.
+	 * Default: false. Not part of schema input — set by ThoughtProcessor during processing.
 	 */
 	retracted?: boolean;
 
@@ -259,4 +82,80 @@ export interface ThoughtData {
 	 * Used by HistoryManager to emit `tool_invocation` DAG edges.
 	 */
 	_resumedFrom?: number;
-}
+
+	/** Current step recommendation (post-normalization, with defaults filled). */
+	current_step?: StepRecommendation;
+
+	/** Previously recommended steps (post-normalization, with defaults filled). */
+	previous_steps?: StepRecommendation[];
+};
+
+/**
+ * Discriminated union variants of `ThoughtData` after `_validateNewTypes`
+ * has guaranteed per-type invariants. Allows downstream methods to consume
+ * narrowed thoughts without `!` non-null assertions.
+ */
+import type { ThoughtType } from './reasoning.js';
+
+/** A `tool_call` thought with `tool_name` guaranteed by validation. */
+export type ToolCallThought = ThoughtData & {
+	readonly thought_type: 'tool_call';
+	readonly tool_name: string;
+};
+
+/** A `tool_observation` thought with `continuation_token` guaranteed. */
+export type ToolObservationThought = ThoughtData & {
+	readonly thought_type: 'tool_observation';
+	readonly continuation_token: SuspensionToken;
+};
+
+/** A `backtrack` thought with `backtrack_target` guaranteed. */
+export type BacktrackThought = ThoughtData & {
+	readonly thought_type: 'backtrack';
+	readonly backtrack_target: number;
+};
+
+/** A `verification` thought with `verification_target` guaranteed. */
+export type VerificationThought = ThoughtData & {
+	readonly thought_type: 'verification';
+	readonly verification_target: number;
+};
+
+/** A `critique` thought with `verification_target` guaranteed. */
+export type CritiqueThought = ThoughtData & {
+	readonly thought_type: 'critique';
+	readonly verification_target: number;
+};
+
+/** A `synthesis` thought with non-empty `synthesis_sources` guaranteed. */
+export type SynthesisThought = ThoughtData & {
+	readonly thought_type: 'synthesis';
+	readonly synthesis_sources: readonly number[];
+};
+
+/** Catch-all for thought types with no per-type field invariants. */
+export type BaseThought = ThoughtData & {
+	readonly thought_type?: Exclude<
+		ThoughtType,
+		| 'tool_call'
+		| 'tool_observation'
+		| 'backtrack'
+		| 'verification'
+		| 'critique'
+		| 'synthesis'
+	>;
+};
+
+/**
+ * Discriminated union of validated thoughts. Returned by
+ * `ThoughtProcessor._validateNewTypes` to encode invariants in the type system
+ * and eliminate `!` non-null assertions in downstream handlers.
+ */
+export type ValidatedThought =
+	| ToolCallThought
+	| ToolObservationThought
+	| BacktrackThought
+	| VerificationThought
+	| CritiqueThought
+	| SynthesisThought
+	| BaseThought;

@@ -12,7 +12,7 @@
  */
 import type { Edge } from '../core/graph/Edge.js';
 import type { ThoughtType } from '../core/reasoning.js';
-import type { SessionId, ThoughtId } from './ids.js';
+import type { ThoughtId } from './ids.js';
 
 /**
  * Metrics interface for observability.
@@ -73,7 +73,7 @@ export interface VerificationOutcome {
 	/** The thought number of the prediction (backward compat). */
 	thoughtNumber: number;
 	/** The session this outcome belongs to. */
-	sessionId: SessionId;
+	sessionId: string;
 	/** The predicted confidence (0-1). */
 	predicted: number;
 	/** The actual outcome (0 = wrong, 1 = correct). */

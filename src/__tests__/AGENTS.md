@@ -4,7 +4,7 @@
 
 ## OVERVIEW
 
-Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 2100 tests across 80 files, 16 skipped for known gaps. Coverage gates: branches 90%, functions 60%, lines 65%, statements 65%.
+Vitest 4.1.4 suite colocated under `src/__tests__/` (non-standard, kept inside `src/` for path alias parity). 2100 tests across 80 files, 16 skipped for known gaps. Coverage gates (effective): branches 90%, functions 60%, lines 65%, statements 65%. Note: `vitest.config.ts` declares duplicate threshold keys; the second set overrides — these are the values CI enforces.
 
 ## STRUCTURE
 
@@ -36,8 +36,9 @@ eval/fixtures/   scenarios.ts (10 canonical eval scenarios)
 ## HELPERS
 
 `helpers/factories.ts`:
-- `createTestThought(overrides?)`: 11 typed variants covering every `ThoughtType`. Accepts plain `string` for `id`/`session_id`/`continuation_token` and brands internally. Returns a fully-valid `ThoughtData`.
-- `MockHistoryManager`: in-memory `Map`-backed `IHistoryManager`. Use it instead of stubbing the real one when persistence isn't under test.
+- `createTestThought(overrides?: ThoughtOverrides)`: 11 typed variants covering every `ThoughtType`. `ThoughtOverrides` accepts plain `string` for `id`/`session_id`/`continuation_token` and brands them internally. Returns a fully-valid `ThoughtData`.
+- Branded ID constructors (accept plain `string`, return branded type): `createTestSessionId()`, `createTestThoughtId()`, `createTestEdgeId()`, `createTestSuspensionToken()`. Use these whenever a test needs a typed ID without going through `generateUlid`.
+- `MockHistoryManager`: in-memory `Map`-backed `IHistoryManager`. `getBranches()` returns `Record<BranchId, ThoughtData[]>` (keyed by branded `BranchId`, not raw string). Use it instead of stubbing the real one when persistence isn't under test.
 - `createMockFormatter()`: capture-only formatter for assertions on display output.
 
 `helpers/timers.ts` wraps Vitest timer APIs:

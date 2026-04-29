@@ -9,6 +9,7 @@ import { MockHistoryManager } from './helpers/factories.js';
 import { createTestThought } from './helpers/factories.js';
 import type { ThoughtData } from '../core/thought.js';
 
+import { asBranchId } from '../contracts/ids.js';
 describe('ThoughtEvaluator', () => {
 	const evaluator = new ThoughtEvaluator();
 
@@ -96,9 +97,9 @@ describe('ThoughtEvaluator', () => {
 
 		it('counts branches correctly', () => {
 			const branches = {
-				'branch-a': [makeThought({ branch_id: 'branch-a' })],
-				'branch-b': [makeThought({ branch_id: 'branch-b' })],
-				'branch-c': [makeThought({ branch_id: 'branch-c' })],
+				'branch-a': [makeThought({ branch_id: asBranchId('branch-a') })],
+				'branch-b': [makeThought({ branch_id: asBranchId('branch-b') })],
+				'branch-c': [makeThought({ branch_id: asBranchId('branch-c') })],
 			};
 			const signals = evaluator.computeConfidenceSignals([], branches);
 
@@ -221,7 +222,7 @@ describe('ThoughtEvaluator', () => {
 				makeThought({}),
 				makeThought({ merge_from_thoughts: [1, 2] }),
 				makeThought({}),
-				makeThought({ merge_branch_ids: ['a', 'b'] }),
+				makeThought({ merge_branch_ids: ['a', 'b'].map(asBranchId) }),
 			];
 			const stats = evaluator.computeReasoningStats(history, {});
 

@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
 	createTestThought,
-} from './helpers/factories.js';
+	} from './helpers/factories.js';
+import { asBranchId } from '../contracts/ids.js';
 import { MemoryPersistence } from '../persistence/MemoryPersistence.js';
 import { FilePersistence } from '../persistence/FilePersistence.js';
 import {
@@ -72,7 +73,7 @@ describe('MemoryPersistence', () => {
 
 	describe('saveBranch and loadBranch', () => {
 		it('should save and load a branch', async () => {
-			const branchId = 'branch-1';
+			const branchId = asBranchId('branch-1');
 			const thoughts = [
 				createTestThought({ thought: 'Branch thought 1', thought_number: 1 }),
 				createTestThought({ thought: 'Branch thought 2', thought_number: 2 }),
@@ -86,7 +87,7 @@ describe('MemoryPersistence', () => {
 		});
 
 		it('should return undefined for non-existent branch', async () => {
-			const loaded = await backend.loadBranch('non-existent');
+			const loaded = await backend.loadBranch(asBranchId('non-existent'));
 			expect(loaded).toBeUndefined();
 		});
 
@@ -95,17 +96,17 @@ describe('MemoryPersistence', () => {
 			const branch2 = [createTestThought({ thought: 'Branch 2' })];
 			const branch3 = [createTestThought({ thought: 'Branch 3' })];
 
-			await backend.saveBranch('branch-1', branch1);
-			await backend.saveBranch('branch-2', branch2);
-			await backend.saveBranch('branch-3', branch3);
+			await backend.saveBranch(asBranchId('branch-1'), branch1);
+			await backend.saveBranch(asBranchId('branch-2'), branch2);
+			await backend.saveBranch(asBranchId('branch-3'), branch3);
 
-			expect(await backend.loadBranch('branch-1')).toEqual(branch1);
-			expect(await backend.loadBranch('branch-2')).toEqual(branch2);
-			expect(await backend.loadBranch('branch-3')).toEqual(branch3);
+			expect(await backend.loadBranch(asBranchId('branch-1'))).toEqual(branch1);
+			expect(await backend.loadBranch(asBranchId('branch-2'))).toEqual(branch2);
+			expect(await backend.loadBranch(asBranchId('branch-3'))).toEqual(branch3);
 		});
 
 		it('should overwrite existing branch', async () => {
-			const branchId = 'branch-1';
+			const branchId = asBranchId('branch-1');
 			const original = [createTestThought({ thought: 'Original' })];
 			const updated = [createTestThought({ thought: 'Updated' })];
 
@@ -118,7 +119,7 @@ describe('MemoryPersistence', () => {
 		});
 
 		it('should return a copy of branch data', async () => {
-			const branchId = 'branch-1';
+			const branchId = asBranchId('branch-1');
 			const thoughts = [createTestThought({ thought: 'Test' })];
 
 			await backend.saveBranch(branchId, thoughts);
@@ -142,8 +143,8 @@ describe('MemoryPersistence', () => {
 			await backend.saveThought(createTestThought({ thought_number: 2 }));
 
 			// Add branches
-			await backend.saveBranch('branch-1', [createTestThought()]);
-			await backend.saveBranch('branch-2', [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-1'), [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-2'), [createTestThought()]);
 
 			// Verify data exists
 			expect((await backend.loadHistory()).length).toBeGreaterThan(0);
@@ -154,8 +155,8 @@ describe('MemoryPersistence', () => {
 
 			// Verify cleared
 			expect(await backend.loadHistory()).toEqual([]);
-			expect(await backend.loadBranch('branch-1')).toBeUndefined();
-			expect(await backend.loadBranch('branch-2')).toBeUndefined();
+			expect(await backend.loadBranch(asBranchId('branch-1'))).toBeUndefined();
+			expect(await backend.loadBranch(asBranchId('branch-2'))).toBeUndefined();
 			expect(backend.getHistorySize()).toBe(0);
 			expect(backend.getBranchCount()).toBe(0);
 		});
@@ -190,17 +191,17 @@ describe('MemoryPersistence', () => {
 		it('should track branch count correctly', async () => {
 			expect(backend.getBranchCount()).toBe(0);
 
-			await backend.saveBranch('branch-1', [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-1'), [createTestThought()]);
 			expect(backend.getBranchCount()).toBe(1);
 
-			await backend.saveBranch('branch-2', [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-2'), [createTestThought()]);
 			expect(backend.getBranchCount()).toBe(2);
 		});
 
 		it('should return all branch IDs', async () => {
-			await backend.saveBranch('branch-1', [createTestThought()]);
-			await backend.saveBranch('branch-2', [createTestThought()]);
-			await backend.saveBranch('branch-3', [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-1'), [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-2'), [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-3'), [createTestThought()]);
 
 			const ids = backend.getBranchIds();
 
@@ -228,7 +229,7 @@ describe('MemoryPersistence', () => {
 			await backend.saveThought(createTestThought({ thought: 'History thought' }));
 
 			// Add branch
-			await backend.saveBranch('branch-1', [createTestThought({ thought: 'Branch thought' })]);
+			await backend.saveBranch(asBranchId('branch-1'), [createTestThought({ thought: 'Branch thought' })]);
 
 			// History should only contain history thoughts
 			const history = await backend.loadHistory();
@@ -236,7 +237,7 @@ describe('MemoryPersistence', () => {
 			expect(history[0]!.thought).toBe('History thought');
 
 			// Branch should only contain branch thoughts
-			const branch = await backend.loadBranch('branch-1');
+			const branch = await backend.loadBranch(asBranchId('branch-1'));
 			expect(branch).toHaveLength(1);
 			expect(branch?.[0]?.thought).toBe('Branch thought');
 		});
@@ -309,7 +310,7 @@ describe('FilePersistence', () => {
 
 	describe('saveBranch and loadBranch', () => {
 		it('should save and load a branch', async () => {
-			const branchId = 'branch-1';
+			const branchId = asBranchId('branch-1');
 			const thoughts = [
 				createTestThought({ thought: 'Branch thought 1', thought_number: 1 }),
 				createTestThought({ thought: 'Branch thought 2', thought_number: 2 }),
@@ -323,12 +324,12 @@ describe('FilePersistence', () => {
 		});
 
 		it('should return undefined for non-existent branch', async () => {
-			const loaded = await backend.loadBranch('non-existent');
+			const loaded = await backend.loadBranch(asBranchId('non-existent'));
 			expect(loaded).toBeUndefined();
 		});
 
 		it('should persist branches across backend instances', async () => {
-			const branchId = 'branch-1';
+			const branchId = asBranchId('branch-1');
 			const thoughts = [createTestThought({ thought: 'Branch thought' })];
 
 			await backend.saveBranch(branchId, thoughts);
@@ -353,7 +354,7 @@ describe('FilePersistence', () => {
 			await writeFile(branchPath, 'invalid json', 'utf-8');
 
 			// Should return undefined instead of throwing
-			const loaded = await backend.loadBranch('corrupted');
+			const loaded = await backend.loadBranch(asBranchId('corrupted'));
 			expect(loaded).toBeUndefined();
 		});
 	});
@@ -362,14 +363,14 @@ describe('FilePersistence', () => {
 		it('should clear all history and branches', async () => {
 			// Add data
 			await backend.saveThought(createTestThought());
-			await backend.saveBranch('branch-1', [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-1'), [createTestThought()]);
 
 			// Clear
 			await backend.clear();
 
 			// Verify cleared
 			expect(await backend.loadHistory()).toEqual([]);
-			expect(await backend.loadBranch('branch-1')).toBeUndefined();
+			expect(await backend.loadBranch(asBranchId('branch-1'))).toBeUndefined();
 		});
 
 		it('should be safe to call when nothing to clear', async () => {
@@ -412,9 +413,9 @@ describe('FilePersistence', () => {
 				persistBranches: false,
 			});
 
-			await backend2.saveBranch('branch-1', [createTestThought()]);
+			await backend2.saveBranch(asBranchId('branch-1'), [createTestThought()]);
 
-			const loaded = await backend2.loadBranch('branch-1');
+			const loaded = await backend2.loadBranch(asBranchId('branch-1'));
 
 			expect(loaded).toBeUndefined();
 		});
@@ -427,9 +428,9 @@ describe('FilePersistence', () => {
 		});
 
 		it('should return all branch IDs', async () => {
-			await backend.saveBranch('branch-1', [createTestThought()]);
-			await backend.saveBranch('branch-2', [createTestThought()]);
-			await backend.saveBranch('branch-3', [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-1'), [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-2'), [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-3'), [createTestThought()]);
 
 			const ids = await backend.getBranchIds();
 
@@ -489,9 +490,10 @@ describe('FilePersistence', () => {
 				'x'.repeat(64), // max length
 			];
 
-			for (const branchId of validBranchIds) {
-				await backend.saveBranch(branchId, [createTestThought()]);
-				const loaded = await backend.loadBranch(branchId);
+		for (const id of validBranchIds) {
+			const branchId = asBranchId(id);
+			await backend.saveBranch(branchId, [createTestThought()]);
+			const loaded = await backend.loadBranch(branchId);
 				expect(loaded).toBeDefined();
 				expect(loaded?.[0]?.thought).toBe('Test thought');
 			}
@@ -503,7 +505,7 @@ describe('FilePersistence', () => {
 				: [];
 
 			// Try path traversal - should throw
-			await expect(backend.saveBranch('../../malicious', [createTestThought()])).rejects.toThrow();
+			await expect(backend.saveBranch(asBranchId('../../malicious'), [createTestThought()])).rejects.toThrow();
 
 			// Verify no new files outside branches
 			const afterFiles = existsSync(join(testDir, 'branches'))
@@ -517,8 +519,8 @@ describe('FilePersistence', () => {
 
 	describe('additional coverage', () => {
 		it('should delegate listBranches() to getBranchIds()', async () => {
-			await backend.saveBranch('branch-a', [createTestThought()]);
-			await backend.saveBranch('branch-b', [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-a'), [createTestThought()]);
+			await backend.saveBranch(asBranchId('branch-b'), [createTestThought()]);
 
 			const branches = await backend.listBranches();
 
@@ -592,7 +594,7 @@ describe('FilePersistence', () => {
 			// Write valid JSON that is not an array
 			await wf(join(branchesDir, 'not-array.json'), JSON.stringify('string-value'), 'utf-8');
 
-			const loaded = await backend.loadBranch('not-array');
+			const loaded = await backend.loadBranch(asBranchId('not-array'));
 			expect(loaded).toBeUndefined();
 		});
 
@@ -603,7 +605,7 @@ describe('FilePersistence', () => {
 			// Create a non-json file in branches dir
 			await wf(join(branchesDir, 'readme.txt'), 'not a branch', 'utf-8');
 			// Also create a valid branch
-			await backend.saveBranch('valid', [createTestThought()]);
+			await backend.saveBranch(asBranchId('valid'), [createTestThought()]);
 
 			// Clear should succeed without throwing
 			await expect(backend.clear()).resolves.toBeUndefined();

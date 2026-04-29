@@ -8,6 +8,7 @@
  */
 
 import type { IEdgeStore } from '../contracts/interfaces.js';
+import type { BranchId } from '../contracts/ids.js';
 import type { ThoughtData } from './thought.js';
 
 /**
@@ -72,7 +73,7 @@ export interface IHistoryManager {
 	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns A record mapping branch IDs to their thought arrays
 	 */
-	getBranches(sessionId?: string): Record<string, ThoughtData[]>;
+	getBranches(sessionId?: string): Record<BranchId, ThoughtData[]>;
 
 	/**
 	 * Gets all branch IDs.
@@ -80,7 +81,7 @@ export interface IHistoryManager {
 	 * @param sessionId - Optional session ID for session-scoped results
 	 * @returns An array of branch identifiers
 	 */
-	getBranchIds(sessionId?: string): string[];
+	getBranchIds(sessionId?: string): BranchId[];
 
 	/**
 	 * Clears history and branches.
@@ -115,7 +116,7 @@ export interface IHistoryManager {
 	 * @param branchId - The branch identifier to register
 	 * @throws ValidationError if branchId is empty or already exists
 	 */
-	registerBranch(sessionId: string | undefined, branchId: string): void;
+	registerBranch(sessionId: string | undefined, branchId: BranchId): void;
 
 	/**
 	 * Checks whether a branch exists (has thoughts OR was pre-declared).
@@ -124,7 +125,7 @@ export interface IHistoryManager {
 	 * @param branchId - The branch identifier to check
 	 * @returns true if the branch exists or has been registered
 	 */
-	branchExists(sessionId: string | undefined, branchId: string): boolean;
+	branchExists(sessionId: string | undefined, branchId: BranchId): boolean;
 
 	/**
 	 * Access the EdgeStore, if configured.

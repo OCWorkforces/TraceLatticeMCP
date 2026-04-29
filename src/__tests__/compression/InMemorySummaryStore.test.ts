@@ -6,16 +6,16 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { InMemorySummaryStore } from '../../core/compression/InMemorySummaryStore.js';
 import { SequentialThinkingError } from '../../errors.js';
 import type { Summary } from '../../core/compression/Summary.js';
-import { asSessionId, type ThoughtId } from '../../contracts/ids.js';
+import { asSessionId, asBranchId, type ThoughtId } from '../../contracts/ids.js';
 
 let counter = 0;
 
-function makeSummary(overrides: Partial<Omit<Summary, 'sessionId' | 'rootThoughtId' | 'coveredIds'>> & { sessionId?: string; rootThoughtId?: string; coveredIds?: readonly string[] } = {}): Summary {
+function makeSummary(overrides: Partial<Omit<Summary, 'sessionId' | 'rootThoughtId' | 'coveredIds' | 'branchId'>> & { sessionId?: string; rootThoughtId?: string; coveredIds?: readonly string[]; branchId?: string } = {}): Summary {
 	counter += 1;
 	return {
 		id: overrides.id ?? `sum-${counter}`,
 		sessionId: asSessionId(overrides.sessionId ?? 's1'),
-		branchId: overrides.branchId,
+		branchId: overrides.branchId === undefined ? undefined : asBranchId(overrides.branchId),
 		rootThoughtId: (overrides.rootThoughtId ?? `t-${counter}`) as ThoughtId,
 		coveredIds: (overrides.coveredIds ?? [`t-${counter}`]) as readonly ThoughtId[],
 		coveredRange: overrides.coveredRange ?? [counter, counter],
@@ -79,18 +79,18 @@ describe('InMemorySummaryStore', () => {
 		store.add(b);
 		store.add(c);
 		store.add(d);
-		expect(store.forBranch('s1', 'b1').map((s) => s.id)).toEqual(['a', 'c']);
-		expect(store.forBranch('s1', 'b2').map((s) => s.id)).toEqual(['b']);
-		expect(store.forBranch('s2', 'b1').map((s) => s.id)).toEqual(['d']);
+		expect(store.forBranch('s1', asBranchId('b1')).map((s) => s.id)).toEqual(['a', 'c']);
+		expect(store.forBranch('s1', asBranchId('b2')).map((s) => s.id)).toEqual(['b']);
+		expect(store.forBranch('s2', asBranchId('b1')).map((s) => s.id)).toEqual(['d']);
 	});
 
 	it('forBranch() returns empty for unknown branch', () => {
-		expect(store.forBranch('nope', 'x')).toEqual([]);
+		expect(store.forBranch('nope', asBranchId('x'))).toEqual([]);
 	});
 
 	it('summaries without branchId are not indexed by branch', () => {
 		store.add(makeSummary({ id: 'm1', sessionId: 's1' }));
-		expect(store.forBranch('s1', 'anything')).toEqual([]);
+		expect(store.forBranch('s1', asBranchId('anything'))).toEqual([]);
 		expect(store.forSession('s1').map((s) => s.id)).toEqual(['m1']);
 	});
 
@@ -124,7 +124,7 @@ describe('InMemorySummaryStore', () => {
 		expect(store.get('b')).toBeUndefined();
 		expect(store.get('c')).toBe(c);
 		expect(store.forSession('s1')).toEqual([]);
-		expect(store.forBranch('s1', 'b1')).toEqual([]);
+		expect(store.forBranch('s1', asBranchId('b1'))).toEqual([]);
 		expect(store.forSession('s2').map((s) => s.id)).toEqual(['c']);
 		expect(store.size()).toBe(1);
 		expect(store.size('s1')).toBe(0);
@@ -147,13 +147,13 @@ describe('InMemorySummaryStore', () => {
 		store.add(makeSummary({ id: 'b1', sessionId: 's1', branchId: 'b', createdAt: 30 }));
 		store.add(makeSummary({ id: 'b2', sessionId: 's1', branchId: 'b', createdAt: 10 }));
 		store.add(makeSummary({ id: 'b3', sessionId: 's1', branchId: 'b', createdAt: 20 }));
-		expect(store.forBranch('s1', 'b').map((s) => s.id)).toEqual(['b2', 'b3', 'b1']);
+		expect(store.forBranch('s1', asBranchId('b')).map((s) => s.id)).toEqual(['b2', 'b3', 'b1']);
 	});
 
 	it('isolates branch keys with the same branchId across sessions', () => {
 		store.add(makeSummary({ id: 'x', sessionId: 's1', branchId: 'shared' }));
 		store.add(makeSummary({ id: 'y', sessionId: 's2', branchId: 'shared' }));
-		expect(store.forBranch('s1', 'shared').map((s) => s.id)).toEqual(['x']);
-		expect(store.forBranch('s2', 'shared').map((s) => s.id)).toEqual(['y']);
+		expect(store.forBranch('s1', asBranchId('shared')).map((s) => s.id)).toEqual(['x']);
+		expect(store.forBranch('s2', asBranchId('shared')).map((s) => s.id)).toEqual(['y']);
 	});
 });

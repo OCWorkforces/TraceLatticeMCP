@@ -11,10 +11,10 @@ import type { IHistoryManager } from '../../core/IHistoryManager.js';
 import type { ThoughtData } from '../../core/thought.js';
 import type { ConfidenceSignals } from '../../core/reasoning.js';
 import type { Edge } from '../../core/graph/Edge.js';
-import { asSessionId, asThoughtId, type EdgeId, type SessionId, type ThoughtId } from '../../contracts/ids.js';
+import { asSessionId, asThoughtId, asBranchId, type BranchId, type EdgeId, type SessionId, type ThoughtId } from '../../contracts/ids.js';
 
 const SESSION: SessionId = asSessionId('s1');
-const BRANCH = 'b1';
+const BRANCH: BranchId = asBranchId('b1');
 
 type Signals = Partial<ConfidenceSignals>;
 
@@ -48,10 +48,10 @@ class FakeHistoryManager implements IHistoryManager {
 	getHistoryLength(): number {
 		return this._thoughts.length;
 	}
-	getBranches(): Record<string, ThoughtData[]> {
-		return {};
+	getBranches(): Record<BranchId, ThoughtData[]> {
+		return {} as Record<BranchId, ThoughtData[]>;
 	}
-	getBranchIds(): string[] {
+	getBranchIds(): BranchId[] {
 		return [];
 	}
 	registerBranch(): void {}
