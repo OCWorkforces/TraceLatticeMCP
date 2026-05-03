@@ -9,6 +9,7 @@
  *
  * @module core/compression/Summary
  */
+import * as v from 'valibot';
 import type { BranchId, SessionId, ThoughtId } from '../../contracts/ids.js';
 
 /**
@@ -54,3 +55,35 @@ export interface Summary {
 	/** Free-form metadata for strategy-specific extensions. */
 	readonly meta?: Record<string, unknown>;
 }
+
+/**
+ * Valibot schema for runtime validation of {@link Summary} records loaded
+ * from persistence. IDs are validated as bounded strings; the brand is
+ * applied implicitly when consumers narrow the parsed value to `Summary`.
+ */
+export const SummarySchema = v.object({
+	id: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+	sessionId: v.pipe(v.string(), v.minLength(1), v.maxLength(100)),
+	branchId: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+	rootThoughtId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
+	coveredIds: v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+	coveredRange: v.pipe(
+		v.array(v.number()),
+		v.length(2),
+	),
+	topics: v.array(v.string()),
+	aggregateConfidence: v.pipe(v.number(), v.minValue(0), v.maxValue(1)),
+	createdAt: v.number(),
+	meta: v.optional(v.record(v.string(), v.unknown())),
+}) satisfies v.GenericSchema<{
+	id: string;
+	sessionId: string;
+	branchId?: string;
+	rootThoughtId: string;
+	coveredIds: string[];
+	coveredRange: number[];
+	topics: string[];
+	aggregateConfidence: number;
+	createdAt: number;
+	meta?: Record<string, unknown>;
+}>;

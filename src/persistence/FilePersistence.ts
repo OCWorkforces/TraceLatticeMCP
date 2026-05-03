@@ -7,7 +7,15 @@ import type { ThoughtData } from '../core/thought.js';
 import type { Edge } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
 import type { PersistenceBackend, PersistenceConfig } from '../contracts/PersistenceBackend.js';
-import { asBranchId, type BranchId } from '../contracts/ids.js';
+import { asBranchId, asSessionId, type BranchId, type SessionId } from '../contracts/ids.js';
+import * as v from 'valibot';
+import { SequentialThinkingSchema, EdgeSchema } from '../schema.js';
+import { SummarySchema } from '../core/compression/Summary.js';
+import { getErrorMessage } from '../errors.js';
+
+const ThoughtArraySchema = v.array(SequentialThinkingSchema);
+const EdgeArraySchema = v.array(EdgeSchema);
+const SummaryArraySchema = v.array(SummarySchema);
 
 /**
  * File-based persistence backend using JSON files.
@@ -128,13 +136,15 @@ export class FilePersistence implements PersistenceBackend {
 			}
 
 			const content = await readFile(this._historyPath, 'utf-8');
-			const data = JSON.parse(content) as unknown as ThoughtData[];
-
-			// Validate and filter
-			return Array.isArray(data) ? data : [];
-		} catch {
-			// If file is corrupted, start fresh
-			return [];
+			try {
+				const raw: unknown = JSON.parse(content);
+				const data = v.parse(ThoughtArraySchema, raw);
+				return data as unknown as ThoughtData[];
+			} catch (e) {
+				console.warn('Persistence validation error in history.json:', getErrorMessage(e));
+				this._metrics?.counter('persistence_validation_errors', 1, { file: 'history' });
+				return [];
+			}
 		} finally {
 			this._recordOperationDuration('load_history', startTime);
 		}
@@ -171,9 +181,15 @@ export class FilePersistence implements PersistenceBackend {
 				}
 
 				const content = await readFile(branchPath, 'utf-8');
-				const data = JSON.parse(content) as unknown as ThoughtData[];
-
-				return Array.isArray(data) ? data : undefined;
+				try {
+					const raw: unknown = JSON.parse(content);
+					const data = v.parse(ThoughtArraySchema, raw);
+					return data as unknown as ThoughtData[];
+				} catch (e) {
+					console.warn(`Persistence validation error in branch ${branchId}:`, getErrorMessage(e));
+					this._metrics?.counter('persistence_validation_errors', 1, { file: 'branch' });
+					return undefined;
+				}
 			} catch {
 				return undefined;
 			}
@@ -298,7 +314,7 @@ export class FilePersistence implements PersistenceBackend {
 	 * @param sessionId - The session ID
 	 * @param edges - Edges to persist (sorted by createdAt before write)
 	 */
-	public async saveEdges(sessionId: string, edges: readonly Edge[]): Promise<void> {
+	public async saveEdges(sessionId: SessionId, edges: readonly Edge[]): Promise<void> {
 		const startTime = Date.now();
 		try {
 			await this._ensureDirectories();
@@ -329,7 +345,7 @@ export class FilePersistence implements PersistenceBackend {
 	 * @param sessionId - The session ID
 	 * @returns Edges array (empty if file is missing or corrupted)
 	 */
-	public async loadEdges(sessionId: string): Promise<Edge[]> {
+	public async loadEdges(sessionId: SessionId): Promise<Edge[]> {
 		const startTime = Date.now();
 		try {
 			const edgePath = this._safeEdgePath(sessionId);
@@ -340,8 +356,15 @@ export class FilePersistence implements PersistenceBackend {
 
 			try {
 				const content = await readFile(edgePath, 'utf-8');
-				const data = JSON.parse(content) as unknown as Edge[];
-				return Array.isArray(data) ? data : [];
+				try {
+					const raw: unknown = JSON.parse(content);
+					const data = v.parse(EdgeArraySchema, raw);
+					return data as unknown as Edge[];
+				} catch (e) {
+					console.warn(`Persistence validation error in edges ${sessionId}:`, getErrorMessage(e));
+					this._metrics?.counter('persistence_validation_errors', 1, { file: 'edges' });
+					return [];
+				}
 			} catch {
 				return [];
 			}
@@ -355,10 +378,10 @@ export class FilePersistence implements PersistenceBackend {
 	 *
 	 * @returns Array of session identifiers (filenames without .json extension)
 	 */
-	public async listEdgeSessions(): Promise<string[]> {
+	public async listEdgeSessions(): Promise<SessionId[]> {
 		try {
 			const files = await readdir(this._edgesDir);
-			return files.filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5));
+			return files.filter((f) => f.endsWith('.json')).map((f) => asSessionId(f.slice(0, -5)));
 		} catch {
 			return [];
 		}
@@ -396,7 +419,7 @@ export class FilePersistence implements PersistenceBackend {
 	 * @param sessionId - The session ID
 	 * @param summaries - Summaries to persist (sorted by createdAt before write)
 	 */
-	public async saveSummaries(sessionId: string, summaries: readonly Summary[]): Promise<void> {
+	public async saveSummaries(sessionId: SessionId, summaries: readonly Summary[]): Promise<void> {
 		const startTime = Date.now();
 		try {
 			await this._ensureDirectories();
@@ -429,7 +452,7 @@ export class FilePersistence implements PersistenceBackend {
 	 * @param sessionId - The session ID
 	 * @returns Summaries array (empty if file is missing or corrupted)
 	 */
-	public async loadSummaries(sessionId: string): Promise<Summary[]> {
+	public async loadSummaries(sessionId: SessionId): Promise<Summary[]> {
 		const startTime = Date.now();
 		try {
 			const summaryPath = this._safeSummaryPath(sessionId);
@@ -440,9 +463,15 @@ export class FilePersistence implements PersistenceBackend {
 
 			try {
 				const content = await readFile(summaryPath, 'utf-8');
-				const data = JSON.parse(content) as unknown as Summary[];
-				if (!Array.isArray(data)) return [];
-				return [...data].sort((a, b) => a.createdAt - b.createdAt);
+				try {
+					const raw: unknown = JSON.parse(content);
+					const data = v.parse(SummaryArraySchema, raw);
+					return [...data].sort((a, b) => a.createdAt - b.createdAt) as unknown as Summary[];
+				} catch (e) {
+					console.warn(`Persistence validation error in summaries ${sessionId}:`, getErrorMessage(e));
+					this._metrics?.counter('persistence_validation_errors', 1, { file: 'summaries' });
+					return [];
+				}
 			} catch {
 				return [];
 			}
