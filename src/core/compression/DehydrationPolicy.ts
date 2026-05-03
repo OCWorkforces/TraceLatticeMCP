@@ -17,6 +17,7 @@
 
 import type { ISummaryStore, Summary } from '../../contracts/summary.js';
 import type { ThoughtData } from '../thought.js';
+import type { SessionId } from '../../contracts/ids.js';
 
 
 /** Default value for {@link DehydrationOptions.keepLastK}. */
@@ -80,7 +81,7 @@ export class DehydrationPolicy {
 	 */
 	apply(
 		history: readonly ThoughtData[],
-		sessionId: string,
+		sessionId: SessionId,
 		opts?: DehydrationOptions
 	): HydratedEntry[] {
 		const k = opts?.keepLastK ?? DEFAULT_KEEP_LAST_K;

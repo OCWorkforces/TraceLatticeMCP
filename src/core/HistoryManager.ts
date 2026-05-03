@@ -14,7 +14,7 @@
 
 import type { IMetrics } from '../contracts/interfaces.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
-import { asSessionId, type BranchId } from '../contracts/ids.js';
+import { asSessionId, type BranchId, type SessionId } from '../contracts/ids.js';
 import type { ISummaryStore } from '../contracts/summary.js';
 import { ValidationError, SessionAccessDeniedError, getErrorMessage } from '../errors.js';
 import { NullLogger } from '../logger/NullLogger.js';
@@ -85,7 +85,7 @@ export class HistoryManager implements IHistoryManager {
 	private static readonly DEFAULT_SESSION = '__global__';
 	private static readonly SESSION_TTL_MS = 30 * 60 * 1000;
 	private static readonly MAX_SESSIONS = 100;
-	private _sessions: Map<string, SessionState> = new Map();
+	private _sessions: Map<SessionId, SessionState> = new Map();
 	private _maxHistorySize: number;
 	private _maxBranches: number;
 	private _maxBranchSize: number;
@@ -148,7 +148,7 @@ export class HistoryManager implements IHistoryManager {
 				bufferSize: config.persistenceBufferSize ?? 100,
 				flushInterval: config.persistenceFlushInterval ?? 1000,
 				maxRetries: config.persistenceMaxRetries ?? 3,
-				defaultSessionId: HistoryManager.DEFAULT_SESSION,
+				defaultSessionId: asSessionId(HistoryManager.DEFAULT_SESSION),
 				getSessions: () => this._sessions,
 				getDefaultSession: () => this._getSession(),
 				edgeStore: this._edgeStore,
@@ -205,7 +205,7 @@ export class HistoryManager implements IHistoryManager {
 	 *   (e.g. by stdio), the owner is set on first owner-aware access.
 	 */
 	private _getSession(sessionId?: string, owner?: string): SessionState {
-		const key = sessionId ?? HistoryManager.DEFAULT_SESSION;
+		const key = sessionId === undefined ? asSessionId(HistoryManager.DEFAULT_SESSION) : asSessionId(sessionId);
 		let session = this._sessions.get(key);
 		if (!session) {
 			session = {
@@ -377,7 +377,7 @@ export class HistoryManager implements IHistoryManager {
 		}
 		const sid = sessionId ?? HistoryManager.DEFAULT_SESSION;
 		const policy = new DehydrationPolicy(this._summaryStore);
-		return policy.apply(history, sid, opts);
+		return policy.apply(history, sid as SessionId, opts);
 	}
 
 	public getHistoryLength(sessionId?: string): number {
@@ -435,18 +435,18 @@ export class HistoryManager implements IHistoryManager {
 		// Clear edges from EdgeStore (before session map mutation so keys are still available)
 		if (this._edgeStore) {
 			if (sessionId !== undefined) {
-				this._edgeStore.clearSession(sessionId);
+				this._edgeStore.clearSession(asSessionId(sessionId));
 			} else {
-				for (const sid of this._sessions.keys()) {
-					this._edgeStore.clearSession(asSessionId(sid));
+			for (const sid of this._sessions.keys()) {
+				this._edgeStore.clearSession(sid);
 				}
 				// Also clear the default session in case no session entries exist yet
-				this._edgeStore.clearSession(HistoryManager.DEFAULT_SESSION);
+			this._edgeStore.clearSession(asSessionId(HistoryManager.DEFAULT_SESSION));
 			}
 		}
 
 		if (sessionId !== undefined) {
-			this._sessions.delete(sessionId);
+			this._sessions.delete(asSessionId(sessionId));
 			this.log('Session cleared', { sessionId });
 		} else {
 			this._sessions.clear();

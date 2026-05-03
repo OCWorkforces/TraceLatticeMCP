@@ -14,7 +14,7 @@
 
 import { SequentialThinkingError } from '../../errors.js';
 import type { ISummaryStore, Summary } from '../../contracts/summary.js';
-import type { BranchId } from '../../contracts/ids.js';
+import { asBranchId, asSessionId, asSummaryId, type BranchId, type SessionId, type SummaryId } from '../../contracts/ids.js';
 
 /**
  * Compose the composite branch key used by the per-branch index.
@@ -23,8 +23,8 @@ import type { BranchId } from '../../contracts/ids.js';
  * and is safe because session/branch ids are constrained to alphanumeric,
  * hyphen and underscore characters.
  */
-function branchKey(sessionId: string, branchId: BranchId): string {
-	return `${sessionId}:${branchId}`;
+function branchKey(sessionId: SessionId, branchId: BranchId): BranchId {
+	return asBranchId(`${sessionId}:${branchId}`);
 }
 
 /**
@@ -52,9 +52,9 @@ function branchKey(sessionId: string, branchId: BranchId): string {
  * ```
  */
 export class InMemorySummaryStore implements ISummaryStore {
-	private readonly _byId: Map<string, Summary> = new Map();
-	private readonly _bySession: Map<string, Summary[]> = new Map();
-	private readonly _byBranch: Map<string, Summary[]> = new Map();
+	private readonly _byId: Map<SummaryId, Summary> = new Map();
+	private readonly _bySession: Map<SessionId, Summary[]> = new Map();
+	private readonly _byBranch: Map<BranchId, Summary[]> = new Map();
 
 	/**
 	 * Add a summary to the store.
@@ -72,17 +72,17 @@ export class InMemorySummaryStore implements ISummaryStore {
 	 * ```
 	 */
 	add(summary: Summary): void {
-		if (this._byId.has(summary.id)) {
+		if (this._byId.has(asSummaryId(summary.id))) {
 			throw new SequentialThinkingError(
 				`Duplicate summary id: ${summary.id}`,
 				'DUPLICATE_SUMMARY'
 			);
 		}
 
-		this._byId.set(summary.id, summary);
+		this._byId.set(asSummaryId(summary.id), summary);
 		this._insertSorted(this._bySession, summary.sessionId, summary);
 		if (summary.branchId !== undefined) {
-			this._insertSorted(this._byBranch, branchKey(summary.sessionId, summary.branchId), summary);
+			this._insertSorted(this._byBranch, branchKey(asSessionId(summary.sessionId), summary.branchId), summary);
 		}
 	}
 
@@ -98,7 +98,7 @@ export class InMemorySummaryStore implements ISummaryStore {
 	 * ```
 	 */
 	get(id: string): Summary | undefined {
-		return this._byId.get(id);
+		return this._byId.get(asSummaryId(id));
 	}
 
 	/**
@@ -113,7 +113,7 @@ export class InMemorySummaryStore implements ISummaryStore {
 	 * ```
 	 */
 	forSession(sessionId: string): readonly Summary[] {
-		return this._bySession.get(sessionId) ?? [];
+		return this._bySession.get(asSessionId(sessionId)) ?? [];
 	}
 
 	/**
@@ -129,7 +129,7 @@ export class InMemorySummaryStore implements ISummaryStore {
 	 * ```
 	 */
 	forBranch(sessionId: string, branchId: BranchId): readonly Summary[] {
-		return this._byBranch.get(branchKey(sessionId, branchId)) ?? [];
+		return this._byBranch.get(branchKey(asSessionId(sessionId), branchId)) ?? [];
 	}
 
 	/**
@@ -146,18 +146,18 @@ export class InMemorySummaryStore implements ISummaryStore {
 	 * ```
 	 */
 	clearSession(sessionId: string): void {
-		const summaries = this._bySession.get(sessionId);
+		const summaries = this._bySession.get(asSessionId(sessionId));
 		if (!summaries) {
 			return;
 		}
 
 		for (const summary of summaries) {
-			this._byId.delete(summary.id);
+			this._byId.delete(asSummaryId(summary.id));
 			if (summary.branchId !== undefined) {
-				this._byBranch.delete(branchKey(sessionId, summary.branchId));
+				this._byBranch.delete(branchKey(asSessionId(sessionId), summary.branchId));
 			}
 		}
-		this._bySession.delete(sessionId);
+		this._bySession.delete(asSessionId(sessionId));
 	}
 
 	/**
@@ -175,7 +175,7 @@ export class InMemorySummaryStore implements ISummaryStore {
 	 */
 	size(sessionId?: string): number {
 		if (sessionId !== undefined) {
-			return this._bySession.get(sessionId)?.length ?? 0;
+			return this._bySession.get(asSessionId(sessionId))?.length ?? 0;
 		}
 		return this._byId.size;
 	}
@@ -184,7 +184,7 @@ export class InMemorySummaryStore implements ISummaryStore {
 	 * Insert a summary into a bucket maintaining ascending `createdAt` order
 	 * via binary search (O(log n) search, O(n) splice).
 	 */
-	private _insertSorted(index: Map<string, Summary[]>, key: string, summary: Summary): void {
+	private _insertSorted<K>(index: Map<K, Summary[]>, key: K, summary: Summary): void {
 		let bucket = index.get(key);
 		if (!bucket) {
 			bucket = [];

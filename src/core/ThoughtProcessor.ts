@@ -10,7 +10,7 @@
 
 import { NullLogger } from '../logger/NullLogger.js';
 import type { Logger } from '../logger/StructuredLogger.js';
-import { asSessionId, GLOBAL_SESSION_ID, type BranchId, type SessionId } from '../contracts/ids.js';
+import { asSessionId, GLOBAL_SESSION_ID, type BranchId, type SessionId, type ThoughtId } from '../contracts/ids.js';
 import type { IEdgeStore } from '../contracts/interfaces.js';
 import type { ISuspensionStore, SuspensionRecord } from '../contracts/suspension.js';
 import type { IReasoningStrategy, StrategyDecision } from '../contracts/strategy.js';
@@ -427,7 +427,7 @@ export class ThoughtProcessor {
 				const sid = sessionId ?? GLOBAL_SESSION_ID;
 				const branchRoot = this._findBranchRoot(sid, currentThought.branch_id);
 				if (branchRoot) {
-					this._compressionService.compressBranch(sid, currentThought.branch_id, branchRoot);
+					this._compressionService.compressBranch(sid, currentThought.branch_id, branchRoot as ThoughtId);
 				}
 			} catch (err) {
 				this._logger.debug('Compression auto-trigger failed', {

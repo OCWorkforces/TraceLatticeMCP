@@ -41,6 +41,9 @@ export type SuspensionToken = Brand<string, 'SuspensionToken'>;
 /** Branded branch identifier. */
 export type BranchId = Brand<string, 'BranchId'>;
 
+/** Branded summary identifier. */
+export type SummaryId = Brand<string, 'SummaryId'>;
+
 /**
  * Validate and brand a string as a {@link SessionId}.
  *
@@ -91,6 +94,11 @@ export function asBranchId(value: string): BranchId {
 	return value as BranchId;
 }
 
+/** Brand a string as a {@link SummaryId} without validation. */
+export function asSummaryId(value: string): SummaryId {
+	return value as SummaryId;
+}
+
 /** Generate a fresh {@link ThoughtId}. */
 export function generateThoughtId(): ThoughtId {
 	return generateUlid() as ThoughtId;
@@ -104,6 +112,11 @@ export function generateEdgeId(): EdgeId {
 /** Generate a fresh {@link SuspensionToken}. */
 export function generateSuspensionToken(): SuspensionToken {
 	return generateUlid() as SuspensionToken;
+}
+
+/** Generate a fresh {@link SummaryId}. */
+export function generateSummaryId(): SummaryId {
+	return generateUlid() as SummaryId;
 }
 
 /**

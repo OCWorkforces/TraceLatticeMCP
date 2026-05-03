@@ -115,6 +115,13 @@ export class HttpTransport extends BaseTransport implements ITransport {
 		this._server = createServer((req, res) => this._handleRequest(req, res));
 	}
 
+	private _requireMcpServer(): McpServer {
+		if (!this._mcpServer) {
+			throw new Error('MCP server not initialized. Did you call connect()?');
+		}
+		return this._mcpServer;
+	}
+
 	/**
 	 * Get number of active HTTP connections.
 	 */
@@ -286,7 +293,7 @@ export class HttpTransport extends BaseTransport implements ITransport {
 			const owner = randomUUID();
 			const response = await runWithContext(
 				{ requestId: randomUUID(), owner },
-				() => this._mcpServer!.receive(jsonRpcRequest as Parameters<McpServer['receive']>[0], {
+				() => this._requireMcpServer().receive(jsonRpcRequest as Parameters<McpServer['receive']>[0], {
 					sessionInfo: {},
 				})
 			);

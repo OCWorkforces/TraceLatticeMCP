@@ -28,6 +28,12 @@
  * partial input from LLMs; the normalizer fills the default). An inferred type would
  * make `priority` optional and break call sites that read it without a guard.
  */
+/**
+ * JSON Schema definition object. Self-documenting alias over `Record<string, unknown>`
+ * used for tool `inputSchema` parameters.
+ */
+export type JsonSchema = Record<string, unknown>;
+
 export interface ToolRecommendation {
 	/** The unique name/identifier of the recommended tool. */
 	tool_name: string;
@@ -77,5 +83,5 @@ export interface Tool {
 	description: string;
 
 	/** JSON Schema defining the parameters the tool accepts. */
-	inputSchema: Record<string, unknown>;
+	inputSchema: JsonSchema;
 }

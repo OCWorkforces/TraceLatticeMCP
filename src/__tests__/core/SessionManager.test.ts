@@ -7,6 +7,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SessionManager, type SessionLike } from '../../core/SessionManager.js';
+import { asSessionId, type SessionId } from '../../contracts/ids.js';
 
 interface TestSession extends SessionLike {
 	id: string;
@@ -29,10 +30,10 @@ function fillSessions(
 	count: number,
 	startTime: number,
 	prefix: string
-): Map<string, TestSession> {
-	const map = new Map<string, TestSession>();
+): Map<SessionId, TestSession> {
+	const map = new Map<SessionId, TestSession>();
 	for (let i = 0; i < count; i++) {
-		map.set(`${prefix}-${i}`, {
+		map.set(asSessionId(`${prefix}-${i}`), {
 			id: `${prefix}-${i}`,
 			lastAccessedAt: startTime + i,
 			owner,
@@ -50,75 +51,75 @@ describe('SessionManager — per-owner LRU eviction', () => {
 
 	it('evicts oldest sessions of an over-quota owner only (own bucket)', () => {
 		const mgr = makeManager({ maxSessions: 1000, maxSessionsPerOwner: 50 });
-		const sessions = new Map<string, TestSession>();
+		const sessions = new Map<SessionId, TestSession>();
 
 		// Owner A: 60 sessions (10 over quota)
 		for (let i = 0; i < 60; i++) {
-			sessions.set(`a-${i}`, { id: `a-${i}`, lastAccessedAt: now + i, owner: 'A' });
+			sessions.set(asSessionId(`a-${i}`), { id: `a-${i}`, lastAccessedAt: now + i, owner: 'A' });
 		}
 		// Owner B: 30 sessions (under quota)
 		for (let i = 0; i < 30; i++) {
-			sessions.set(`b-${i}`, { id: `b-${i}`, lastAccessedAt: now + 1000 + i, owner: 'B' });
+			sessions.set(asSessionId(`b-${i}`), { id: `b-${i}`, lastAccessedAt: now + 1000 + i, owner: 'B' });
 		}
 
 		mgr.evictExcessSessions(sessions);
 
 		// Owner A: oldest 10 evicted -> a-0..a-9 gone, a-10..a-59 remain (50)
 		for (let i = 0; i < 10; i++) {
-			expect(sessions.has(`a-${i}`)).toBe(false);
+			expect(sessions.has(asSessionId(`a-${i}`))).toBe(false);
 		}
 		for (let i = 10; i < 60; i++) {
-			expect(sessions.has(`a-${i}`)).toBe(true);
+			expect(sessions.has(asSessionId(`a-${i}`))).toBe(true);
 		}
 		// Owner B: untouched
 		for (let i = 0; i < 30; i++) {
-			expect(sessions.has(`b-${i}`)).toBe(true);
+			expect(sessions.has(asSessionId(`b-${i}`))).toBe(true);
 		}
 	});
 
 	it('two owners each filling exactly to quota — neither evicts the other', () => {
 		const mgr = makeManager({ maxSessions: 1000, maxSessionsPerOwner: 5 });
-		const sessions = new Map<string, TestSession>();
+		const sessions = new Map<SessionId, TestSession>();
 
 		for (let i = 0; i < 5; i++) {
-			sessions.set(`a-${i}`, { id: `a-${i}`, lastAccessedAt: now + i, owner: 'A' });
-			sessions.set(`b-${i}`, { id: `b-${i}`, lastAccessedAt: now + 100 + i, owner: 'B' });
+			sessions.set(asSessionId(`a-${i}`), { id: `a-${i}`, lastAccessedAt: now + i, owner: 'A' });
+			sessions.set(asSessionId(`b-${i}`), { id: `b-${i}`, lastAccessedAt: now + 100 + i, owner: 'B' });
 		}
 
 		mgr.evictExcessSessions(sessions);
 
 		expect(sessions.size).toBe(10);
 		for (let i = 0; i < 5; i++) {
-			expect(sessions.has(`a-${i}`)).toBe(true);
-			expect(sessions.has(`b-${i}`)).toBe(true);
+			expect(sessions.has(asSessionId(`a-${i}`))).toBe(true);
+			expect(sessions.has(asSessionId(`b-${i}`))).toBe(true);
 		}
 	});
 
 	it('owner exceeding quota evicts only own oldest sessions, not other owners', () => {
 		const mgr = makeManager({ maxSessions: 1000, maxSessionsPerOwner: 3 });
-		const sessions = new Map<string, TestSession>();
+		const sessions = new Map<SessionId, TestSession>();
 
 		// Attacker owner X: 10 sessions (7 over quota)
 		for (let i = 0; i < 10; i++) {
-			sessions.set(`x-${i}`, { id: `x-${i}`, lastAccessedAt: now + i, owner: 'X' });
+			sessions.set(asSessionId(`x-${i}`), { id: `x-${i}`, lastAccessedAt: now + i, owner: 'X' });
 		}
 		// Legitimate owner Y: 3 sessions (at quota)
 		for (let i = 0; i < 3; i++) {
-			sessions.set(`y-${i}`, { id: `y-${i}`, lastAccessedAt: now + 50 + i, owner: 'Y' });
+			sessions.set(asSessionId(`y-${i}`), { id: `y-${i}`, lastAccessedAt: now + 50 + i, owner: 'Y' });
 		}
 
 		mgr.evictExcessSessions(sessions);
 
 		// X: oldest 7 gone (x-0..x-6), x-7..x-9 remain
 		for (let i = 0; i < 7; i++) {
-			expect(sessions.has(`x-${i}`)).toBe(false);
+			expect(sessions.has(asSessionId(`x-${i}`))).toBe(false);
 		}
 		for (let i = 7; i < 10; i++) {
-			expect(sessions.has(`x-${i}`)).toBe(true);
+			expect(sessions.has(asSessionId(`x-${i}`))).toBe(true);
 		}
 		// Y: all retained
 		for (let i = 0; i < 3; i++) {
-			expect(sessions.has(`y-${i}`)).toBe(true);
+			expect(sessions.has(asSessionId(`y-${i}`))).toBe(true);
 		}
 	});
 
@@ -141,68 +142,68 @@ describe('SessionManager — per-owner LRU eviction', () => {
 		expect(sessions.size).toBe(50);
 		// Oldest 10 evicted
 		for (let i = 0; i < 10; i++) {
-			expect(sessions.has(`s-${i}`)).toBe(false);
+			expect(sessions.has(asSessionId(`s-${i}`))).toBe(false);
 		}
 		for (let i = 10; i < 60; i++) {
-			expect(sessions.has(`s-${i}`)).toBe(true);
+			expect(sessions.has(asSessionId(`s-${i}`))).toBe(true);
 		}
 	});
 
 	it('default session is never evicted (per-owner stage)', () => {
 		const mgr = makeManager({ maxSessions: 1000, maxSessionsPerOwner: 1 });
-		const sessions = new Map<string, TestSession>();
+		const sessions = new Map<SessionId, TestSession>();
 		// Default session is owner-less — exempt anyway, but make sure it's present
-		sessions.set(DEFAULT_ID, {
+		sessions.set(asSessionId(DEFAULT_ID), {
 			id: DEFAULT_ID,
 			lastAccessedAt: 0, // very old
 			owner: undefined,
 		});
 		// Owner A overflows
 		for (let i = 0; i < 5; i++) {
-			sessions.set(`a-${i}`, { id: `a-${i}`, lastAccessedAt: now + i, owner: 'A' });
+			sessions.set(asSessionId(`a-${i}`), { id: `a-${i}`, lastAccessedAt: now + i, owner: 'A' });
 		}
 
 		mgr.evictExcessSessions(sessions);
 
-		expect(sessions.has(DEFAULT_ID)).toBe(true);
+		expect(sessions.has(asSessionId(DEFAULT_ID))).toBe(true);
 	});
 
 	it('default session is never evicted (global stage)', () => {
 		const mgr = makeManager({ maxSessions: 3, maxSessionsPerOwner: 1000 });
-		const sessions = new Map<string, TestSession>();
-		sessions.set(DEFAULT_ID, {
+		const sessions = new Map<SessionId, TestSession>();
+		sessions.set(asSessionId(DEFAULT_ID), {
 			id: DEFAULT_ID,
 			lastAccessedAt: 0, // oldest
 			owner: undefined,
 		});
 		for (let i = 0; i < 10; i++) {
-			sessions.set(`s-${i}`, { id: `s-${i}`, lastAccessedAt: now + i, owner: undefined });
+			sessions.set(asSessionId(`s-${i}`), { id: `s-${i}`, lastAccessedAt: now + i, owner: undefined });
 		}
 
 		mgr.evictExcessSessions(sessions);
 
 		// Default kept; global cap of 3 enforced over total -> 3 retained including default
-		expect(sessions.has(DEFAULT_ID)).toBe(true);
+		expect(sessions.has(asSessionId(DEFAULT_ID))).toBe(true);
 		expect(sessions.size).toBe(3); // default + 2 newest
 	});
 
 	it('per-owner eviction respects lastAccessedAt order', () => {
 		const mgr = makeManager({ maxSessions: 1000, maxSessionsPerOwner: 2 });
-		const sessions = new Map<string, TestSession>();
+		const sessions = new Map<SessionId, TestSession>();
 
 		// Insert out-of-order timestamps for owner A
-		sessions.set('a-newest', { id: 'a-newest', lastAccessedAt: now + 300, owner: 'A' });
-		sessions.set('a-oldest', { id: 'a-oldest', lastAccessedAt: now + 100, owner: 'A' });
-		sessions.set('a-mid', { id: 'a-mid', lastAccessedAt: now + 200, owner: 'A' });
-		sessions.set('a-ancient', { id: 'a-ancient', lastAccessedAt: now + 50, owner: 'A' });
+		sessions.set(asSessionId('a-newest'), { id: 'a-newest', lastAccessedAt: now + 300, owner: 'A' });
+		sessions.set(asSessionId('a-oldest'), { id: 'a-oldest', lastAccessedAt: now + 100, owner: 'A' });
+		sessions.set(asSessionId('a-mid'), { id: 'a-mid', lastAccessedAt: now + 200, owner: 'A' });
+		sessions.set(asSessionId('a-ancient'), { id: 'a-ancient', lastAccessedAt: now + 50, owner: 'A' });
 
 		mgr.evictExcessSessions(sessions);
 
 		// Quota 2 -> evict oldest 2 (ancient, oldest) -> retain (mid, newest)
-		expect(sessions.has('a-ancient')).toBe(false);
-		expect(sessions.has('a-oldest')).toBe(false);
-		expect(sessions.has('a-mid')).toBe(true);
-		expect(sessions.has('a-newest')).toBe(true);
+		expect(sessions.has(asSessionId('a-ancient'))).toBe(false);
+		expect(sessions.has(asSessionId('a-oldest'))).toBe(false);
+		expect(sessions.has(asSessionId('a-mid'))).toBe(true);
+		expect(sessions.has(asSessionId('a-newest'))).toBe(true);
 	});
 
 	it('default maxSessionsPerOwner is 50 when not configured', () => {
@@ -212,9 +213,9 @@ describe('SessionManager — per-owner LRU eviction', () => {
 			cleanupIntervalMs: 60_000,
 			getMaxSessions: () => 1000,
 		});
-		const sessions = new Map<string, TestSession>();
+		const sessions = new Map<SessionId, TestSession>();
 		for (let i = 0; i < 60; i++) {
-			sessions.set(`a-${i}`, { id: `a-${i}`, lastAccessedAt: now + i, owner: 'A' });
+			sessions.set(asSessionId(`a-${i}`), { id: `a-${i}`, lastAccessedAt: now + i, owner: 'A' });
 		}
 		mgr.evictExcessSessions(sessions);
 		// 50 per-owner default -> 10 evicted

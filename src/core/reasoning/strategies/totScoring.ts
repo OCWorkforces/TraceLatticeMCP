@@ -17,7 +17,8 @@
 import type { ThoughtData } from '../../thought.js';
 import type { ConfidenceSignals, ThoughtType } from '../../reasoning.js';
 import type { GraphView } from '../../graph/GraphView.js';
-import type { SessionId } from '../../../contracts/ids.js';
+import type { SessionId, ThoughtId } from '../../../contracts/ids.js';
+import { assertNever } from '../../../utils.js';
 
 /**
  * Optional `confidence_signals` carried alongside a thought. The core
@@ -49,6 +50,7 @@ export interface ScoredCandidate {
  * Pure function: deterministic, no I/O.
  */
 function getTypeWeight(type: ThoughtType | undefined): number {
+	if (type === undefined) return 1.0;
 	switch (type) {
 		case 'assumption':
 			return 0.5;
@@ -60,8 +62,15 @@ function getTypeWeight(type: ThoughtType | undefined): number {
 			return 1.0;
 		case 'tool_observation':
 			return 1.0;
-		default:
+		case 'regular':
+		case 'hypothesis':
+		case 'verification':
+		case 'critique':
+		case 'synthesis':
+		case 'meta':
 			return 1.0;
+		default:
+			return assertNever(type);
 	}
 }
 
@@ -184,7 +193,7 @@ export function breadthFirstFrontier(
 	while (frontier.length > 0 && depth < depthCap) {
 		const next: string[] = [];
 		for (const node of frontier) {
-			for (const child of graph.descendants(sessionId, node, 1)) {
+			for (const child of graph.descendants(sessionId, node as ThoughtId, 1)) {
 				if (visited.has(child)) continue;
 				visited.add(child);
 				next.push(child);
@@ -210,7 +219,7 @@ export function breadthFirstFrontier(
 	// a leaf (covers nodes shallower than depthCap that terminated naturally).
 	for (const id of explored) {
 		if (seenLeaf.has(id)) continue;
-		const children = graph.descendants(sessionId, id, 1);
+		const children = graph.descendants(sessionId, id as ThoughtId, 1);
 		if (children.length === 0) collect(id);
 	}
 	return leaves;

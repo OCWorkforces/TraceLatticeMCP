@@ -17,7 +17,7 @@ import { generateUlid } from '../../core/ids.js';
 import { createTestThought } from '../helpers/factories.js';
 import type { ThoughtData } from '../../core/thought.js';
 import type { Edge } from '../../core/graph/Edge.js';
-import { asSessionId, asThoughtId, type SessionId, type ThoughtId, type EdgeId } from '../../contracts/ids.js';
+import { asSessionId, asThoughtId, type EdgeId, type SessionId, type ThoughtId } from '../../contracts/ids.js';
 
 const GLOBAL: SessionId = asSessionId('__global__');
 
@@ -176,7 +176,7 @@ describe('HistoryManager edge persistence', () => {
 
 	it('listEdgeSessions returns all sessions with persisted edges', async () => {
 		const persistence = new MemoryPersistence();
-		await persistence.saveEdges('test-A', [
+		await persistence.saveEdges(asSessionId('test-A'), [
 			{
 				id: generateUlid() as EdgeId,
 				from: asThoughtId('a1'),
@@ -186,7 +186,7 @@ describe('HistoryManager edge persistence', () => {
 				createdAt: 1,
 			},
 		]);
-		await persistence.saveEdges('test-B', [
+		await persistence.saveEdges(asSessionId('test-B'), [
 			{
 				id: generateUlid() as EdgeId,
 				from: asThoughtId('b1'),
@@ -231,8 +231,8 @@ describe('HistoryManager edge persistence', () => {
 				createdAt: 200,
 			},
 		];
-		await persistence.saveEdges('test-A', seedA);
-		await persistence.saveEdges('test-B', seedB);
+		await persistence.saveEdges(asSessionId('test-A'), seedA);
+		await persistence.saveEdges(asSessionId('test-B'), seedB);
 
 		const edgeStore = new EdgeStore();
 		const manager = new HistoryManager({

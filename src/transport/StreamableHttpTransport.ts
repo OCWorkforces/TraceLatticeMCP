@@ -31,6 +31,7 @@ import { getErrorMessage } from '../errors.js';
 import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 import type { ITransport, TransportKind } from '../contracts/transport.js';
+import { asSessionId, type SessionId } from '../contracts/ids.js';
 import { readRequestBody } from './HttpHelpers.js';
 import { runWithContext } from '../context/RequestContext.js';
 
@@ -143,7 +144,7 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 	private _path: string;
 	private _stateful: boolean;
 	private _sessionIdGenerator: () => string;
-	private _sessions: Map<string, SessionState> = new Map();
+	private _sessions: Map<SessionId, SessionState> = new Map();
 	private _requestCount: number = 0;
 	private _activeRequests: number = 0;
 	private _bodySizeLimitEnabled: boolean;
@@ -163,6 +164,20 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 		this._requestTimeout = options.requestTimeout ?? 30000;
 		this._metrics = options.metrics;
 		this._metricsProvider = options.metricsProvider ?? null;
+	}
+
+	private _requireServer(): Server {
+		if (!this._server) {
+			throw new Error('HTTP server not initialized. Did you call connect()?');
+		}
+		return this._server;
+	}
+
+	private _requireMcpServer(): McpServer {
+		if (!this._mcpServer) {
+			throw new Error('MCP server not initialized. Did you call connect()?');
+		}
+		return this._mcpServer;
 	}
 
 	/**
@@ -187,7 +202,7 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 		this._server = createServer((req, res) => this._handleRequest(req, res));
 
 		return new Promise((resolve) => {
-			this._server!.listen(this._port, this._host, () => {
+			this._requireServer().listen(this._port, this._host, () => {
 				this.log(
 					'info',
 					`Streamable HTTP transport listening on http://${this._host}:${this._port}`
@@ -371,7 +386,7 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 			const owner = this._stateful ? (sessionId ?? randomUUID()) : randomUUID();
 			const response = await runWithContext(
 				{ requestId: randomUUID(), owner },
-				() => this._mcpServer!.receive(jsonRpcRequest as Parameters<McpServer['receive']>[0], { sessionInfo: {} })
+				() => this._requireMcpServer().receive(jsonRpcRequest as Parameters<McpServer['receive']>[0], { sessionInfo: {} })
 			);
 			clearTimeout(timeout);
 			this._activeRequests--;
@@ -436,7 +451,7 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 			return;
 		}
 
-		const session = this._sessions.get(sessionId);
+		const session = this._sessions.get(asSessionId(sessionId));
 		if (!session) {
 			res.writeHead(404, { 'Content-Type': 'application/json' });
 			res.end(
@@ -498,7 +513,7 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 			}
 
 			// Check if session exists
-			const session = this._sessions.get(headerSessionId);
+			const session = this._sessions.get(asSessionId(headerSessionId));
 			if (session) {
 				session.lastActivityAt = Date.now();
 				return headerSessionId;
@@ -524,7 +539,7 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 			lastActivityAt: Date.now(),
 			notificationStreams: new Set(),
 		};
-		this._sessions.set(newSessionId, sessionState);
+		this._sessions.set(asSessionId(newSessionId), sessionState);
 		this.log('info', `New session created: ${newSessionId}`);
 		this._updateSessionMetrics();
 
@@ -563,7 +578,7 @@ export class StreamableHttpTransport extends BaseTransport implements ITransport
 	 * @param data - Event payload
 	 */
 	broadcastToSession(sessionId: string, event: string, data: unknown): void {
-		const session = this._sessions.get(sessionId);
+		const session = this._sessions.get(asSessionId(sessionId));
 		if (!session) {
 			return;
 		}

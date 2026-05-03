@@ -13,7 +13,7 @@
  */
 
 import type { IEdgeStore } from '../../contracts/interfaces.js';
-import type { SessionId } from '../../contracts/ids.js';
+import { asEdgeId, asThoughtId, type EdgeId, type SessionId, type ThoughtId } from '../../contracts/ids.js';
 import { InvalidEdgeError } from '../../errors.js';
 import type { Edge } from './Edge.js';
 
@@ -21,9 +21,9 @@ import type { Edge } from './Edge.js';
  * Per-session adjacency container.
  */
 interface SessionEdges {
-	readonly byId: Map<string, Edge>;
-	readonly outgoing: Map<string, Edge[]>;
-	readonly incoming: Map<string, Edge[]>;
+	readonly byId: Map<EdgeId, Edge>;
+	readonly outgoing: Map<ThoughtId, Edge[]>;
+	readonly incoming: Map<ThoughtId, Edge[]>;
 }
 
 /**
@@ -49,7 +49,7 @@ interface SessionEdges {
  * ```
  */
 export class EdgeStore implements IEdgeStore {
-	private readonly _sessions: Map<string, SessionEdges> = new Map();
+	private readonly _sessions: Map<SessionId, SessionEdges> = new Map();
 
 	/**
 	 * Add a directed edge to the store.
@@ -95,7 +95,7 @@ export class EdgeStore implements IEdgeStore {
 	 */
 	getEdge(id: string): Edge | undefined {
 		for (const session of this._sessions.values()) {
-			const edge = session.byId.get(id);
+			const edge = session.byId.get(asEdgeId(id));
 			if (edge) {
 				return edge;
 			}
@@ -115,7 +115,7 @@ export class EdgeStore implements IEdgeStore {
 		if (!session) {
 			return [];
 		}
-		return session.outgoing.get(from) ?? [];
+		return session.outgoing.get(asThoughtId(from)) ?? [];
 	}
 
 	/**
@@ -130,7 +130,7 @@ export class EdgeStore implements IEdgeStore {
 		if (!session) {
 			return [];
 		}
-		return session.incoming.get(to) ?? [];
+		return session.incoming.get(asThoughtId(to)) ?? [];
 	}
 
 	/**
@@ -177,13 +177,13 @@ export class EdgeStore implements IEdgeStore {
 	/**
 	 * Get an existing session container or create a new empty one.
 	 */
-	private _getOrCreateSession(sessionId: string): SessionEdges {
+	private _getOrCreateSession(sessionId: SessionId): SessionEdges {
 		let session = this._sessions.get(sessionId);
 		if (!session) {
 			session = {
-				byId: new Map(),
-				outgoing: new Map(),
-				incoming: new Map(),
+				byId: new Map<EdgeId, Edge>(),
+				outgoing: new Map<ThoughtId, Edge[]>(),
+				incoming: new Map<ThoughtId, Edge[]>(),
 			};
 			this._sessions.set(sessionId, session);
 		}
@@ -194,7 +194,7 @@ export class EdgeStore implements IEdgeStore {
 	 * Insert an edge into an adjacency bucket, maintaining ascending
 	 * `createdAt` order. Uses binary search to keep insertion at O(log n).
 	 */
-	private _insertSorted(index: Map<string, Edge[]>, key: string, edge: Edge): void {
+	private _insertSorted<K>(index: Map<K, Edge[]>, key: K, edge: Edge): void {
 		let bucket = index.get(key);
 		if (!bucket) {
 			bucket = [];

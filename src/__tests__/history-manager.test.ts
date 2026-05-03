@@ -9,6 +9,7 @@ import type { Logger } from '../logger/StructuredLogger.js';
 import type { ThoughtData } from '../core/thought.js';
 
 import { asBranchId, type BranchId } from '../contracts/ids.js';
+import type { SessionId } from '../contracts/ids.js';
 /** Test-only interface to access private fields of HistoryManager. */
 interface HistoryManagerTestAccess {
 	_maxHistorySize: number;
@@ -70,7 +71,7 @@ class MockPersistence implements PersistenceBackend {
 		return [];
 	}
 
-	async listEdgeSessions(): Promise<string[]> {
+	async listEdgeSessions(): Promise<SessionId[]> {
 		return [];
 	}
 

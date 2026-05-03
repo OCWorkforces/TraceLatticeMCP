@@ -8,6 +8,8 @@
  */
 
 import type { IOutcomeRecorder, VerificationOutcome } from '../../contracts/interfaces.js';
+import { asSessionId, type SessionId } from '../../contracts/ids.js';
+
 
 /**
  * Configuration for OutcomeRecorder.
@@ -38,7 +40,7 @@ export interface OutcomeRecorderConfig {
  * ```
  */
 export class OutcomeRecorder implements IOutcomeRecorder {
-	private readonly _outcomes: Map<string, VerificationOutcome[]> = new Map();
+	private readonly _outcomes: Map<SessionId, VerificationOutcome[]> = new Map();
 	private readonly _enabled: boolean;
 
 	/**
@@ -72,9 +74,10 @@ export class OutcomeRecorder implements IOutcomeRecorder {
 			recordedAt: Date.now(),
 		};
 
-		const sessionOutcomes = this._outcomes.get(outcome.sessionId) ?? [];
+		const sessionId = asSessionId(outcome.sessionId);
+		const sessionOutcomes = this._outcomes.get(sessionId) ?? [];
 		sessionOutcomes.push(full);
-		this._outcomes.set(outcome.sessionId, sessionOutcomes);
+		this._outcomes.set(sessionId, sessionOutcomes);
 	}
 
 	/**
@@ -85,7 +88,7 @@ export class OutcomeRecorder implements IOutcomeRecorder {
 	 */
 	getOutcomes(sessionId: string): VerificationOutcome[] {
 		if (!this._enabled) return [];
-		return this._outcomes.get(sessionId) ?? [];
+		return this._outcomes.get(asSessionId(sessionId)) ?? [];
 	}
 
 	/**
@@ -108,6 +111,6 @@ export class OutcomeRecorder implements IOutcomeRecorder {
 	 * @param sessionId - The session id to clear
 	 */
 	clearOutcomes(sessionId: string): void {
-		this._outcomes.delete(sessionId);
+		this._outcomes.delete(asSessionId(sessionId));
 	}
 }

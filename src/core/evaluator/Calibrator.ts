@@ -244,7 +244,7 @@ function emptyMetrics(): CalibrationMetrics {
 export class Calibrator implements ICalibrator {
 	public readonly enabled: boolean;
 	private readonly _recorder: IOutcomeRecorder;
-	private readonly _temperatures = new Map<string, number>();
+	private readonly _temperatures = new Map<SessionId, number>();
 
 	constructor(outcomeRecorder: IOutcomeRecorder, enabled: boolean) {
 		this._recorder = outcomeRecorder;

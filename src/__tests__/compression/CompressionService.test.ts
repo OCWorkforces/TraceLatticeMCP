@@ -11,7 +11,7 @@ import type { IHistoryManager } from '../../core/IHistoryManager.js';
 import type { ThoughtData } from '../../core/thought.js';
 import type { ConfidenceSignals } from '../../core/reasoning.js';
 import type { Edge } from '../../core/graph/Edge.js';
-import { asSessionId, asThoughtId, asBranchId, type BranchId, type EdgeId, type SessionId, type ThoughtId } from '../../contracts/ids.js';
+import { asBranchId, asSessionId, asThoughtId, type BranchId, type EdgeId, type SessionId, type ThoughtId } from '../../contracts/ids.js';
 
 const SESSION: SessionId = asSessionId('s1');
 const BRANCH: BranchId = asBranchId('b1');
@@ -127,7 +127,7 @@ describe('CompressionService', () => {
 
 	it('compresses a single-thought subtree (no descendants)', () => {
 		h.hm.addThought(makeThought('root', 'database connection pooling logic', 1, 0.7));
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'root');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('root'));
 		expect(summary.coveredIds).toEqual(['root']);
 		expect(summary.rootThoughtId).toBe('root');
 		expect(summary.sessionId).toBe(SESSION);
@@ -143,15 +143,15 @@ describe('CompressionService', () => {
 		h.hm.addThought(makeThought('c', 'gamma terms', 3));
 		addSeqEdge(h.edges, 'a', 'b');
 		addSeqEdge(h.edges, 'b', 'c');
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'a');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('a'));
 		expect(summary.coveredIds).toEqual(['a', 'b', 'c']);
 		expect(summary.coveredRange).toEqual([1, 3]);
 	});
 
 	it('is idempotent: re-compressing returns the same Summary instance', () => {
 		h.hm.addThought(makeThought('root', 'topic alpha keyword', 1));
-		const first = h.svc.compressBranch(SESSION, BRANCH, 'root');
-		const second = h.svc.compressBranch(SESSION, BRANCH, 'root');
+		const first = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('root'));
+		const second = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('root'));
 		expect(second.id).toBe(first.id);
 		expect(h.store.size()).toBe(1);
 	});
@@ -160,13 +160,13 @@ describe('CompressionService', () => {
 		h.hm.addThought(
 			makeThought('root', 'this that with from have will would could should', 1),
 		);
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'root');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('root'));
 		expect(summary.topics).toEqual([]);
 	});
 
 	it('drops tokens shorter than 4 characters', () => {
 		h.hm.addThought(makeThought('root', 'a is to of in on at by go run', 1));
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'root');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('root'));
 		// "run" is 3 chars → dropped; nothing else qualifies
 		expect(summary.topics).toEqual([]);
 	});
@@ -177,7 +177,7 @@ describe('CompressionService', () => {
 		h.hm.addThought(
 			makeThought('root', 'alpha bravo alpha delta bravo alpha gamma delta', 1),
 		);
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'root');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('root'));
 		expect(summary.topics).toEqual(['alpha', 'bravo', 'delta']);
 	});
 
@@ -185,7 +185,7 @@ describe('CompressionService', () => {
 		h.hm.addThought(makeThought('a', 'alpha', 1, 0.2, { calibrated_confidence: 0.8 }));
 		h.hm.addThought(makeThought('b', 'beta', 2, 0.4, { calibrated_confidence: 0.6 }));
 		addSeqEdge(h.edges, 'a', 'b');
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'a');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('a'));
 		expect(summary.aggregateConfidence).toBeCloseTo(0.7); // mean(0.8, 0.6)
 	});
 
@@ -193,7 +193,7 @@ describe('CompressionService', () => {
 		h.hm.addThought(makeThought('a', 'alpha', 1, 0.5));
 		h.hm.addThought(makeThought('b', 'beta', 2));
 		addSeqEdge(h.edges, 'a', 'b');
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'a');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('a'));
 		expect(summary.aggregateConfidence).toBeCloseTo(0.25); // mean(0.5, 0)
 	});
 
@@ -203,7 +203,7 @@ describe('CompressionService', () => {
 		h.hm.addThought(makeThought('c', 'word', 9));
 		addSeqEdge(h.edges, 'a', 'b');
 		addSeqEdge(h.edges, 'b', 'c');
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'a');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('a'));
 		expect(summary.coveredRange).toEqual([2, 9]);
 	});
 
@@ -211,7 +211,7 @@ describe('CompressionService', () => {
 		h.hm.addThought(makeThought('a', 'alpha keyword', 1, 0.4));
 		// 'ghost' has an edge but no thought in history
 		addSeqEdge(h.edges, 'a', 'ghost');
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'a');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('a'));
 		expect(summary.coveredIds).toEqual(['a', 'ghost']);
 		expect(summary.coveredRange).toEqual([1, 1]);
 		expect(summary.aggregateConfidence).toBeCloseTo(0.4);
@@ -219,13 +219,13 @@ describe('CompressionService', () => {
 
 	it('emits a debug log on compression when logger provided', () => {
 		h.hm.addThought(makeThought('root', 'compression keyword sample', 1));
-		h.svc.compressBranch(SESSION, BRANCH, 'root');
+		h.svc.compressBranch(SESSION, BRANCH, asThoughtId('root'));
 		expect(h.logs.some((l) => l.msg === 'compression.branch.compressed')).toBe(true);
 	});
 
 	it('persists the summary in the store under the given session and branch', () => {
 		h.hm.addThought(makeThought('root', 'sample words present', 1));
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'root');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('root'));
 		expect(h.store.get(summary.id)).toBe(summary);
 		expect(h.store.forBranch(SESSION, BRANCH).map((s) => s.id)).toEqual([summary.id]);
 	});
@@ -234,13 +234,13 @@ describe('CompressionService', () => {
 		h.hm.addThought(
 			makeThought('root', 'alpha bravo delta gamma kappa lambda omega', 1),
 		);
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'root');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('root'));
 		expect(summary.topics).toHaveLength(3);
 	});
 
 	it('returns 0 confidence and [0,0] range when history has no matching thought', () => {
 		// Root id has no entry in history at all
-		const summary = h.svc.compressBranch(SESSION, BRANCH, 'orphan');
+		const summary = h.svc.compressBranch(SESSION, BRANCH, asThoughtId('orphan'));
 		expect(summary.coveredIds).toEqual(['orphan']);
 		expect(summary.aggregateConfidence).toBe(0);
 		expect(summary.coveredRange).toEqual([0, 0]);
@@ -256,7 +256,7 @@ describe('CompressionService', () => {
 			edgeStore: edges,
 			summaryStore: store,
 		});
-		expect(() => svc.compressBranch(SESSION, BRANCH, 'r')).not.toThrow();
+		expect(() => svc.compressBranch(SESSION, BRANCH, asThoughtId('r'))).not.toThrow();
 		expect(store.size()).toBe(1);
 	});
 });

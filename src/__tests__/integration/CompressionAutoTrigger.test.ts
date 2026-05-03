@@ -302,7 +302,7 @@ describe('Compression → Dehydration Roundtrip', () => {
 		}
 
 		// Compress: produces a Summary covering thoughts 1..8.
-		const summary = compression.compressBranch(sessionId, asBranchId('b1'), 't-1');
+		const summary = compression.compressBranch(sessionId, asBranchId('b1'), asThoughtId('t-1'));
 		expect(summary.coveredRange).toEqual([1, 8]);
 		expect(summary.coveredIds.length).toBe(8);
 

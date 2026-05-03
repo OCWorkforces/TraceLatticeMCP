@@ -12,7 +12,7 @@
  */
 import type { Edge } from '../core/graph/Edge.js';
 import type { ThoughtType } from '../core/reasoning.js';
-import type { ThoughtId } from './ids.js';
+import type { EdgeId, SessionId, ThoughtId } from './ids.js';
 
 /**
  * Metrics interface for observability.
@@ -73,7 +73,7 @@ export interface VerificationOutcome {
 	/** The thought number of the prediction (backward compat). */
 	thoughtNumber: number;
 	/** The session this outcome belongs to. */
-	sessionId: string;
+	sessionId: SessionId;
 	/** The predicted confidence (0-1). */
 	predicted: number;
 	/** The actual outcome (0 = wrong, 1 = correct). */
@@ -103,7 +103,7 @@ export interface IOutcomeRecorder {
 	 * Get all recorded outcomes for a session.
 	 * Returns empty array when disabled or no outcomes recorded.
 	 */
-	getOutcomes(sessionId: string): VerificationOutcome[];
+	getOutcomes(sessionId: SessionId): VerificationOutcome[];
 
 	/**
 	 * Get outcomes across all sessions.
@@ -114,7 +114,7 @@ export interface IOutcomeRecorder {
 	/**
 	 * Clear outcomes for a specific session.
 	 */
-	clearOutcomes(sessionId: string): void;
+	clearOutcomes(sessionId: SessionId): void;
 
 	/**
 	 * Whether outcome recording is currently enabled.
@@ -156,7 +156,7 @@ export interface IEdgeStore {
 	 * @param id - The edge's unique identifier
 	 * @returns The edge, or undefined if not found
 	 */
-	getEdge(id: string): Edge | undefined;
+	getEdge(id: EdgeId): Edge | undefined;
 
 	/**
 	 * Get all outgoing edges from a thought, sorted by createdAt ascending.
@@ -165,7 +165,7 @@ export interface IEdgeStore {
 	 * @param from - Source thought id
 	 * @returns Array of outgoing edges (may be empty)
 	 */
-	outgoing(sessionId: string, from: string): readonly Edge[];
+	outgoing(sessionId: SessionId, from: ThoughtId): readonly Edge[];
 
 	/**
 	 * Get all incoming edges to a thought, sorted by createdAt ascending.
@@ -174,7 +174,7 @@ export interface IEdgeStore {
 	 * @param to - Target thought id
 	 * @returns Array of incoming edges (may be empty)
 	 */
-	incoming(sessionId: string, to: string): readonly Edge[];
+	incoming(sessionId: SessionId, to: ThoughtId): readonly Edge[];
 
 	/**
 	 * Get all edges in a session.
@@ -182,7 +182,7 @@ export interface IEdgeStore {
 	 * @param sessionId - Session to query
 	 * @returns All edges in the session (may be empty)
 	 */
-	edgesForSession(sessionId: string): readonly Edge[];
+	edgesForSession(sessionId: SessionId): readonly Edge[];
 
 	/**
 	 * Clear all edges for a specific session.
@@ -190,7 +190,7 @@ export interface IEdgeStore {
 	 *
 	 * @param sessionId - Session to clear
 	 */
-	clearSession(sessionId: string): void;
+	clearSession(sessionId: SessionId): void;
 
 	/**
 	 * Count edges.
@@ -198,7 +198,7 @@ export interface IEdgeStore {
 	 * @param sessionId - If provided, count for that session only
 	 * @returns Total edge count (across all sessions if no sessionId provided)
 	 */
-	size(sessionId?: string): number;
+	size(sessionId?: SessionId): number;
 }
 
 /**
@@ -242,7 +242,7 @@ export interface ISessionLock {
 	 * @throws {LockTimeoutError} If the lock is not acquired before `timeoutMs`.
 	 */
 	withLock<T>(
-		sessionId: string | undefined,
+		sessionId: SessionId | undefined,
 		fn: () => Promise<T>,
 		timeoutMs?: number,
 	): Promise<T>;

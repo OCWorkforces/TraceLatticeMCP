@@ -21,7 +21,7 @@ import type { ThoughtData } from '../thought.js';
 import type { ConfidenceSignals } from '../reasoning.js';
 import { GraphView } from '../graph/GraphView.js';
 import { generateUlid } from '../ids.js';
-import { asSessionId, type BranchId } from '../../contracts/ids.js';
+import type { BranchId, SessionId, ThoughtId } from '../../contracts/ids.js';
 
 /** Stopwords excluded from topic extraction (lowercase). */
 const STOPWORDS: ReadonlySet<string> = new Set([
@@ -71,7 +71,7 @@ export class CompressionService {
 	 * exists in the store, the existing summary is returned unchanged — same
 	 * inputs always yield the same Summary identity.
 	 */
-	compressBranch(sessionId: string, branchId: BranchId, rootThoughtId: string): Summary {
+	compressBranch(sessionId: SessionId, branchId: BranchId, rootThoughtId: ThoughtId): Summary {
 		const existing = this._findExistingForRoot(sessionId, branchId, rootThoughtId);
 		if (existing) return existing;
 
@@ -79,10 +79,10 @@ export class CompressionService {
 		const thoughts = this._lookupThoughts(sessionId, coveredIds);
 		const summary: Summary = {
 			id: generateUlid(),
-			sessionId: asSessionId(sessionId),
+			sessionId,
 			branchId,
-			rootThoughtId: rootThoughtId as Summary['rootThoughtId'],
-			coveredIds: coveredIds as Summary['coveredIds'],
+			rootThoughtId,
+			coveredIds,
 			coveredRange: this._coveredRange(thoughts),
 			topics: this._extractTopics(thoughts),
 			aggregateConfidence: this._meanConfidence(thoughts),
@@ -102,9 +102,9 @@ export class CompressionService {
 
 	/** Look up an existing summary on this branch with a matching root. */
 	private _findExistingForRoot(
-		sessionId: string,
+		sessionId: SessionId,
 		branchId: BranchId,
-		rootThoughtId: string
+		rootThoughtId: ThoughtId
 	): Summary | undefined {
 		for (const s of this._deps.summaryStore.forBranch(sessionId, branchId)) {
 			if (s.rootThoughtId === rootThoughtId) return s;
@@ -113,8 +113,8 @@ export class CompressionService {
 	}
 
 	/** Collect the root and all of its descendants (chronological BFS). */
-	private _collectCovered(sessionId: string, rootThoughtId: string): readonly string[] {
-		const descendants = this._graph.descendants(asSessionId(sessionId), rootThoughtId);
+	private _collectCovered(sessionId: SessionId, rootThoughtId: ThoughtId): readonly ThoughtId[] {
+		const descendants = this._graph.descendants(sessionId, rootThoughtId);
 		return [rootThoughtId, ...descendants];
 	}
 
@@ -122,7 +122,7 @@ export class CompressionService {
 	 * Resolve covered ids to {@link ThoughtData}, dropping any not found in
 	 * the history (defensive — graph may reference evicted thoughts).
 	 */
-	private _lookupThoughts(sessionId: string, coveredIds: readonly string[]): ThoughtData[] {
+	private _lookupThoughts(sessionId: SessionId, coveredIds: readonly ThoughtId[]): ThoughtData[] {
 		const history = this._deps.historyManager.getHistory(sessionId);
 		const byId = new Map<string, ThoughtData>();
 		for (const t of history) {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { ConnectionPool, createConnectionPool } from '../pool/ConnectionPool.js';
 import type { ThoughtData } from '../core/thought.js';
+import { asSessionId } from '../contracts/ids.js';
 
 const createMockServer = () => ({
 	processThought: vi.fn().mockResolvedValue({
@@ -333,7 +334,7 @@ describe('ConnectionPool additional coverage', () => {
 				serverFactory: createMockServerFactory(),
 			});
 
-			await expect(pool.closeSession('nonexistent')).rejects.toThrow();
+			await expect(pool.closeSession(asSessionId('nonexistent'))).rejects.toThrow();
 
 			await pool.terminate();
 		});

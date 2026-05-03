@@ -1,4 +1,4 @@
-import { asBranchId } from '../../contracts/ids.js';
+
 /**
  * Integration tests for DAG edge emission and persistence.
  *
@@ -15,7 +15,7 @@ import { asBranchId } from '../../contracts/ids.js';
  *   5. Restart roundtrip with GraphView — restored edges traverse correctly
  */
 
-import { asSessionId } from '../../contracts/ids.js';
+import { asBranchId, asSessionId, type ThoughtId } from '../../contracts/ids.js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -359,11 +359,11 @@ describe('DAG edges integration — Scenario 4: multi-session isolation', () => 
 		await manager._flushBuffer();
 
 		const sessionsCalled = new Set(spy.mock.calls.map((c) => c[0]));
-		expect(sessionsCalled.has('sess-x')).toBe(true);
-		expect(sessionsCalled.has('sess-y')).toBe(true);
+		expect(sessionsCalled.has(asSessionId('sess-x'))).toBe(true);
+		expect(sessionsCalled.has(asSessionId('sess-y'))).toBe(true);
 
-		const xEdges = await persistence.loadEdges('sess-x');
-		const yEdges = await persistence.loadEdges('sess-y');
+		const xEdges = await persistence.loadEdges(asSessionId('sess-x'));
+		const yEdges = await persistence.loadEdges(asSessionId('sess-y'));
 		expect(xEdges).toHaveLength(1);
 		expect(yEdges).toHaveLength(1);
 		expect(xEdges.every((e: Edge) => e.sessionId === 'sess-x')).toBe(true);
@@ -428,10 +428,10 @@ describe('DAG edges integration — Scenario 5: restart + GraphView', () => {
 		await fresh.loadFromPersistence();
 
 		const view = new GraphView(freshStore);
-		const descendants = view.descendants(asSessionId(GLOBAL), ids[0]!);
+		const descendants = view.descendants(asSessionId(GLOBAL), ids[0]! as ThoughtId);
 		expect(descendants).toEqual([ids[1]!, ids[2]!, ids[3]!]);
 
-		const ancestors = view.ancestors(asSessionId(GLOBAL), ids[3]!);
+		const ancestors = view.ancestors(asSessionId(GLOBAL), ids[3]! as ThoughtId);
 		expect(ancestors).toEqual([ids[2]!, ids[1]!, ids[0]!]);
 
 		await fresh.shutdown();

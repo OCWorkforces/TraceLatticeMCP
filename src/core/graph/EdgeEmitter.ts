@@ -202,8 +202,12 @@ export class EdgeEmitter {
 			createdAt: Date.now(),
 			...(metadata !== undefined ? { metadata } : {}),
 		};
+		if (!this._edgeStore) {
+			this._logger.warn('EdgeStore not available; skipping edge', { kind });
+			return false;
+		}
 		try {
-			this._edgeStore!.addEdge(edge);
+			this._edgeStore.addEdge(edge);
 			return true;
 		} catch (err) {
 			this._logger.info('Failed to add DAG edge', {

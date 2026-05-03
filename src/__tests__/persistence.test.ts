@@ -736,8 +736,8 @@ describe('FilePersistence — edge persistence roundtrip', () => {
 			{ id: 'e1' as EdgeId, from: asThoughtId('a'), to: asThoughtId('b'), kind: 'branch' as const, sessionId: asSessionId('s1'), createdAt: 100 },
 			{ id: 'e3' as EdgeId, from: asThoughtId('b'), to: asThoughtId('d'), kind: 'merge' as const, sessionId: asSessionId('s1'), createdAt: 300 },
 		];
-		await backend.saveEdges('s1', edges);
-		const loaded = await backend.loadEdges('s1');
+		await backend.saveEdges(asSessionId('s1'), edges);
+		const loaded = await backend.loadEdges(asSessionId('s1'));
 		expect(loaded).toHaveLength(3);
 		// Sorted by createdAt ascending on save
 		expect(loaded.map((e) => e.id)).toEqual(['e1', 'e2', 'e3']);
@@ -746,50 +746,51 @@ describe('FilePersistence — edge persistence roundtrip', () => {
 
 	it('saveEdges with empty array deletes the existing edge file', async () => {
 		const backend = new FilePersistence({ dataDir: testDir });
-		await backend.saveEdges('s2', [
+		await backend.saveEdges(asSessionId('s2'), [
 			{ id: 'e1' as EdgeId, from: asThoughtId('a'), to: asThoughtId('b'), kind: 'sequence', sessionId: asSessionId('s2'), createdAt: 1 },
 		]);
-		expect(await backend.loadEdges('s2')).toHaveLength(1);
-		await backend.saveEdges('s2', []);
-		expect(await backend.loadEdges('s2')).toEqual([]);
+		expect(await backend.loadEdges(asSessionId('s2'))).toHaveLength(1);
+		await backend.saveEdges(asSessionId('s2'), []);
+		expect(await backend.loadEdges(asSessionId('s2'))).toEqual([]);
 	});
 
 	it('loadEdges returns [] for missing session file (no error)', async () => {
 		const backend = new FilePersistence({ dataDir: testDir });
-		const loaded = await backend.loadEdges('never-saved');
+		const loaded = await backend.loadEdges(asSessionId('never-saved'));
 		expect(loaded).toEqual([]);
 	});
 
 	it('loadEdges returns [] for corrupted JSON file', async () => {
 		const backend = new FilePersistence({ dataDir: testDir });
 		// Force file creation by saving + then corrupting
-		await backend.saveEdges('corrupt', [
+		await backend.saveEdges(asSessionId('corrupt'), [
 			{ id: 'e1' as EdgeId, from: asThoughtId('a'), to: asThoughtId('b'), kind: 'sequence', sessionId: asSessionId('corrupt'), createdAt: 1 },
 		]);
 		const { writeFileSync } = await import('node:fs');
 		writeFileSync(join(testDir, 'edges', 'corrupt.json'), '{not valid json', 'utf-8');
-		const loaded = await backend.loadEdges('corrupt');
+		const loaded = await backend.loadEdges(asSessionId('corrupt'));
 		expect(loaded).toEqual([]);
 	});
 
 	it('rejects invalid sessionId (path traversal / bad chars)', async () => {
 		const backend = new FilePersistence({ dataDir: testDir });
 		await expect(
-			backend.saveEdges('../etc', [
-				{ id: 'e1' as EdgeId, from: asThoughtId('a'), to: asThoughtId('b'), kind: 'sequence', sessionId: 'safe-session' as ReturnType<typeof asSessionId>, createdAt: 1 },
-			])
+			(async () =>
+				backend.saveEdges(asSessionId('../etc'), [
+					{ id: 'e1' as EdgeId, from: asThoughtId('a'), to: asThoughtId('b'), kind: 'sequence', sessionId: 'safe-session' as ReturnType<typeof asSessionId>, createdAt: 1 },
+				]))()
 		).rejects.toThrow();
-		await expect(backend.loadEdges('../etc')).rejects.toThrow();
-		await expect(backend.loadEdges('has space')).rejects.toThrow();
+		await expect((async () => backend.loadEdges(asSessionId('../etc')))()).rejects.toThrow();
+		await expect((async () => backend.loadEdges(asSessionId('has space')))()).rejects.toThrow();
 	});
 
 	it('persists edges across separate FilePersistence instances (durability)', async () => {
 		const backendA = new FilePersistence({ dataDir: testDir });
-		await backendA.saveEdges('durable', [
+		await backendA.saveEdges(asSessionId('durable'), [
 			{ id: 'd1' as EdgeId, from: asThoughtId('x'), to: asThoughtId('y'), kind: 'verifies', sessionId: asSessionId('durable'), createdAt: 50 },
 		]);
 		const backendB = new FilePersistence({ dataDir: testDir });
-		const loaded = await backendB.loadEdges('durable');
+		const loaded = await backendB.loadEdges(asSessionId('durable'));
 		expect(loaded).toHaveLength(1);
 		expect(loaded[0]).toMatchObject({ id: 'd1', kind: 'verifies' });
 	});

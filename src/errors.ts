@@ -26,6 +26,9 @@
  * @module errors
  */
 
+import type { SessionId } from './contracts/ids.js';
+
+
 /**
  * All known error codes as a const object for exhaustive switching.
  */
@@ -479,7 +482,7 @@ export class SessionNotActiveError extends SequentialThinkingError {
 	 * // Code: SESSION_NOT_ACTIVE
 	 * ```
 	 */
-	constructor(sessionId: string) {
+	constructor(sessionId: SessionId) {
 		super(`Session '${sessionId}' is not active`, ERROR_CODES.SESSION_NOT_ACTIVE);
 		this.name = 'SessionNotActiveError';
 	}
@@ -512,7 +515,7 @@ export class SessionNotFoundError extends SequentialThinkingError {
 	 * // Code: SESSION_NOT_FOUND
 	 * ```
 	 */
-	constructor(sessionId: string) {
+	constructor(sessionId: SessionId) {
 		super(`Session not found: ${sessionId}`, ERROR_CODES.SESSION_NOT_FOUND);
 		this.name = 'SessionNotFoundError';
 	}
@@ -754,10 +757,10 @@ export class UnknownToolError extends SequentialThinkingError {
  * configured timeout, suggesting a stuck handler or deadlock.
  */
 export class LockTimeoutError extends SequentialThinkingError {
-	public readonly sessionId: string;
+	public readonly sessionId: SessionId;
 	public readonly timeoutMs: number;
 
-	constructor(sessionId: string, timeoutMs: number) {
+	constructor(sessionId: SessionId, timeoutMs: number) {
 		super(
 			`Lock timeout for session '${sessionId}' after ${timeoutMs}ms`,
 			ERROR_CODES.LOCK_TIMEOUT,
@@ -779,11 +782,11 @@ export class LockTimeoutError extends SequentialThinkingError {
  * The stdio transport does not set an owner, so its sessions are unaffected.
  */
 export class SessionAccessDeniedError extends SequentialThinkingError {
-	public readonly sessionId: string;
+	public readonly sessionId: SessionId;
 	public readonly expectedOwner: string;
 	public readonly actualOwner: string | undefined;
 
-	constructor(sessionId: string, expectedOwner: string, actualOwner?: string) {
+	constructor(sessionId: SessionId, expectedOwner: string, actualOwner?: string) {
 		super(
 			`Access denied to session '${sessionId}': owned by '${expectedOwner}', accessed by '${actualOwner ?? 'anonymous'}'`,
 			ERROR_CODES.SESSION_ACCESS_DENIED,

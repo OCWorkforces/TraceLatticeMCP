@@ -12,6 +12,7 @@ import type { IReasoningStrategy } from '../../../contracts/strategy.js';
 import type { FeatureFlags } from '../../../contracts/features.js';
 import { SequentialStrategy } from './SequentialStrategy.js';
 import { TreeOfThoughtStrategy } from './TreeOfThoughtStrategy.js';
+import { assertNever } from '../../../utils.js';
 
 /**
  * Build a reasoning strategy by name.
@@ -33,10 +34,7 @@ export function createReasoningStrategy(
 			return new SequentialStrategy();
 		case 'tot':
 			return new TreeOfThoughtStrategy();
-		default: {
-			const _exhaust: never = name;
-			void _exhaust;
-			return new SequentialStrategy();
-		}
+		default:
+			return assertNever(name);
 	}
 }

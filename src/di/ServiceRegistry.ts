@@ -24,11 +24,12 @@ import type { ServerConfig } from '../ServerConfig.js';
 import type { ISummaryStore } from '../contracts/summary.js';
 import type { CompressionService } from '../core/compression/CompressionService.js';
 import type { ISuspensionStore } from '../contracts/suspension.js';
+import type { ConfigFileOptions } from '../config/ConfigLoader.js';
 
 export interface ServiceRegistry {
 	Logger: StructuredLogger;
 	Config: ServerConfig;
-	FileConfig: Record<string, unknown>;
+	FileConfig: ConfigFileOptions;
 	HistoryManager: HistoryManager;
 	ThoughtProcessor: ThoughtProcessor;
 	ThoughtFormatter: IThoughtFormatter;
