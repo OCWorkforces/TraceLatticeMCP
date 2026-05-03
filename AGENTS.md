@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
-**Updated:** 2026-04-29
-**Commit:** 9828538 v1.3.6
+**Updated:** 2026-05-04
+**Commit:** 1c9141f v1.3.6+typing
 **Branch:** feat/rslib-rsbuild-migration
 
 ## OVERVIEW
@@ -129,11 +129,11 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 | `EdgeEmitter`                       | class     | src/core/EdgeEmitter.ts                  | Extracted from HistoryManager: edge creation, _resolveThoughtId (searches history + branches), _addEdgeIfValid |
 | `PersistenceBuffer`                 | class     | src/core/PersistenceBuffer.ts            | Extracted from HistoryManager: write buffer, flush timer, batched persistence |
 | `SessionManager`                    | class     | src/core/SessionManager.ts               | Extracted from HistoryManager: session lifecycle, TTL eviction, LRU tracking |
-| `SessionId` / `ThoughtId` / `EdgeId` / `BranchId` / `SuspensionToken` | branded types | src/contracts/ids.ts | Branded ID types preventing wrong-ID-passing. `asBranchId()` constructor validates branch IDs. `SessionId` + `ThoughtData` branded end-to-end through HistoryManager. `generateThoughtId/EdgeId/SuspensionToken` wrap `generateUlid`. |
+| `SessionId` / `ThoughtId` / `EdgeId` / `BranchId` / `SuspensionToken` / `SummaryId` | branded types | src/contracts/ids.ts | Branded ID types preventing wrong-ID-passing. `asBranchId()` constructor validates branch IDs. `SessionId` + `ThoughtData` branded end-to-end through HistoryManager. `generateThoughtId/EdgeId/SuspensionToken/SummaryId` wrap `generateUlid`. |
 | `GLOBAL_SESSION_ID`                | constant  | src/contracts/ids.ts                     | Branded `SessionId` constant replacing literal `'__global__'` for stdio/global session path. |
 | `ValidatedThought`                 | union     | src/core/thought.ts                      | Discriminated union over 7 thought-type variants for exhaustive type-narrowed handling. |
 | `assertNever`                      | function  | src/utils.ts                             | Exhaustiveness helper: throws on unreachable union branches. |
-| `FeatureFlags`                     | interface | src/contracts/features.ts                | 7 readonly feature flags + `DEFAULT_FLAGS` + `hasFeature()` type guard. Re-exported from `ServerConfig.ts`. |
+| `FeatureFlags`                     | interface | src/contracts/features.ts                | 7 readonly feature flags (dagEdges, reasoningStrategy, calibration, compression, toolInterleave, newThoughtTypes, outcomeRecording). Feature flags gate write paths only; EdgeStore always registered in DI. |
 | `ITransport`                       | interface | src/contracts/transport.ts               | Shared transport lifecycle: `kind`, `connect`, `stop`, `clientCount`, `isShuttingDown`, `serverUrl`. |
 | `stripUrgencyPhrases`              | function  | src/sanitize.ts                          | Strips urgency/imperative phrases (URGENT, IMMEDIATELY, etc.) from strings to prevent prompt injection. Used by `sanitizeRationale` and `sanitizeStepField`. |
 | `sanitizeStepField`                | function  | src/sanitize.ts                          | Sanitizes step-level fields (`step_description`, `expected_outcome`, `meta_observation`, `next_step_conditions`). Combines `sanitizeString` + `stripUrgencyPhrases` + 4000-char cap. |
