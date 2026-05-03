@@ -27,6 +27,7 @@ import type { ConnectionPool } from '../pool/ConnectionPool.js';
 import { JsonRpcRequestSchema } from '../schema.js';
 import { BaseTransport, type TransportOptions } from './BaseTransport.js';
 import type { ITransport, TransportKind } from '../contracts/transport.js';
+import { asSessionId, type SessionId } from '../contracts/ids.js';
 import { runWithContext } from '../context/RequestContext.js';
 /**
  * SSE-specific transport options extending base TransportOptions.
@@ -65,7 +66,7 @@ export class SseTransport extends BaseTransport implements ITransport {
 	private _server: ReturnType<typeof createServer>;
 	private _path: string;
 	private _clients: Set<ServerResponse> = new Set();
-	private _clientSessionMap: Map<ServerResponse, string> = new Map();
+	private _clientSessionMap: Map<ServerResponse, SessionId> = new Map();
 	private _messageQueue: Map<string, unknown[]> = new Map();
 	private _metrics?: IMetrics;
 	private _connectionPool?: ConnectionPool;
@@ -97,6 +98,13 @@ export class SseTransport extends BaseTransport implements ITransport {
 	}
 
 	private _mcpServer: McpServer | null = null;
+
+	private _requireMcpServer(): McpServer {
+		if (!this._mcpServer) {
+			throw new Error('MCP server not initialized. Did you call connect()?');
+		}
+		return this._mcpServer;
+	}
 
 	/**
 	 * Handle incoming HTTP requests
@@ -243,7 +251,7 @@ export class SseTransport extends BaseTransport implements ITransport {
 		let sessionId: string | undefined;
 		if (this._connectionPool) {
 			const requestedSession = params.session ?? params.sessionId;
-			if (requestedSession && this._connectionPool.getSessionInfo(requestedSession)) {
+			if (requestedSession && this._connectionPool.getSessionInfo(asSessionId(requestedSession))) {
 				sessionId = requestedSession;
 			} else {
 				try {
@@ -255,7 +263,7 @@ export class SseTransport extends BaseTransport implements ITransport {
 					return;
 				}
 			}
-			this._clientSessionMap.set(res, sessionId);
+			this._clientSessionMap.set(res, asSessionId(sessionId));
 			this._updatePoolMetrics();
 		}
 
@@ -330,7 +338,7 @@ export class SseTransport extends BaseTransport implements ITransport {
 				const owner = sessionId ?? `sse-${randomUUID()}`;
 				const response = await runWithContext(
 					{ requestId: randomUUID(), owner },
-					() => this._mcpServer!.receive(jsonRpcRequest as Parameters<McpServer['receive']>[0], {
+					() => this._requireMcpServer().receive(jsonRpcRequest as Parameters<McpServer['receive']>[0], {
 						sessionInfo: {},
 					})
 				);

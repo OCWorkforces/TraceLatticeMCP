@@ -1,4 +1,4 @@
-import type { Logger } from '../logger/StructuredLogger.js';
+import type { Logger, StructuredLogger } from '../logger/StructuredLogger.js';
 import type { ServerConfig } from '../ServerConfig.js';
 import type { ConfigFileOptions } from '../config/ConfigLoader.js';
 
@@ -36,9 +36,9 @@ import type { ServiceKey, ServiceRegistry } from './ServiceRegistry.js';
  *   new RequestContext()
  * );
  *
- * // For dynamic services not in ServiceRegistry
- * container.registerInstance<MyService>('MyService', myService);
- * const service = container.resolve<MyService>('MyService');
+ * // For dynamic services not in ServiceRegistry, use the escape hatch
+ * container.registerDynamicInstance('MyService', myService);
+ * const service = container.resolveDynamic('MyService') as MyService;
  * ```
  */
 export class Container {
@@ -60,7 +60,6 @@ export class Container {
 	 * ```
 	 */
 	registerInstance<K extends ServiceKey>(name: K, instance: ServiceRegistry[K]): void;
-	registerInstance<T>(name: string, instance: T): void;
 	registerInstance(name: string, instance: unknown): void {
 		if (
 			this._services.has(name) ||
@@ -88,7 +87,6 @@ export class Container {
 	 * ```
 	 */
 	register<K extends ServiceKey>(name: K, factory: () => ServiceRegistry[K]): void;
-	register<T>(name: string, factory: () => T): void;
 	register(name: string, factory: () => unknown): void {
 		if (
 			this._services.has(name) ||
@@ -115,7 +113,6 @@ export class Container {
 	 * ```
 	 */
 	registerFactory<K extends ServiceKey>(name: K, factory: () => ServiceRegistry[K]): void;
-	registerFactory<T>(name: string, factory: () => T): void;
 	registerFactory(name: string, factory: () => unknown): void {
 		if (
 			this._services.has(name) ||
@@ -193,6 +190,59 @@ export class Container {
 	 */
 	resolveDynamic(name: string): unknown {
 		return this.resolve(name as never);
+	}
+
+	/**
+	 * Register a factory for a service key not present in `ServiceRegistry`.
+	 * Use this for runtime-keyed registrations that cannot be expressed as typed services.
+	 *
+	 * @param name - Arbitrary string key
+	 * @param factory - Factory returning the dynamic instance
+	 */
+	registerDynamic(name: string, factory: () => unknown): void {
+		if (
+			this._services.has(name) ||
+			this._factories.has(name) ||
+			this._transientFactories.has(name)
+		) {
+			throw new Error(`Service '${name}' is already registered`);
+		}
+		this._factories.set(name, factory);
+	}
+
+	/**
+	 * Register a singleton instance for a service key not present in `ServiceRegistry`.
+	 *
+	 * @param name - Arbitrary string key
+	 * @param instance - The instance to register
+	 */
+	registerDynamicInstance(name: string, instance: unknown): void {
+		if (
+			this._services.has(name) ||
+			this._factories.has(name) ||
+			this._transientFactories.has(name)
+		) {
+			throw new Error(`Service '${name}' is already registered`);
+		}
+		this._services.set(name, instance);
+	}
+
+	/**
+	 * Register a transient factory for a service key not present in `ServiceRegistry`.
+	 * Each `resolveDynamic` call invokes the factory and returns a new instance.
+	 *
+	 * @param name - Arbitrary string key
+	 * @param factory - Factory returning a new instance per call
+	 */
+	registerDynamicFactory(name: string, factory: () => unknown): void {
+		if (
+			this._services.has(name) ||
+			this._factories.has(name) ||
+			this._transientFactories.has(name)
+		) {
+			throw new Error(`Service '${name}' is already registered`);
+		}
+		this._transientFactories.set(name, factory);
 	}
 
 	/**
@@ -362,7 +412,7 @@ export function createDefaultContainer(options: CreateContainerOptions = {}): Co
 
 	// Register logger if provided
 	if (options.logger) {
-		container.registerInstance('Logger', options.logger);
+		container.registerInstance('Logger', options.logger as StructuredLogger);
 	}
 
 	// Register config if provided

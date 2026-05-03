@@ -147,7 +147,7 @@ export interface ISuspensionStore {
 	 * store.clearSession('session-a');
 	 * ```
 	 */
-	clearSession(sessionId: string): void;
+	clearSession(sessionId: SessionId): void;
 
 	/**
 	 * Count stored records.

@@ -5,7 +5,14 @@ import type { ThoughtData } from '../core/thought.js';
 import type { Edge, EdgeKind } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
 import type { PersistenceBackend, PersistenceConfig } from '../contracts/PersistenceBackend.js';
-import { asBranchId, type BranchId } from '../contracts/ids.js';
+import { asBranchId, asSessionId, type BranchId, type SessionId } from '../contracts/ids.js';
+import * as v from 'valibot';
+import { SequentialThinkingSchema } from '../schema.js';
+import { getErrorMessage } from '../errors.js';
+
+const ThoughtArraySchema = v.array(SequentialThinkingSchema);
+const MetadataSchema = v.record(v.string(), v.unknown());
+const StringArraySchema = v.array(v.string());
 
 /**
  * Type definition for the better-sqlite3 Database interface.
@@ -202,8 +209,14 @@ export class SqlitePersistence implements PersistenceBackend {
 		return rows
 			.map((row) => {
 				try {
-					return JSON.parse(row.data) as unknown as ThoughtData;
-				} catch {
+					const raw: unknown = JSON.parse(row.data);
+					return v.parse(SequentialThinkingSchema, raw) as unknown as ThoughtData;
+				} catch (e) {
+					console.warn(
+						'Persistence validation error in thoughts row:',
+						getErrorMessage(e),
+						row.data.slice(0, 200)
+					);
 					return null;
 				}
 			})
@@ -234,9 +247,14 @@ export class SqlitePersistence implements PersistenceBackend {
 		}
 
 		try {
-			const data = JSON.parse(row.data) as unknown as ThoughtData[];
-			return Array.isArray(data) ? data : undefined;
-		} catch {
+			const raw: unknown = JSON.parse(row.data);
+			const data = v.parse(ThoughtArraySchema, raw);
+			return data as unknown as ThoughtData[];
+		} catch (e) {
+			console.warn(
+				`Persistence validation error in branch ${branchId}:`,
+				getErrorMessage(e)
+			);
 			return undefined;
 		}
 	}
@@ -294,7 +312,7 @@ export class SqlitePersistence implements PersistenceBackend {
 	 * @param edges - The edges to persist for the session
 	 * @returns A Promise that resolves when the edges are persisted
 	 */
-	public async saveEdges(sessionId: string, edges: readonly Edge[]): Promise<void> {
+	public async saveEdges(sessionId: SessionId, edges: readonly Edge[]): Promise<void> {
 		const deleteStmt = this._db.prepare('DELETE FROM edges WHERE session_id = ?');
 		const insertStmt = this._db.prepare(
 			'INSERT INTO edges (id, session_id, from_id, to_id, kind, created_at, metadata) VALUES (?, ?, ?, ?, ?, ?, ?)'
@@ -327,7 +345,7 @@ export class SqlitePersistence implements PersistenceBackend {
 	 * @param sessionId - Session identifier to load edges for
 	 * @returns A Promise that resolves to the session's edges in chronological order
 	 */
-	public async loadEdges(sessionId: string): Promise<Edge[]> {
+	public async loadEdges(sessionId: SessionId): Promise<Edge[]> {
 		const stmt = this._db.prepare(
 			'SELECT id, session_id, from_id, to_id, kind, created_at, metadata FROM edges WHERE session_id = ? ORDER BY created_at ASC'
 		);
@@ -348,7 +366,7 @@ export class SqlitePersistence implements PersistenceBackend {
 			to: row.to_id as Edge['to'],
 			kind: row.kind as EdgeKind,
 			createdAt: row.created_at,
-			...(row.metadata ? { metadata: JSON.parse(row.metadata) as unknown as Record<string, unknown> } : {}),
+			...(row.metadata ? { metadata: this._parseMetadataField(row.metadata, 'edges.metadata') } : {}),
 		}));
 	}
 
@@ -357,11 +375,11 @@ export class SqlitePersistence implements PersistenceBackend {
 	 *
 	 * @returns Array of distinct session identifiers from the edges table
 	 */
-	public async listEdgeSessions(): Promise<string[]> {
+	public async listEdgeSessions(): Promise<SessionId[]> {
 		const rows = this._db
 			.prepare('SELECT DISTINCT session_id FROM edges')
 			.all() as { session_id: string }[];
-		return rows.map((r) => r.session_id);
+		return rows.map((r) => asSessionId(r.session_id));
 	}
 
 	/**
@@ -373,7 +391,7 @@ export class SqlitePersistence implements PersistenceBackend {
 	 * @param summaries - The summaries to persist for the session
 	 * @returns A Promise that resolves when the summaries are persisted
 	 */
-	public async saveSummaries(sessionId: string, summaries: readonly Summary[]): Promise<void> {
+	public async saveSummaries(sessionId: SessionId, summaries: readonly Summary[]): Promise<void> {
 		const deleteStmt = this._db.prepare('DELETE FROM summaries WHERE session_id = ?');
 		const insertStmt = this._db.prepare(
 			'INSERT OR REPLACE INTO summaries (id, session_id, branch_id, root_thought_id, covered_ids, covered_range_start, covered_range_end, topics, aggregate_confidence, created_at, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -410,7 +428,7 @@ export class SqlitePersistence implements PersistenceBackend {
 	 * @param sessionId - Session identifier to load summaries for
 	 * @returns A Promise that resolves to the session's summaries in chronological order
 	 */
-	public async loadSummaries(sessionId: string): Promise<Summary[]> {
+	public async loadSummaries(sessionId: SessionId): Promise<Summary[]> {
 		const stmt = this._db.prepare(
 			'SELECT id, session_id, branch_id, root_thought_id, covered_ids, covered_range_start, covered_range_end, topics, aggregate_confidence, created_at, meta FROM summaries WHERE session_id = ? ORDER BY created_at ASC'
 		);
@@ -433,12 +451,12 @@ export class SqlitePersistence implements PersistenceBackend {
 			sessionId: row.session_id as Summary['sessionId'],
 			...(row.branch_id !== null ? { branchId: asBranchId(row.branch_id) } : {}),
 			rootThoughtId: row.root_thought_id as Summary['rootThoughtId'],
-			coveredIds: JSON.parse(row.covered_ids) as unknown as Summary['coveredIds'],
+			coveredIds: this._parseStringArrayField(row.covered_ids, 'summaries.covered_ids') as unknown as Summary['coveredIds'],
 			coveredRange: [row.covered_range_start, row.covered_range_end] as [number, number],
-			topics: JSON.parse(row.topics) as unknown as string[],
+			topics: this._parseStringArrayField(row.topics, 'summaries.topics'),
 			aggregateConfidence: row.aggregate_confidence,
 			createdAt: row.created_at,
-			...(row.meta ? { meta: JSON.parse(row.meta) as unknown as Record<string, unknown> } : {}),
+			...(row.meta ? { meta: this._parseMetadataField(row.meta, 'summaries.meta') } : {}),
 		}));
 	}
 
@@ -465,5 +483,25 @@ export class SqlitePersistence implements PersistenceBackend {
 			branchCount,
 			dbSize: 0, // Would need to check file size
 		};
+	}
+
+	private _parseMetadataField(json: string, label: string): Record<string, unknown> {
+		try {
+			const raw: unknown = JSON.parse(json);
+			return v.parse(MetadataSchema, raw);
+		} catch (e) {
+			console.warn(`Persistence validation error in ${label}:`, getErrorMessage(e));
+			return {};
+		}
+	}
+
+	private _parseStringArrayField(json: string, label: string): string[] {
+		try {
+			const raw: unknown = JSON.parse(json);
+			return v.parse(StringArraySchema, raw);
+		} catch (e) {
+			console.warn(`Persistence validation error in ${label}:`, getErrorMessage(e));
+			return [];
+		}
 	}
 }

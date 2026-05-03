@@ -15,7 +15,7 @@
 import type { ISessionLock } from '../contracts/interfaces.js';
 import { LockTimeoutError } from '../errors.js';
 import type { SessionId } from '../contracts/ids.js';
-import { GLOBAL_SESSION_ID, asSessionId } from '../contracts/ids.js';
+import { GLOBAL_SESSION_ID } from '../contracts/ids.js';
 
 const DEFAULT_LOCK_TIMEOUT_MS = 5000;
 
@@ -25,7 +25,7 @@ const DEFAULT_LOCK_TIMEOUT_MS = 5000;
  *
  * @internal
  */
-function lockKey(sessionId: SessionId | undefined): string {
+function lockKey(sessionId: SessionId | undefined): SessionId {
 	return sessionId && sessionId.length > 0 ? sessionId : GLOBAL_SESSION_ID;
 }
 
@@ -50,7 +50,7 @@ function lockKey(sessionId: SessionId | undefined): string {
  * ```
  */
 export class SessionLock implements ISessionLock {
-	private readonly _locks = new Map<string, Promise<void>>();
+	private readonly _locks = new Map<SessionId, Promise<void>>();
 
 	/**
 	 * Number of currently held lock chains. Useful for diagnostics
@@ -98,7 +98,7 @@ export class SessionLock implements ISessionLock {
 		try {
 			await new Promise<void>((resolve, reject) => {
 				timeoutId = setTimeout(
-					() => reject(new LockTimeoutError(asSessionId(key), timeoutMs)),
+					() => reject(new LockTimeoutError(key, timeoutMs)),
 					timeoutMs,
 				);
 				previous.then(

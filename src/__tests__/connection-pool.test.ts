@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ConnectionPool, createConnectionPool } from '../pool/ConnectionPool.js';
 import type { ThoughtData } from '../core/thought.js';
+import { asSessionId } from '../contracts/ids.js';
 
 const createMockServer = () => ({
 	processThought: vi.fn().mockResolvedValue({
@@ -159,7 +160,7 @@ describe('ConnectionPool', () => {
 				next_thought_needed: false,
 			};
 
-			await expect(async () => await pool.process('non-existent', thought)).rejects.toThrow(
+			await expect(async () => await pool.process(asSessionId('non-existent'), thought)).rejects.toThrow(
 				'Session not found'
 			);
 		});
@@ -177,7 +178,7 @@ describe('ConnectionPool', () => {
 		});
 
 		it('should throw error for non-existent session', async () => {
-			await expect(async () => await pool.closeSession('non-existent')).rejects.toThrow(
+			await expect(async () => await pool.closeSession(asSessionId('non-existent'))).rejects.toThrow(
 				'Session not found'
 			);
 		});
@@ -215,7 +216,7 @@ describe('ConnectionPool', () => {
 		});
 
 		it('should return undefined for non-existent session', () => {
-			const info = pool.getSessionInfo('non-existent');
+			const info = pool.getSessionInfo(asSessionId('non-existent'));
 			expect(info).toBeUndefined();
 		});
 	});

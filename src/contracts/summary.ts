@@ -9,7 +9,7 @@
  */
 
 import type { Summary } from '../core/compression/Summary.js';
-import type { BranchId } from './ids.js';
+import type { BranchId, SessionId, SummaryId } from './ids.js';
 
 export type { Summary };
 
@@ -52,7 +52,7 @@ export interface ISummaryStore {
 	 * if (s) console.log(s.topics);
 	 * ```
 	 */
-	get(id: string): Summary | undefined;
+	get(id: SummaryId): Summary | undefined;
 
 	/**
 	 * Get all summaries for a session, in insertion order.
@@ -67,7 +67,7 @@ export interface ISummaryStore {
 	 * }
 	 * ```
 	 */
-	forSession(sessionId: string): readonly Summary[];
+	forSession(sessionId: SessionId): readonly Summary[];
 
 	/**
 	 * Get all summaries for a specific branch within a session.
@@ -81,7 +81,7 @@ export interface ISummaryStore {
 	 * const altSummaries = store.forBranch('sess_42', 'alt-1');
 	 * ```
 	 */
-	forBranch(sessionId: string, branchId: BranchId): readonly Summary[];
+	forBranch(sessionId: SessionId, branchId: BranchId): readonly Summary[];
 
 	/**
 	 * Remove all summaries for a session. Other sessions are unaffected.
@@ -93,7 +93,7 @@ export interface ISummaryStore {
 	 * store.clearSession('sess_42');
 	 * ```
 	 */
-	clearSession(sessionId: string): void;
+	clearSession(sessionId: SessionId): void;
 
 	/**
 	 * Count summaries.
@@ -108,5 +108,5 @@ export interface ISummaryStore {
 	 * const perSession = store.size('sess_42');
 	 * ```
 	 */
-	size(sessionId?: string): number;
+	size(sessionId?: SessionId): number;
 }

@@ -9,6 +9,7 @@
  */
 
 import type { ThoughtData } from '../core/thought.js';
+import type { SessionId } from '../contracts/ids.js';
 import type { IDisposable } from '../types/disposable.js';
 import type { ProcessResult, SessionInfo } from './ConnectionPool.js';
 
@@ -46,7 +47,7 @@ export interface IConnectionPool extends IDisposable {
 	 * @throws PoolTerminatedError if the pool has been terminated
 	 * @throws MaxSessionsReachedError if the maximum number of sessions is reached
 	 */
-	createSession(): Promise<string>;
+	createSession(): Promise<SessionId>;
 
 	/**
 	 * Process a thought in the specified session.
@@ -56,7 +57,7 @@ export interface IConnectionPool extends IDisposable {
 	 * @returns The processing result
 	 * @throws SessionNotFoundError if the session does not exist
 	 */
-	process(sessionId: string, input: ThoughtData): Promise<ProcessResult>;
+	process(sessionId: SessionId, input: ThoughtData): Promise<ProcessResult>;
 
 	/**
 	 * Close a session and release its resources.
@@ -64,7 +65,7 @@ export interface IConnectionPool extends IDisposable {
 	 * @param sessionId - The session ID to close
 	 * @throws SessionNotFoundError if the session does not exist
 	 */
-	closeSession(sessionId: string): Promise<void>;
+	closeSession(sessionId: SessionId): Promise<void>;
 
 	/**
 	 * Get information about a session.
@@ -72,7 +73,7 @@ export interface IConnectionPool extends IDisposable {
 	 * @param sessionId - The session ID
 	 * @returns Session info, or undefined if not found
 	 */
-	getSessionInfo(sessionId: string): SessionInfo | undefined;
+	getSessionInfo(sessionId: SessionId): SessionInfo | undefined;
 
 	/**
 	 * Get all active sessions.

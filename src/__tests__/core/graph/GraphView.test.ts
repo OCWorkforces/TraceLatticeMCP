@@ -60,7 +60,7 @@ describe('GraphView', () => {
 			expect(result).toContain('d');
 			expect(result).toHaveLength(4);
 			// b appears before c (since c depends on b)
-			expect(result.indexOf('b')).toBeLessThan(result.indexOf('c'));
+			expect(result.indexOf(asThoughtId('b'))).toBeLessThan(result.indexOf(asThoughtId('c')));
 		});
 
 		it('handles disconnected components with multiple roots', () => {
@@ -80,7 +80,7 @@ describe('GraphView', () => {
 				makeEdge('root', 'seq', 150, 'sequence'),
 			];
 			const view = setup(edges);
-			const result = view.branchThoughts(SESSION, 'root');
+			const result = view.branchThoughts(SESSION, asThoughtId('root'));
 			expect(result).toEqual(expect.arrayContaining(['root', 'b1', 'b2']));
 			expect(result).not.toContain('seq');
 		});
@@ -88,7 +88,7 @@ describe('GraphView', () => {
 		it('returns just the root id when no branch edges exist', () => {
 			const edges = [makeEdge('root', 'x', 100, 'sequence')];
 			const view = setup(edges);
-			expect(view.branchThoughts(SESSION, 'root')).toEqual(['root']);
+			expect(view.branchThoughts(SESSION, asThoughtId('root'))).toEqual(['root']);
 		});
 	});
 
@@ -102,9 +102,9 @@ describe('GraphView', () => {
 			const view = setup(edges);
 			const result = view.topological(SESSION);
 			expect(result).toHaveLength(3);
-			expect(result.indexOf('a')).toBeLessThan(result.indexOf('b'));
-			expect(result.indexOf('b')).toBeLessThan(result.indexOf('c'));
-			expect(result.indexOf('a')).toBeLessThan(result.indexOf('c'));
+			expect(result.indexOf(asThoughtId('a'))).toBeLessThan(result.indexOf(asThoughtId('b')));
+			expect(result.indexOf(asThoughtId('b'))).toBeLessThan(result.indexOf(asThoughtId('c')));
+			expect(result.indexOf(asThoughtId('a'))).toBeLessThan(result.indexOf(asThoughtId('c')));
 		});
 
 		it('throws CycleDetectedError on cycle', () => {
@@ -129,7 +129,7 @@ describe('GraphView', () => {
 				makeEdge('c', 'd', 300),
 			];
 			const view = setup(edges);
-			const result = view.ancestors(SESSION, 'd');
+			const result = view.ancestors(SESSION, asThoughtId('d'));
 			expect(result).toEqual(expect.arrayContaining(['a', 'b', 'c']));
 			expect(result).not.toContain('d');
 		});
@@ -141,14 +141,14 @@ describe('GraphView', () => {
 				makeEdge('c', 'd', 300),
 			];
 			const view = setup(edges);
-			const result = view.ancestors(SESSION, 'd', 1);
+			const result = view.ancestors(SESSION, asThoughtId('d'), 1);
 			expect(result).toEqual(['c']);
 		});
 
 		it('returns empty when no ancestors', () => {
 			const edges = [makeEdge('a', 'b', 100)];
 			const view = setup(edges);
-			expect(view.ancestors(SESSION, 'a')).toEqual([]);
+			expect(view.ancestors(SESSION, asThoughtId('a'))).toEqual([]);
 		});
 	});
 
@@ -160,7 +160,7 @@ describe('GraphView', () => {
 				makeEdge('c', 'd', 300),
 			];
 			const view = setup(edges);
-			const result = view.descendants(SESSION, 'a');
+			const result = view.descendants(SESSION, asThoughtId('a'));
 			expect(result).toEqual(expect.arrayContaining(['b', 'c', 'd']));
 			expect(result).not.toContain('a');
 		});
@@ -172,7 +172,7 @@ describe('GraphView', () => {
 				makeEdge('c', 'd', 300),
 			];
 			const view = setup(edges);
-			const result = view.descendants(SESSION, 'a', 2);
+			const result = view.descendants(SESSION, asThoughtId('a'), 2);
 			expect(result).toEqual(expect.arrayContaining(['b', 'c']));
 			expect(result).not.toContain('d');
 		});
@@ -180,7 +180,7 @@ describe('GraphView', () => {
 		it('handles cycles without infinite loop', () => {
 			const edges = [makeEdge('a', 'b', 100), makeEdge('b', 'a', 200)];
 			const view = setup(edges);
-			const result = view.descendants(SESSION, 'a');
+			const result = view.descendants(SESSION, asThoughtId('a'));
 			expect(result).toEqual(expect.arrayContaining(['b']));
 		});
 	});
@@ -215,7 +215,7 @@ describe('GraphView', () => {
 			const view = setup(edges);
 			expect(view.chronological(asSessionId('s1'))).toEqual(expect.arrayContaining(['a', 'b']));
 			expect(view.chronological(asSessionId('s1'))).not.toContain('x');
-			expect(view.descendants(asSessionId('s1'), 'x')).toEqual([]);
+			expect(view.descendants(asSessionId('s1'), asThoughtId('x'))).toEqual([]);
 		});
 	});
 
@@ -258,7 +258,7 @@ describe('GraphView', () => {
 				makeEdge('c', 'b', 300),
 			];
 			const view = setup(edges);
-			const result = view.descendants(SESSION, 'a');
+			const result = view.descendants(SESSION, asThoughtId('a'));
 			expect(result).toEqual(expect.arrayContaining(['b', 'c']));
 			expect(result).not.toContain('a');
 			// Each visited at most once: no duplicates
@@ -272,7 +272,7 @@ describe('GraphView', () => {
 				makeEdge('c', 'b', 300),
 			];
 			const view = setup(edges);
-			const result = view.ancestors(SESSION, 'c');
+			const result = view.ancestors(SESSION, asThoughtId('c'));
 			expect(result).toEqual(expect.arrayContaining(['a', 'b']));
 			expect(new Set(result).size).toBe(result.length);
 		});

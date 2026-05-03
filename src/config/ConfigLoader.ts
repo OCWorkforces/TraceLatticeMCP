@@ -12,9 +12,35 @@ import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import * as v from 'valibot';
 import type { PersistenceConfig } from '../contracts/PersistenceBackend.js';
 import { getErrorMessage } from '../errors.js';
 import type { FeatureFlags } from '../contracts/features.js';
+
+/**
+ * Lenient runtime schema for config files. Only validates top-level shape;
+ * unknown extra fields are preserved by Valibot's default object behavior
+ * being strict is avoided by using `v.looseObject`. All fields are optional.
+ */
+const ConfigFileOptionsSchema = v.looseObject({
+	maxHistorySize: v.optional(v.number()),
+	maxBranches: v.optional(v.number()),
+	maxBranchSize: v.optional(v.number()),
+	logLevel: v.optional(v.picklist(['debug', 'info', 'warn', 'error'])),
+	prettyLog: v.optional(v.boolean()),
+	skillDirs: v.optional(v.array(v.string())),
+	discoveryCache: v.optional(
+		v.looseObject({
+			ttl: v.optional(v.number()),
+			maxSize: v.optional(v.number()),
+		})
+	),
+	persistence: v.optional(v.looseObject({})),
+	features: v.optional(v.looseObject({})),
+	toolInterleaveTtlMs: v.optional(v.number()),
+	toolInterleaveSweepMs: v.optional(v.number()),
+	maxSessionsPerOwner: v.optional(v.number()),
+});
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] };
 
@@ -407,11 +433,10 @@ export class ConfigLoader {
 		const content = readFileSync(filePath, 'utf-8');
 		const ext = filePath.split('.').pop()?.toLowerCase();
 
-		if (ext === 'yaml' || ext === 'yml') {
-			return parseYaml(content) as ConfigFileOptions;
-		}
+		const raw: unknown =
+			ext === 'yaml' || ext === 'yml' ? parseYaml(content) : JSON.parse(content);
 
-		return JSON.parse(content) as ConfigFileOptions;
+		return v.parse(ConfigFileOptionsSchema, raw) as ConfigFileOptions;
 	}
 
 	/**

@@ -17,6 +17,7 @@ import {
 	PoolTerminatedError,
 	ValidationError,
 } from '../errors.js';
+import { asSessionId } from '../contracts/ids.js';
 import type { ErrorCode } from '../errors.js';
 
 describe('Custom Error Types', () => {
@@ -161,7 +162,7 @@ describe('Custom Error Types', () => {
 
 describe('SessionNotActiveError', () => {
 	it('should create session not active error', () => {
-		const error = new SessionNotActiveError('test-session');
+		const error = new SessionNotActiveError(asSessionId('test-session'));
 		expect(error.message).toBe("Session 'test-session' is not active");
 		expect(error.code).toBe('SESSION_NOT_ACTIVE');
 		expect(error.name).toBe('SessionNotActiveError');
@@ -170,7 +171,7 @@ describe('SessionNotActiveError', () => {
 
 describe('SessionNotFoundError', () => {
 	it('should create session not found error', () => {
-		const error = new SessionNotFoundError('missing-session');
+		const error = new SessionNotFoundError(asSessionId('missing-session'));
 		expect(error.message).toBe('Session not found: missing-session');
 		expect(error.code).toBe('SESSION_NOT_FOUND');
 		expect(error.name).toBe('SessionNotFoundError');

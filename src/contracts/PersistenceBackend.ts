@@ -1,7 +1,7 @@
 import type { ThoughtData } from '../core/thought.js';
 import type { Edge } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
-import type { BranchId } from './ids.js';
+import type { BranchId, SessionId } from './ids.js';
 
 /**
  * Persistence backend interface for storing thought history and branches.
@@ -72,7 +72,7 @@ export interface PersistenceBackend {
 	 * @param sessionId - The session whose edges to persist
 	 * @param edges - Array of edges to save
 	 */
-	saveEdges(sessionId: string, edges: readonly Edge[]): Promise<void>;
+	saveEdges(sessionId: SessionId, edges: readonly Edge[]): Promise<void>;
 
 	/**
 	 * Load edges for a session from persistent storage.
@@ -82,14 +82,14 @@ export interface PersistenceBackend {
 	 * @param sessionId - The session whose edges to load
 	 * @returns Array of persisted edges, sorted by createdAt
 	 */
-	loadEdges(sessionId: string): Promise<Edge[]>;
+	loadEdges(sessionId: SessionId): Promise<Edge[]>;
 
 	/**
 	 * List all session IDs that have persisted edge data.
 	 *
 	 * @returns Array of session identifiers with persisted edges
 	 */
-	listEdgeSessions(): Promise<string[]>;
+	listEdgeSessions(): Promise<SessionId[]>;
 
 	/**
 	 * Save summaries for a session, replacing any previously saved summaries.
@@ -97,7 +97,7 @@ export interface PersistenceBackend {
 	 * @param sessionId - The session whose summaries to persist
 	 * @param summaries - Array of summaries to save
 	 */
-	saveSummaries(sessionId: string, summaries: readonly Summary[]): Promise<void>;
+	saveSummaries(sessionId: SessionId, summaries: readonly Summary[]): Promise<void>;
 
 	/**
 	 * Load summaries for a session from persistent storage.
@@ -107,7 +107,7 @@ export interface PersistenceBackend {
 	 * @param sessionId - The session whose summaries to load
 	 * @returns Array of persisted summaries, sorted by createdAt
 	 */
-	loadSummaries(sessionId: string): Promise<Summary[]>;
+	loadSummaries(sessionId: SessionId): Promise<Summary[]>;
 }
 
 export interface PersistenceConfig {

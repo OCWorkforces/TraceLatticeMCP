@@ -2,7 +2,7 @@ import type { ThoughtData } from '../core/thought.js';
 import type { Edge } from '../core/graph/Edge.js';
 import type { Summary } from '../core/compression/Summary.js';
 import type { PersistenceBackend } from '../contracts/PersistenceBackend.js';
-import { asBranchId, type BranchId } from '../contracts/ids.js';
+import { asBranchId, type BranchId, type SessionId } from '../contracts/ids.js';
 
 /**
  * Configuration options for MemoryPersistence.
@@ -37,10 +37,10 @@ export interface MemoryPersistenceOptions {
  */
 export class MemoryPersistence implements PersistenceBackend {
 	private _history: ThoughtData[] = [];
-	private _branches: Map<string, ThoughtData[]> = new Map();
+	private _branches: Map<BranchId, ThoughtData[]> = new Map();
 	private _maxSize?: number;
-	private _edges: Map<string, Edge[]> = new Map();
-	private _summaries: Map<string, Summary[]> = new Map();
+	private _edges: Map<SessionId, Edge[]> = new Map();
+	private _summaries: Map<SessionId, Summary[]> = new Map();
 
 	constructor(options: MemoryPersistenceOptions = {}) {
 		this._maxSize = options.maxSize && options.maxSize > 0 ? options.maxSize : undefined;
@@ -102,7 +102,7 @@ export class MemoryPersistence implements PersistenceBackend {
 	 * @param sessionId - The session whose edges to persist
 	 * @param edges - Array of edges to save
 	 */
-	public async saveEdges(sessionId: string, edges: readonly Edge[]): Promise<void> {
+	public async saveEdges(sessionId: SessionId, edges: readonly Edge[]): Promise<void> {
 		if (edges.length === 0) {
 			this._edges.delete(sessionId);
 		} else {
@@ -117,7 +117,7 @@ export class MemoryPersistence implements PersistenceBackend {
 	 * @param sessionId - The session whose edges to load
 	 * @returns Array of persisted edges, sorted by createdAt
 	 */
-	public async loadEdges(sessionId: string): Promise<Edge[]> {
+	public async loadEdges(sessionId: SessionId): Promise<Edge[]> {
 		const edges = this._edges.get(sessionId);
 		if (!edges) return [];
 		return [...edges].sort((a, b) => a.createdAt - b.createdAt);
@@ -128,7 +128,7 @@ export class MemoryPersistence implements PersistenceBackend {
 	 *
 	 * @returns Array of session identifiers with persisted edges
 	 */
-	public async listEdgeSessions(): Promise<string[]> {
+	public async listEdgeSessions(): Promise<SessionId[]> {
 		return Array.from(this._edges.keys());
 	}
 
@@ -138,7 +138,7 @@ export class MemoryPersistence implements PersistenceBackend {
 	 * @param sessionId - The session whose summaries to persist
 	 * @param summaries - Array of summaries to save
 	 */
-	public async saveSummaries(sessionId: string, summaries: readonly Summary[]): Promise<void> {
+	public async saveSummaries(sessionId: SessionId, summaries: readonly Summary[]): Promise<void> {
 		if (summaries.length === 0) {
 			this._summaries.delete(sessionId);
 		} else {
@@ -153,7 +153,7 @@ export class MemoryPersistence implements PersistenceBackend {
 	 * @param sessionId - The session whose summaries to load
 	 * @returns Array of persisted summaries, sorted by createdAt
 	 */
-	public async loadSummaries(sessionId: string): Promise<Summary[]> {
+	public async loadSummaries(sessionId: SessionId): Promise<Summary[]> {
 		const summaries = this._summaries.get(sessionId);
 		if (!summaries) return [];
 		return [...summaries].sort((a, b) => a.createdAt - b.createdAt);
@@ -176,7 +176,7 @@ export class MemoryPersistence implements PersistenceBackend {
 	/**
 	 * Get all branch IDs.
 	 */
-	public getBranchIds(): string[] {
+	public getBranchIds(): BranchId[] {
 		return Array.from(this._branches.keys());
 	}
 }

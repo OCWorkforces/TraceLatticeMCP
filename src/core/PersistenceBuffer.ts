@@ -10,7 +10,7 @@
  */
 
 import type { IEdgeStore } from '../contracts/interfaces.js';
-import { asSessionId } from '../contracts/ids.js';
+import type { SessionId } from '../contracts/ids.js';
 import { getErrorMessage } from '../errors.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import { NullLogger } from '../logger/NullLogger.js';
@@ -33,9 +33,9 @@ export interface PersistenceBufferConfig<S extends BufferedSession> {
 	bufferSize: number;
 	flushInterval: number;
 	maxRetries: number;
-	defaultSessionId: string;
+	defaultSessionId: SessionId;
 	/** Returns the live session map (called on each flush). */
-	getSessions: () => Map<string, S>;
+	getSessions: () => Map<SessionId, S>;
 	/** Returns the requeue target session (default-session buffer). */
 	getDefaultSession: () => S;
 	/** Optional EdgeStore for flushing edges alongside thoughts. */
@@ -54,8 +54,8 @@ export class PersistenceBuffer<S extends BufferedSession> {
 	private readonly _bufferSize: number;
 	private readonly _flushInterval: number;
 	private readonly _maxRetries: number;
-	private readonly _defaultSessionId: string;
-	private readonly _getSessions: () => Map<string, S>;
+	private readonly _defaultSessionId: SessionId;
+	private readonly _getSessions: () => Map<SessionId, S>;
 	private readonly _getDefaultSession: () => S;
 	private readonly _edgeStore?: IEdgeStore;
 	private _eventEmitter: PersistenceEventEmitter | null;
@@ -185,10 +185,10 @@ export class PersistenceBuffer<S extends BufferedSession> {
 	 */
 	private async _flushEdges(): Promise<void> {
 		if (!this._edgeStore) return;
-		const sessionKeys = new Set<string>(this._getSessions().keys());
+		const sessionKeys = new Set<SessionId>(this._getSessions().keys());
 		sessionKeys.add(this._defaultSessionId);
 		for (const sessionId of sessionKeys) {
-			const edges = this._edgeStore.edgesForSession(asSessionId(sessionId));
+			const edges = this._edgeStore.edgesForSession(sessionId);
 			if (edges.length === 0) continue;
 			try {
 				await this._persistence.saveEdges(sessionId, edges);

@@ -220,10 +220,14 @@ export class PatternDetector {
 		signals: PatternSignal[]
 	): void {
 		if (runLength < 3) return;
-		const start = history[runStart]!.thought_number ?? runStart + 1;
-		const end = history[runStart + runLength - 1]!.thought_number ?? runStart + runLength;
-		const firstConf = history[runStart]!.confidence!;
-		const lastConf = history[runStart + runLength - 1]!.confidence!;
+		const first = history[runStart];
+		const last = history[runStart + runLength - 1];
+		if (!first || !last) return;
+		if (first.confidence === undefined || last.confidence === undefined) return;
+		const start = first.thought_number ?? runStart + 1;
+		const end = last.thought_number ?? runStart + runLength;
+		const firstConf = first.confidence;
+		const lastConf = last.confidence;
 		signals.push({
 			pattern: 'confidence_drift',
 			severity: 'warning',

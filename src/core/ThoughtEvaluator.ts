@@ -13,6 +13,7 @@ import type {
 	CalibrationResult,
 	ICalibrator,
 } from '../contracts/calibrator.js';
+import { GLOBAL_SESSION_ID, type SessionId } from '../contracts/ids.js';
 import type { ConfidenceSignals, PatternSignal, ReasoningStats, ThoughtType } from './reasoning.js';
 import type { ThoughtData } from './thought.js';
 import { Aggregator } from './evaluator/Aggregator.js';
@@ -29,12 +30,12 @@ import { SignalComputer } from './evaluator/SignalComputer.js';
 class NoOpCalibrator implements ICalibrator {
 	public readonly enabled = false;
 
-	public calibrate(rawConfidence: number, _type: ThoughtType, _sessionId: string): CalibrationResult {
+	public calibrate(rawConfidence: number, _type: ThoughtType, _sessionId: SessionId): CalibrationResult {
 		const raw = Math.min(1, Math.max(0, rawConfidence));
 		return { raw, calibrated: raw, temperature: 1.0, priorWeight: 0 };
 	}
 
-	public metrics(_sessionId?: string): CalibrationMetrics {
+	public metrics(_sessionId?: SessionId): CalibrationMetrics {
 		return {
 			brierScore: null,
 			ece: null,
@@ -55,7 +56,7 @@ class NoOpCalibrator implements ICalibrator {
 		};
 	}
 
-	public refit(_sessionId?: string): void {
+	public refit(_sessionId?: SessionId): void {
 		// no-op
 	}
 }
@@ -104,7 +105,7 @@ export class ThoughtEvaluator {
 		const result = this._calibrator.calibrate(
 			lastThought.confidence,
 			lastThought.thought_type ?? 'regular',
-			lastThought.session_id ?? ''
+			lastThought.session_id ?? GLOBAL_SESSION_ID
 		);
 		return {
 			...signals,

@@ -9,7 +9,7 @@
  */
 
 import type { ISuspensionStore, SuspensionRecord } from '../../contracts/suspension.js';
-import { generateSuspensionToken } from '../../contracts/ids.js';
+import { generateSuspensionToken, type SessionId, type SuspensionToken } from '../../contracts/ids.js';
 import type { Logger } from '../../logger/StructuredLogger.js';
 
 /**
@@ -47,8 +47,8 @@ const DEFAULT_SWEEP_INTERVAL_MS = 60_000;
  * ```
  */
 export class InMemorySuspensionStore implements ISuspensionStore {
-	private readonly _byToken: Map<string, SuspensionRecord> = new Map();
-	private readonly _bySession: Map<string, Set<string>> = new Map();
+	private readonly _byToken: Map<SuspensionToken, SuspensionRecord> = new Map();
+	private readonly _bySession: Map<SessionId, Set<SuspensionToken>> = new Map();
 	private readonly _ttlMs: number;
 	private readonly _sweepIntervalMs: number;
 	private _timer: ReturnType<typeof setInterval> | null = null;
@@ -88,18 +88,18 @@ export class InMemorySuspensionStore implements ISuspensionStore {
 	}
 
 	resume(token: string): SuspensionRecord | null {
-		const rec = this._byToken.get(token);
+		const rec = this._byToken.get(token as SuspensionToken);
 		if (!rec) return null;
 		if (rec.expiresAt <= Date.now()) {
-			this._delete(token, rec.sessionId);
+			this._delete(token as SuspensionToken, rec.sessionId);
 			return null;
 		}
-		this._delete(token, rec.sessionId);
+		this._delete(token as SuspensionToken, rec.sessionId);
 		return rec;
 	}
 
 	peek(token: string): SuspensionRecord | null {
-		return this._byToken.get(token) ?? null;
+		return this._byToken.get(token as SuspensionToken) ?? null;
 	}
 
 	expireOlderThan(now: number): number {
@@ -114,17 +114,17 @@ export class InMemorySuspensionStore implements ISuspensionStore {
 	}
 
 	clearSession(sessionId: string): void {
-		const bucket = this._bySession.get(sessionId);
+		const bucket = this._bySession.get(sessionId as SessionId);
 		if (!bucket) return;
 		for (const token of bucket) {
 			this._byToken.delete(token);
 		}
-		this._bySession.delete(sessionId);
+		this._bySession.delete(sessionId as SessionId);
 	}
 
 	size(sessionId?: string): number {
 		if (sessionId === undefined) return this._byToken.size;
-		return this._bySession.get(sessionId)?.size ?? 0;
+		return this._bySession.get(sessionId as SessionId)?.size ?? 0;
 	}
 
 	start(): void {
@@ -141,7 +141,7 @@ export class InMemorySuspensionStore implements ISuspensionStore {
 		this._timer = null;
 	}
 
-	private _delete(token: string, sessionId: string): void {
+	private _delete(token: SuspensionToken, sessionId: SessionId): void {
 		this._byToken.delete(token);
 		const bucket = this._bySession.get(sessionId);
 		if (bucket) {

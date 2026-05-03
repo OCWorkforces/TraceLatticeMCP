@@ -1,4 +1,4 @@
-import { asBranchId } from '../../contracts/ids.js';
+import { asBranchId, asSessionId, type ThoughtId } from '../../contracts/ids.js';
 /**
  * Integration tests for compression persistence across all 3 backends.
  *
@@ -15,7 +15,7 @@ import { asBranchId } from '../../contracts/ids.js';
  * SQLite: skipped at module level when `better-sqlite3` is unavailable.
  */
 
-import { asSessionId } from '../../contracts/ids.js';
+
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -33,7 +33,7 @@ import type { PersistenceBackend } from '../../contracts/PersistenceBackend.js';
 import type { ThoughtData } from '../../core/thought.js';
 import { createTestThought } from '../helpers/factories.js';
 
-const SESSION = 'compression-persistence-sess';
+const SESSION = asSessionId('compression-persistence-sess');
 const BRANCH = asBranchId('alt-1');
 
 // SQLite persistence requires the optional `better-sqlite3` package.
@@ -67,7 +67,7 @@ function makeThought(num: number, overrides?: Partial<ThoughtData>): ThoughtData
  * Seed a branched session (3 main + 3 branched thoughts) and return the
  * branch root id so tests can call compressBranch on it.
  */
-function seedBranchedSession(manager: HistoryManager): { branchRootId: string } {
+function seedBranchedSession(manager: HistoryManager): { branchRootId: ThoughtId } {
 	const t1 = makeThought(1);
 	const t2 = makeThought(2);
 	const t3 = makeThought(3);
@@ -96,7 +96,7 @@ function seedBranchedSession(manager: HistoryManager): { branchRootId: string } 
 	manager.addThought(b2);
 	manager.addThought(b3);
 
-	return { branchRootId: b1.id! };
+	return { branchRootId: b1.id! as ThoughtId };
 }
 
 describe('Compression persistence integration', () => {
@@ -151,7 +151,7 @@ describe('Compression persistence integration', () => {
 				const { branchRootId } = seedBranchedSession(manager);
 
 				// Compress the branch — flag-ON path.
-				const summary = compression.compressBranch(asSessionId(SESSION), BRANCH, branchRootId);
+				const summary = compression.compressBranch(SESSION, BRANCH, branchRootId);
 				expect(summary.sessionId).toBe(SESSION);
 				expect(summary.branchId).toBe(BRANCH);
 				expect(summary.rootThoughtId).toBe(branchRootId);

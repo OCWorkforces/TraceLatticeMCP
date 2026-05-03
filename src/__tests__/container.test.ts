@@ -54,9 +54,9 @@ describe('Container', () => {
 	describe('Instance Registration', () => {
 		it('should register and resolve an instance', () => {
 			const logger = new ConsoleLogger('[TEST] ');
-			container.registerInstance('Logger', logger);
+			container.registerDynamicInstance('Logger', logger);
 
-			const resolved = container.resolve('Logger') as unknown as ConsoleLogger;
+			const resolved = container.resolveDynamic('Logger') as ConsoleLogger;
 
 			expect(resolved).toBe(logger);
 			expect(resolved.prefix).toBe('[TEST] ');
@@ -64,10 +64,10 @@ describe('Container', () => {
 
 		it('should return the same instance on multiple resolves', () => {
 			const logger = new ConsoleLogger('[TEST] ');
-			container.registerInstance('Logger', logger);
+			container.registerDynamicInstance('Logger', logger);
 
-			const first = container.resolve('Logger') as unknown as ConsoleLogger;
-			const second = container.resolve('Logger') as unknown as ConsoleLogger;
+			const first = container.resolveDynamic('Logger') as ConsoleLogger;
+			const second = container.resolveDynamic('Logger') as ConsoleLogger;
 
 			expect(first).toBe(second);
 			expect(first).toBe(logger);
@@ -76,9 +76,9 @@ describe('Container', () => {
 
 	describe('Factory Registration (Singleton)', () => {
 		it('should register and resolve a factory', () => {
-			container.register('Logger', () => new ConsoleLogger('[FACTORY] '));
+			container.registerDynamic('Logger', () => new ConsoleLogger('[FACTORY] '));
 
-			const resolved = container.resolve('Logger') as unknown as ConsoleLogger;
+			const resolved = container.resolveDynamic('Logger') as ConsoleLogger;
 
 			expect(resolved).toBeInstanceOf(ConsoleLogger);
 			expect(resolved.prefix).toBe('[FACTORY] ');
@@ -86,13 +86,13 @@ describe('Container', () => {
 
 		it('should cache factory result (singleton behavior)', () => {
 			let callCount = 0;
-			container.register('Logger', () => {
+			container.registerDynamic('Logger', () => {
 				callCount++;
 				return new ConsoleLogger(`[CALL-${callCount}] `);
 			});
 
-			const first = container.resolve('Logger') as unknown as ConsoleLogger;
-			const second = container.resolve('Logger') as unknown as ConsoleLogger;
+			const first = container.resolveDynamic('Logger') as ConsoleLogger;
+			const second = container.resolveDynamic('Logger') as ConsoleLogger;
 
 			expect(callCount).toBe(1);
 			expect(first).toBe(second);
@@ -101,10 +101,10 @@ describe('Container', () => {
 
 		it('should resolve dependencies from container', () => {
 			const logger = new ConsoleLogger('[DEP] ');
-			container.registerInstance('Logger', logger);
+			container.registerDynamicInstance('Logger', logger);
 
-			container.register('Service', () => {
-				const resolvedLogger = container.resolve('Logger') as unknown as ConsoleLogger;
+			container.registerDynamic('Service', () => {
+				const resolvedLogger = container.resolveDynamic('Logger') as ConsoleLogger;
 				return new ServiceWithDependencies(resolvedLogger, new TestConfig({ key: 'value' }));
 			});
 
@@ -118,10 +118,10 @@ describe('Container', () => {
 
 	describe('Transient Factory Registration', () => {
 		it('should create new instance on each resolve', () => {
-			container.registerFactory('Logger', () => new ConsoleLogger('[TRANSIENT] '));
+			container.registerDynamicFactory('Logger', () => new ConsoleLogger('[TRANSIENT] '));
 
-			const first = container.resolve('Logger') as unknown as ConsoleLogger;
-			const second = container.resolve('Logger') as unknown as ConsoleLogger;
+			const first = container.resolveDynamic('Logger') as ConsoleLogger;
+			const second = container.resolveDynamic('Logger') as ConsoleLogger;
 
 			expect(first).not.toBe(second);
 			expect(first).toBeInstanceOf(ConsoleLogger);
@@ -130,7 +130,7 @@ describe('Container', () => {
 
 		it('should call factory on every resolve', () => {
 			let callCount = 0;
-			container.registerFactory('Counter', () => {
+			container.registerDynamicFactory('Counter', () => {
 				callCount++;
 				return { count: callCount };
 			});
@@ -148,38 +148,38 @@ describe('Container', () => {
 
 	describe('Duplicate Registration', () => {
 		it('should throw error when registering duplicate instance', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
 
 			expect(() => {
-				container.registerInstance('Logger', new ConsoleLogger());
+				container.registerDynamicInstance('Logger', new ConsoleLogger());
 			}).toThrow("Service 'Logger' is already registered");
 		});
 
 		it('should throw error when registering duplicate factory', () => {
-			container.register('Logger', () => new ConsoleLogger());
+			container.registerDynamic('Logger', () => new ConsoleLogger());
 
 			expect(() => {
-				container.register('Logger', () => new ConsoleLogger());
+				container.registerDynamic('Logger', () => new ConsoleLogger());
 			}).toThrow("Service 'Logger' is already registered");
 		});
 
 		it('should throw error when registering duplicate transient factory', () => {
-			container.registerFactory('Logger', () => new ConsoleLogger());
+			container.registerDynamicFactory('Logger', () => new ConsoleLogger());
 
 			expect(() => {
-				container.registerFactory('Logger', () => new ConsoleLogger());
+				container.registerDynamicFactory('Logger', () => new ConsoleLogger());
 			}).toThrow("Service 'Logger' is already registered");
 		});
 
 		it('should throw error when mixing registration types', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
 
 			expect(() => {
-				container.register('Logger', () => new ConsoleLogger());
+				container.registerDynamic('Logger', () => new ConsoleLogger());
 			}).toThrow("Service 'Logger' is already registered");
 
 			expect(() => {
-				container.registerFactory('Logger', () => new ConsoleLogger());
+				container.registerDynamicFactory('Logger', () => new ConsoleLogger());
 			}).toThrow("Service 'Logger' is already registered");
 		});
 	});
@@ -200,17 +200,17 @@ describe('Container', () => {
 
 	describe('has() method', () => {
 		it('should return true for registered instance', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
 			expect(container.has('Logger')).toBe(true);
 		});
 
 		it('should return true for registered factory', () => {
-			container.register('Logger', () => new ConsoleLogger());
+			container.registerDynamic('Logger', () => new ConsoleLogger());
 			expect(container.has('Logger')).toBe(true);
 		});
 
 		it('should return true for registered transient factory', () => {
-			container.registerFactory('Logger', () => new ConsoleLogger());
+			container.registerDynamicFactory('Logger', () => new ConsoleLogger());
 			expect(container.has('Logger')).toBe(true);
 		});
 
@@ -219,15 +219,15 @@ describe('Container', () => {
 		});
 
 		it('should return true after factory is resolved (cached)', () => {
-			container.register('Logger', () => new ConsoleLogger());
-			container.resolve('Logger') as unknown as ConsoleLogger;
+			container.registerDynamic('Logger', () => new ConsoleLogger());
+			container.resolveDynamic('Logger');
 			expect(container.has('Logger')).toBe(true);
 		});
 	});
 
 	describe('unregister() method', () => {
 		it('should remove registered instance', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
 			expect(container.has('Logger')).toBe(true);
 
 			const result = container.unregister('Logger');
@@ -237,7 +237,7 @@ describe('Container', () => {
 		});
 
 		it('should remove registered factory', () => {
-			container.register('Logger', () => new ConsoleLogger());
+			container.registerDynamic('Logger', () => new ConsoleLogger());
 			expect(container.has('Logger')).toBe(true);
 
 			const result = container.unregister('Logger');
@@ -247,7 +247,7 @@ describe('Container', () => {
 		});
 
 		it('should remove registered transient factory', () => {
-			container.registerFactory('Logger', () => new ConsoleLogger());
+			container.registerDynamicFactory('Logger', () => new ConsoleLogger());
 			expect(container.has('Logger')).toBe(true);
 
 			const result = container.unregister('Logger');
@@ -262,22 +262,22 @@ describe('Container', () => {
 		});
 
 		it('should allow re-registration after unregister', () => {
-			container.registerInstance('Logger', new ConsoleLogger('first'));
+			container.registerDynamicInstance('Logger', new ConsoleLogger('first'));
 			container.unregister('Logger');
 
 			// Should not throw
-			container.registerInstance('Logger', new ConsoleLogger('second'));
+			container.registerDynamicInstance('Logger', new ConsoleLogger('second'));
 
-			const resolved = container.resolve('Logger') as unknown as ConsoleLogger;
+			const resolved = container.resolveDynamic('Logger') as ConsoleLogger;
 			expect(resolved.prefix).toBe('second');
 		});
 	});
 
 	describe('clear() method', () => {
 		it('should remove all registered services', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
-			container.register('Config', () => new TestConfig({}));
-			container.registerFactory(
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
+			container.registerDynamic('Config', () => new TestConfig({}));
+			container.registerDynamicFactory(
 				'Service',
 				() => new ServiceWithDependencies(new ConsoleLogger(), new TestConfig({}))
 			);
@@ -293,11 +293,11 @@ describe('Container', () => {
 		});
 
 		it('should allow new registrations after clear', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
 			container.clear();
 
 			// Should not throw
-			container.registerInstance('Logger', new ConsoleLogger());
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
 
 			expect(container.has('Logger')).toBe(true);
 		});
@@ -309,30 +309,30 @@ describe('Container', () => {
 		});
 
 		it('should count registered instances', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
-			container.registerInstance('Config', new TestConfig({}));
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
+			container.registerDynamicInstance('Config', new TestConfig({}));
 
 			expect(container.size).toBe(2);
 		});
 
 		it('should count registered factories', () => {
-			container.register('Logger', () => new ConsoleLogger());
-			container.register('Config', () => new TestConfig({}));
+			container.registerDynamic('Logger', () => new ConsoleLogger());
+			container.registerDynamic('Config', () => new TestConfig({}));
 
 			expect(container.size).toBe(2);
 		});
 
 		it('should count registered transient factories', () => {
-			container.registerFactory('Logger', () => new ConsoleLogger());
-			container.registerFactory('Config', () => new TestConfig({}));
+			container.registerDynamicFactory('Logger', () => new ConsoleLogger());
+			container.registerDynamicFactory('Config', () => new TestConfig({}));
 
 			expect(container.size).toBe(2);
 		});
 
 		it('should count mixed registration types', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
-			container.register('Config', () => new TestConfig({}));
-			container.registerFactory(
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
+			container.registerDynamic('Config', () => new TestConfig({}));
+			container.registerDynamicFactory(
 				'Service',
 				() => new ServiceWithDependencies(new ConsoleLogger(), new TestConfig({}))
 			);
@@ -341,8 +341,8 @@ describe('Container', () => {
 		});
 
 		it('should decrease size when unregistering', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
-			container.register('Config', () => new TestConfig({}));
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
+			container.registerDynamic('Config', () => new TestConfig({}));
 
 			expect(container.size).toBe(2);
 
@@ -352,11 +352,11 @@ describe('Container', () => {
 		});
 
 		it('should not change size when factory is resolved (cached)', () => {
-			container.register('Logger', () => new ConsoleLogger());
+			container.registerDynamic('Logger', () => new ConsoleLogger());
 
 			expect(container.size).toBe(1);
 
-			container.resolve('Logger') as unknown as ConsoleLogger;
+			container.resolveDynamic('Logger');
 
 			expect(container.size).toBe(1);
 		});
@@ -369,8 +369,8 @@ describe('Container', () => {
 		});
 
 		it('should return names of registered instances', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
-			container.registerInstance('Config', new TestConfig({}));
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
+			container.registerDynamicInstance('Config', new TestConfig({}));
 
 			const services = container.registeredServices();
 
@@ -380,8 +380,8 @@ describe('Container', () => {
 		});
 
 		it('should return names of registered factories', () => {
-			container.register('Logger', () => new ConsoleLogger());
-			container.register('Config', () => new TestConfig({}));
+			container.registerDynamic('Logger', () => new ConsoleLogger());
+			container.registerDynamic('Config', () => new TestConfig({}));
 
 			const services = container.registeredServices();
 
@@ -391,8 +391,8 @@ describe('Container', () => {
 		});
 
 		it('should return names of registered transient factories', () => {
-			container.registerFactory('Logger', () => new ConsoleLogger());
-			container.registerFactory('Config', () => new TestConfig({}));
+			container.registerDynamicFactory('Logger', () => new ConsoleLogger());
+			container.registerDynamicFactory('Config', () => new TestConfig({}));
 
 			const services = container.registeredServices();
 
@@ -402,9 +402,9 @@ describe('Container', () => {
 		});
 
 		it('should return unique names when mixing types', () => {
-			container.registerInstance('Logger', new ConsoleLogger());
-			container.register('Config', () => new TestConfig({}));
-			container.registerFactory(
+			container.registerDynamicInstance('Logger', new ConsoleLogger());
+			container.registerDynamic('Config', () => new TestConfig({}));
+			container.registerDynamicFactory(
 				'Service',
 				() => new ServiceWithDependencies(new ConsoleLogger(), new TestConfig({}))
 			);
@@ -594,21 +594,21 @@ describe('Container', () => {
 	describe('Resolution Order Priority', () => {
 		it('should check instances before factories when checking has()', () => {
 			const instance = new ConsoleLogger('[INSTANCE] ');
-			container.registerInstance('Logger', instance);
+			container.registerDynamicInstance('Logger', instance);
 
 			// Should find it in services, not factories
 			expect(container.has('Logger')).toBe(true);
 		});
 
 		it('should check factories before transient factories when checking has()', () => {
-			container.register('Logger', () => new ConsoleLogger('[FACTORY] '));
+			container.registerDynamic('Logger', () => new ConsoleLogger('[FACTORY] '));
 
 			// Should find it in factories, not transient factories
 			expect(container.has('Logger')).toBe(true);
 		});
 
 		it('should check transient factories when nothing else registered', () => {
-			container.registerFactory('Logger', () => new ConsoleLogger('[TRANSIENT] '));
+			container.registerDynamicFactory('Logger', () => new ConsoleLogger('[TRANSIENT] '));
 
 			// Should find it in transient factories
 			expect(container.has('Logger')).toBe(true);
@@ -626,7 +626,9 @@ describe('createDefaultContainer', () => {
 
 	it('should register logger if provided', () => {
 		const logger = new ConsoleLogger('[CUSTOM] ');
-		const container = createDefaultContainer({ logger });
+		// Cast to satisfy ServiceRegistry.Logger (StructuredLogger). ConsoleLogger
+		// implements the Logger interface but is not a StructuredLogger subclass.
+		const container = createDefaultContainer({ logger: logger as unknown as Logger });
 
 		expect(container.has('Logger')).toBe(true);
 		const resolved = container.resolve('Logger') as unknown as ConsoleLogger;
@@ -645,7 +647,7 @@ describe('createDefaultContainer', () => {
 	it('should register both logger and config if provided', () => {
 		const logger = new ConsoleLogger('[CUSTOM] ');
 		const config = new ServerConfig();
-		const container = createDefaultContainer({ logger, config });
+		const container = createDefaultContainer({ logger: logger as unknown as Logger, config });
 		expect(container.has('Logger')).toBe(true);
 		expect(container.has('Config')).toBe(true);
 	});
@@ -667,14 +669,14 @@ describe('Complex Scenarios', () => {
 		const container = new Container();
 
 		// Register a service that will later depend on another
-		container.register('Service', () => {
+		container.registerDynamic('Service', () => {
 			// Resolve dependency at factory call time, not registration time
-			const logger = container.resolve('Logger') as unknown as ConsoleLogger;
+			const logger = container.resolveDynamic('Logger') as ConsoleLogger;
 			return { logger };
 		});
 
 		// Register the dependency after the service
-		container.registerInstance('Logger', new ConsoleLogger('[LAZY] '));
+		container.registerDynamicInstance('Logger', new ConsoleLogger('[LAZY] '));
 
 		const service = container.resolveDynamic('Service') as { logger: ILogger };
 
@@ -685,19 +687,19 @@ describe('Complex Scenarios', () => {
 	it('should support replacing a service', () => {
 		const container = new Container();
 
-		container.registerInstance('Logger', new ConsoleLogger('v1'));
-		expect((container.resolve('Logger') as unknown as ConsoleLogger).prefix).toBe('v1');
+		container.registerDynamicInstance('Logger', new ConsoleLogger('v1'));
+		expect((container.resolveDynamic('Logger') as ConsoleLogger).prefix).toBe('v1');
 
 		container.unregister('Logger');
-		container.registerInstance('Logger', new ConsoleLogger('v2'));
-		expect((container.resolve('Logger') as unknown as ConsoleLogger).prefix).toBe('v2');
+		container.registerDynamicInstance('Logger', new ConsoleLogger('v2'));
+		expect((container.resolveDynamic('Logger') as ConsoleLogger).prefix).toBe('v2');
 	});
 
 	it('should throw descriptive error on circular dependency resolution', () => {
 		const container = new Container();
 
-		container.register('A', () => ({ b: container.resolveDynamic('B') }));
-		container.register('B', () => ({ a: container.resolveDynamic('A') }));
+		container.registerDynamic('A', () => ({ b: container.resolveDynamic('B') }));
+		container.registerDynamic('B', () => ({ a: container.resolveDynamic('A') }));
 
 		expect(() => {
 			container.resolveDynamic('A');
@@ -708,14 +710,14 @@ describe('Complex Scenarios', () => {
 		const container1 = new Container();
 		const container2 = new Container();
 
-		container1.registerInstance('Logger', new ConsoleLogger('C1'));
-		container2.registerInstance('Logger', new ConsoleLogger('C2'));
+		container1.registerDynamicInstance('Logger', new ConsoleLogger('C1'));
+		container2.registerDynamicInstance('Logger', new ConsoleLogger('C2'));
 
-		const logger1 = container1.resolve('Logger');
-		const logger2 = container2.resolve('Logger');
+		const logger1 = container1.resolveDynamic('Logger');
+		const logger2 = container2.resolveDynamic('Logger');
 
-		expect((logger1 as unknown as ConsoleLogger).prefix).toBe('C1');
-		expect((logger2 as unknown as ConsoleLogger).prefix).toBe('C2');
+		expect((logger1 as ConsoleLogger).prefix).toBe('C1');
+		expect((logger2 as ConsoleLogger).prefix).toBe('C2');
 		expect(logger1).not.toBe(logger2);
 	});
 });

@@ -386,7 +386,7 @@ export class ToolAwareSequentialThinkingServer extends EventEmitter implements I
 		container.register('HistoryManager', () => {
 			const cfg = container.resolve('Config');
 			const log = container.resolve('Logger');
-			const pers = container.resolve('Persistence') as PersistenceBackend | null;
+			const pers = container.resolve('Persistence');
 			const componentMetrics = container.resolve('Metrics');
 			const edgeStore = container.resolve('EdgeStore');
 			return new HistoryManager({

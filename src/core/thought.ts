@@ -135,7 +135,7 @@ export type SynthesisThought = ThoughtData & {
 
 /** Catch-all for thought types with no per-type field invariants. */
 export type BaseThought = ThoughtData & {
-	readonly thought_type?: Exclude<
+	readonly thought_type: Exclude<
 		ThoughtType,
 		| 'tool_call'
 		| 'tool_observation'

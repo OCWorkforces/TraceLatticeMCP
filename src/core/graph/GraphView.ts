@@ -14,7 +14,7 @@
  */
 
 import type { IEdgeStore } from '../../contracts/interfaces.js';
-import type { SessionId } from '../../contracts/ids.js';
+import type { SessionId, ThoughtId } from '../../contracts/ids.js';
 import { CycleDetectedError } from '../../errors.js';
 import type { Edge } from './Edge.js';
 
@@ -61,14 +61,14 @@ export class GraphView {
 	 * const ids = view.chronological('s1');
 	 * ```
 	 */
-	chronological(sessionId: SessionId): readonly string[] {
+	chronological(sessionId: SessionId): readonly ThoughtId[] {
 		const edges = this._store.edgesForSession(sessionId);
 		if (edges.length === 0) {
 			return [];
 		}
 		const { nodes, hasIncoming } = this._collectNodes(edges);
 		const roots = this._findRoots(nodes, hasIncoming, edges);
-		return this._bfsFromRoots(sessionId, roots);
+		return this._bfsFromRoots(sessionId, roots) as readonly ThoughtId[];
 	}
 
 	/**
@@ -87,13 +87,13 @@ export class GraphView {
 	 * const branchIds = view.branchThoughts('s1', 'thought-root');
 	 * ```
 	 */
-	branchThoughts(sessionId: SessionId, rootThoughtId: string): readonly string[] {
+	branchThoughts(sessionId: SessionId, rootThoughtId: ThoughtId): readonly ThoughtId[] {
 		const visited = new Set<string>([rootThoughtId]);
 		const order: string[] = [rootThoughtId];
 		const queue: string[] = [rootThoughtId];
 		while (queue.length > 0) {
 			const current = queue.shift()!;
-			const out = this._store.outgoing(sessionId, current);
+			const out = this._store.outgoing(sessionId, current as ThoughtId);
 			for (const edge of out) {
 				if (edge.kind !== 'branch') continue;
 				if (visited.has(edge.to)) continue;
@@ -102,7 +102,7 @@ export class GraphView {
 				queue.push(edge.to);
 			}
 		}
-		return order;
+		return order as ThoughtId[];
 	}
 
 	/**
@@ -118,7 +118,7 @@ export class GraphView {
 	 * const order = view.topological('s1');
 	 * ```
 	 */
-	topological(sessionId: SessionId): readonly string[] {
+	topological(sessionId: SessionId): readonly ThoughtId[] {
 		const edges = this._store.edgesForSession(sessionId);
 		if (edges.length === 0) {
 			return [];
@@ -132,7 +132,7 @@ export class GraphView {
 		while (queue.length > 0) {
 			const node = queue.shift()!;
 			order.push(node);
-			for (const edge of this._store.outgoing(sessionId, node)) {
+			for (const edge of this._store.outgoing(sessionId, node as ThoughtId)) {
 				const next = (inDegree.get(edge.to) ?? 0) - 1;
 				inDegree.set(edge.to, next);
 				if (next === 0) queue.push(edge.to);
@@ -143,7 +143,7 @@ export class GraphView {
 				`Cycle detected in session '${sessionId}': topological sort incomplete (${order.length}/${inDegree.size})`
 			);
 		}
-		return order;
+		return order as ThoughtId[];
 	}
 
 	/**
@@ -161,8 +161,8 @@ export class GraphView {
 	 * const parents = view.ancestors('s1', 'thought-id', 1);
 	 * ```
 	 */
-	ancestors(sessionId: SessionId, thoughtId: string, maxDepth?: number): readonly string[] {
-		return this._bfsClosure(sessionId, thoughtId, maxDepth, 'incoming');
+	ancestors(sessionId: SessionId, thoughtId: ThoughtId, maxDepth?: number): readonly ThoughtId[] {
+		return this._bfsClosure(sessionId, thoughtId, maxDepth, 'incoming') as readonly ThoughtId[];
 	}
 
 	/**
@@ -180,8 +180,8 @@ export class GraphView {
 	 * const children = view.descendants('s1', 'thought-id');
 	 * ```
 	 */
-	descendants(sessionId: SessionId, thoughtId: string, maxDepth?: number): readonly string[] {
-		return this._bfsClosure(sessionId, thoughtId, maxDepth, 'outgoing');
+	descendants(sessionId: SessionId, thoughtId: ThoughtId, maxDepth?: number): readonly ThoughtId[] {
+		return this._bfsClosure(sessionId, thoughtId, maxDepth, 'outgoing') as readonly ThoughtId[];
 	}
 
 	/**
@@ -195,7 +195,7 @@ export class GraphView {
 	 * const tips = view.leaves('s1');
 	 * ```
 	 */
-	leaves(sessionId: SessionId): readonly string[] {
+	leaves(sessionId: SessionId): readonly ThoughtId[] {
 		const edges = this._store.edgesForSession(sessionId);
 		if (edges.length === 0) {
 			return [];
@@ -203,11 +203,11 @@ export class GraphView {
 		const { nodes } = this._collectNodes(edges);
 		const result: string[] = [];
 		for (const node of nodes) {
-			if (this._store.outgoing(sessionId, node).length === 0) {
+			if (this._store.outgoing(sessionId, node as ThoughtId).length === 0) {
 				result.push(node);
 			}
 		}
-		return result;
+		return result as ThoughtId[];
 	}
 
 	/**
@@ -267,7 +267,7 @@ export class GraphView {
 		}
 		while (queue.length > 0) {
 			const node = queue.shift()!;
-			for (const edge of this._store.outgoing(sessionId, node)) {
+			for (const edge of this._store.outgoing(sessionId, node as ThoughtId)) {
 				if (visited.has(edge.to)) continue;
 				visited.add(edge.to);
 				order.push(edge.to);
@@ -309,8 +309,8 @@ export class GraphView {
 			for (const node of frontier) {
 				const edges =
 					direction === 'outgoing'
-						? this._store.outgoing(sessionId, node)
-						: this._store.incoming(sessionId, node);
+						? this._store.outgoing(sessionId, node as ThoughtId)
+						: this._store.incoming(sessionId, node as ThoughtId);
 				for (const edge of edges) {
 					const neighbour = direction === 'outgoing' ? edge.to : edge.from;
 					if (visited.has(neighbour)) continue;

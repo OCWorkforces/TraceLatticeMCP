@@ -8,6 +8,7 @@
  */
 
 import type { ThoughtType } from '../core/reasoning.js';
+import type { SessionId } from './ids.js';
 
 /**
  * Aggregate calibration quality metrics for a session (or globally).
@@ -74,18 +75,18 @@ export interface ICalibrator {
 	 * @param sessionId - Session identifier for per-session calibration state.
 	 * @returns The calibration result.
 	 */
-	calibrate(rawConfidence: number, type: ThoughtType, sessionId: string): CalibrationResult;
+	calibrate(rawConfidence: number, type: ThoughtType, sessionId: SessionId): CalibrationResult;
 	/**
 	 * Get calibration metrics for a session, or globally if `sessionId` is omitted.
 	 *
 	 * @param sessionId - Optional session id; omit for global metrics.
 	 * @returns Aggregate calibration metrics.
 	 */
-	metrics(sessionId?: string): CalibrationMetrics;
+	metrics(sessionId?: SessionId): CalibrationMetrics;
 	/**
 	 * Refit the calibration model from accumulated samples.
 	 *
 	 * @param sessionId - Optional session id; omit to refit global state.
 	 */
-	refit(sessionId?: string): void;
+	refit(sessionId?: SessionId): void;
 }

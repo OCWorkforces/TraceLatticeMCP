@@ -9,6 +9,7 @@
 
 import type { Logger } from '../logger/StructuredLogger.js';
 import { NullLogger } from '../logger/NullLogger.js';
+import type { SessionId } from '../contracts/ids.js';
 
 /** Minimal session contract — anything with a `lastAccessedAt` timestamp and optional owner. */
 export interface SessionLike {
@@ -63,7 +64,7 @@ export class SessionManager<S extends SessionLike> {
 	 * Starts the periodic session cleanup timer. No-op if already started.
 	 * The timer is unref'd so it does not block process exit.
 	 */
-	public startCleanupTimer(sessions: Map<string, S>): void {
+	public startCleanupTimer(sessions: Map<SessionId, S>): void {
 		if (this._cleanupTimer !== null) return;
 		this._cleanupTimer = setInterval(() => {
 			this.cleanupStaleSessions(sessions);
@@ -89,7 +90,7 @@ export class SessionManager<S extends SessionLike> {
 	 * Evicts sessions that have been inactive longer than `sessionTtlMs`.
 	 * The default session is never evicted.
 	 */
-	public cleanupStaleSessions(sessions: Map<string, S>): void {
+	public cleanupStaleSessions(sessions: Map<SessionId, S>): void {
 		const now = Date.now();
 		for (const [key, session] of sessions) {
 			if (key === this._defaultSessionId) continue;
@@ -110,13 +111,13 @@ export class SessionManager<S extends SessionLike> {
 	 *
 	 * The default session is never evicted at either stage.
 	 */
-	public evictExcessSessions(sessions: Map<string, S>): void {
+	public evictExcessSessions(sessions: Map<SessionId, S>): void {
 		this._evictPerOwnerOverflow(sessions);
 		this._evictGlobalOverflow(sessions);
 	}
 
 	/** Per-owner quota enforcement: oldest sessions per owner bucket are evicted. */
-	private _evictPerOwnerOverflow(sessions: Map<string, S>): void {
+	private _evictPerOwnerOverflow(sessions: Map<SessionId, S>): void {
 		const ownerCounts = new Map<string, number>();
 		for (const [key, session] of sessions) {
 			if (key === this._defaultSessionId) continue;
@@ -127,7 +128,7 @@ export class SessionManager<S extends SessionLike> {
 		const maxPerOwner = this._maxSessionsPerOwner;
 		for (const [owner, count] of ownerCounts) {
 			if (count <= maxPerOwner) continue;
-			const ownerSessions: Array<[string, S]> = [];
+			const ownerSessions: Array<[SessionId, S]> = [];
 			for (const [key, session] of sessions) {
 				if (key === this._defaultSessionId) continue;
 				if (session.owner !== owner) continue;
@@ -147,10 +148,10 @@ export class SessionManager<S extends SessionLike> {
 	}
 
 	/** Global LRU cap enforcement: evicts oldest until under `getMaxSessions()`. */
-	private _evictGlobalOverflow(sessions: Map<string, S>): void {
+	private _evictGlobalOverflow(sessions: Map<SessionId, S>): void {
 		const max = this._getMaxSessions();
 		while (sessions.size > max) {
-			let oldestKey: string | null = null;
+			let oldestKey: SessionId | null = null;
 			let oldestTime = Infinity;
 			for (const [key, session] of sessions) {
 				if (key === this._defaultSessionId) continue;
