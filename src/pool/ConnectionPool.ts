@@ -26,6 +26,7 @@ import {
 } from '../errors.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { ConnectionPoolStats, IConnectionPool } from './IConnectionPool.js';
+import { asSessionId, type SessionId } from '../contracts/ids.js';
 
 export interface SessionOptions {
 	/**
@@ -61,7 +62,7 @@ export interface SessionOptions {
 }
 
 export interface SessionInfo {
-	id: string;
+	id: SessionId;
 	server: SessionServer;
 	createdAt: number;
 	lastActivityAt: number;
@@ -88,7 +89,7 @@ export interface ProcessResult {
  */
 export class Session {
 	private _server: SessionServer;
-	private _id: string;
+	private _id: SessionId;
 	private _createdAt: number;
 	private _lastActivityAt: number;
 	private _isActiveValue: boolean;
@@ -96,7 +97,7 @@ export class Session {
 	private _cleanupTimer: NodeJS.Timeout | null = null;
 	private _logger: Logger;
 
-	constructor(id: string, server: SessionServer, timeout: number, logger: Logger) {
+	constructor(id: SessionId, server: SessionServer, timeout: number, logger: Logger) {
 		this._server = server;
 		this._id = id;
 		this._createdAt = Date.now();
@@ -203,13 +204,13 @@ export class Session {
  * allowing multiple users to interact with the system simultaneously.
  */
 export class ConnectionPool implements IConnectionPool {
-	private _sessions: Map<string, Session> = new Map();
+	private _sessions: Map<SessionId, Session> = new Map();
 	private _createSessionLock: Promise<void> | null = null;
 	private _maxSessions: number;
 	private _sessionTimeout: number;
 	private _autoCleanup: boolean;
 	private _cleanupInterval: number;
-	private _cleanupTimerId: number | null = null;
+	private _cleanupTimerId: ReturnType<typeof setInterval> | null = null;
 	private _terminated: boolean = false;
 	private _logger: Logger;
 	private _serverFactory: (() => Promise<SessionServer>) | null;
@@ -247,7 +248,7 @@ export class ConnectionPool implements IConnectionPool {
 	 * @returns The session ID
 	 * @throws Error if max sessions reached
 	 */
-	async createSession(): Promise<string> {
+	async createSession(): Promise<SessionId> {
 		while (this._createSessionLock) {
 			await this._createSessionLock;
 		}
@@ -271,7 +272,7 @@ export class ConnectionPool implements IConnectionPool {
 
 		try {
 			// Generate unique session ID
-			const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+			const sessionId = asSessionId(`session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`);
 
 			// Create a new server instance for this session
 			const server = await this._serverFactory();
@@ -298,7 +299,7 @@ export class ConnectionPool implements IConnectionPool {
 	 * @returns Promise with the processing result
 	 * @throws Error if session not found
 	 */
-	async process(sessionId: string, input: ThoughtData): Promise<ProcessResult> {
+	async process(sessionId: SessionId, input: ThoughtData): Promise<ProcessResult> {
 		const session = this._sessions.get(sessionId);
 
 		if (!session) {
@@ -314,7 +315,7 @@ export class ConnectionPool implements IConnectionPool {
 	 * @param sessionId - The session ID to close
 	 * @throws Error if session not found
 	 */
-	async closeSession(sessionId: string): Promise<void> {
+	async closeSession(sessionId: SessionId): Promise<void> {
 		const session = this._sessions.get(sessionId);
 
 		if (!session) {
@@ -335,7 +336,7 @@ export class ConnectionPool implements IConnectionPool {
 	 * @param sessionId - The session ID
 	 * @returns Session info or undefined if not found
 	 */
-	getSessionInfo(sessionId: string): SessionInfo | undefined {
+	getSessionInfo(sessionId: SessionId): SessionInfo | undefined {
 		return this._sessions.get(sessionId)?.getInfo();
 	}
 
@@ -375,7 +376,7 @@ export class ConnectionPool implements IConnectionPool {
 
 		this._cleanupTimerId = setInterval(() => {
 			this._cleanupTimedOutSessions();
-		}, this._cleanupInterval) as unknown as number;
+		}, this._cleanupInterval);
 	}
 
 	/**

@@ -44,9 +44,3 @@ export const DEFAULT_FLAGS: FeatureFlags = {
 	outcomeRecording: true,
 } as const;
 
-/**
- * Type guard: check if a feature flag is enabled (not false/undefined).
- */
-export function hasFeature(flags: FeatureFlags, key: FeatureFlagKey): boolean {
-	return flags[key] !== false && flags[key] !== undefined;
-}
