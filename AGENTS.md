@@ -1,7 +1,7 @@
 # PROJECT KNOWLEDGE BASE
 
 **Updated:** 2026-05-04
-**Commit:** 1c9141f v1.3.6+typing
+**Commit:** 7b3daab fix(types): brand MemoryPersistence Map keys, missed in typing commit
 **Branch:** feat/rslib-rsbuild-migration
 
 ## OVERVIEW
@@ -168,7 +168,8 @@ MCP Sequential Thinking Server — TypeScript/Node.js server providing structure
 - **Entry Points**: `src/lib.ts` is the library entry point and public API; `src/cli.ts` is CLI entry. Don't mix.
 - **Max CC 25**: Cyclomatic complexity per function (enforced by sentrux).
 - **Max function 100 lines**: Function length limit (enforced by sentrux).
-
+- **No `as SessionId` casts**: Use `asSessionId()` from `contracts/ids.ts` for validated branding. The only exceptions are inside `asSessionId()` itself, suppressed with `eslint-disable`. (ESLint `no-restricted-syntax` enforced).
+- **No inline `import()` types**: Use top-level `import type { … }` statements instead of inline `import('module').Type` annotations. (ESLint `consistent-type-imports` enforced).
 ## SETUP NOTES
 
 - **CI**: `.github/workflows/ci.yml` — Node 22.x + 24.x matrix. Hard gates: type-check, test+coverage, build. Soft gates (continue-on-error): lint, audit.

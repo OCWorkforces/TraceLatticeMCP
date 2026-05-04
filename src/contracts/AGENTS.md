@@ -1,6 +1,6 @@
 # CONTRACTS MODULE
 
-**Updated:** 2026-04-29
+**Updated:** 2026-05-04
 **Parent:** ../AGENTS.md
 
 ## OVERVIEW
@@ -16,7 +16,7 @@ Shared interface contracts. Single coupling point for cross-module type imports 
 | `summary.ts` | `ISummaryStore`, `Summary` |
 | `calibrator.ts` | `ICalibrator`, `CalibrationMetrics`, `CalibrationResult` |
 | `suspension.ts` | `ISuspensionStore`, `SuspensionRecord` |
-| `ids.ts` | `SessionId`, `ThoughtId`, `EdgeId`, `SuspensionToken`, `BranchId` (branded types) + constructors (`asBranchId()` etc.) + generators + `GLOBAL_SESSION_ID` constant |
+| `ids.ts` | `SessionId`, `ThoughtId`, `EdgeId`, `SuspensionToken`, `BranchId`, `SummaryId` (branded types) + validated constructors (`asSessionId()`, `asBranchId()` etc.) + unchecked constructors (`asThoughtId()`, `asEdgeId()`, `asSuspensionToken()`, `asSummaryId()`) + generators + `GLOBAL_SESSION_ID` constant |
 | `features.ts` | `FeatureFlags`, `DEFAULT_FLAGS`, `hasFeature()` type guard |
 | `transport.ts` | `ITransport`, `TransportKind` |
 
