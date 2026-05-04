@@ -12,6 +12,7 @@ import {
 	createPersistenceBackend,
 	} from '../persistence/PersistenceFactory.js';
 import type { PersistenceConfig } from '../contracts/PersistenceBackend.js';
+import type { IMetrics } from '../contracts/interfaces.js';
 import type { Edge } from '../core/graph/Edge.js';
 import { asSessionId, asThoughtId, type EdgeId } from '../contracts/ids.js';
 
@@ -563,7 +564,7 @@ describe('FilePersistence', () => {
 			};
 			const metricsBackend = new FilePersistence({
 				dataDir: testDir,
-				metrics: mockMetrics as unknown as import('../contracts/interfaces.js').IMetrics,
+			metrics: mockMetrics as unknown as IMetrics,
 			});
 
 			await metricsBackend.saveThought(createTestThought());

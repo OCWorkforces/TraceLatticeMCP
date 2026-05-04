@@ -162,7 +162,7 @@ describe.skipIf(!process.env.RUN_EVAL)('ToT vs Sequential Eval', () => {
 			};
 			reports.push(report);
 			// One JSON line per scenario for downstream tooling.
-			// eslint-disable-next-line no-console
+			 
 			console.log(JSON.stringify(report));
 		});
 	}
@@ -177,7 +177,7 @@ describe.skipIf(!process.env.RUN_EVAL)('ToT vs Sequential Eval', () => {
 			failed: total - passed,
 			pass_rate: total === 0 ? 0 : passed / total,
 		};
-		// eslint-disable-next-line no-console
+		 
 		console.log(JSON.stringify(summary));
 	});
 });

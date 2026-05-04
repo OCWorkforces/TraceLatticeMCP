@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { StepRecommendation } from '../core/step.js';
 import type { ThoughtData } from '../core/thought.js';
-import { ToolAwareSequentialThinkingServer, createServer } from '../lib.js';
+import type { ToolAwareSequentialThinkingServer} from '../lib.js';
+import { createServer } from '../lib.js';
 import type { SkillRecommendation } from '../types/skill.js';
 import type { ToolRecommendation } from '../types/tool.js';
 import { asSessionId } from '../contracts/ids.js';

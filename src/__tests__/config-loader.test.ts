@@ -348,7 +348,7 @@ describe('ConfigLoader', () => {
 			loader = new ConfigLoader();
 			const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 			mockExistsSync.mockReturnValue(true);
-			// eslint-disable-next-line no-throw-literal
+			 
 			mockReadFileSync.mockImplementation(() => {
 				throw 'string error thrown';
 			});

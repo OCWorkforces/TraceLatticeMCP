@@ -9,7 +9,7 @@
  */
 
 import type { ISuspensionStore, SuspensionRecord } from '../../contracts/suspension.js';
-import { generateSuspensionToken, type SessionId, type SuspensionToken } from '../../contracts/ids.js';
+import { generateSuspensionToken, asSessionId, type SessionId, type SuspensionToken } from '../../contracts/ids.js';
 import type { Logger } from '../../logger/StructuredLogger.js';
 
 /**
@@ -114,17 +114,17 @@ export class InMemorySuspensionStore implements ISuspensionStore {
 	}
 
 	clearSession(sessionId: string): void {
-		const bucket = this._bySession.get(sessionId as SessionId);
+		const bucket = this._bySession.get(asSessionId(sessionId));
 		if (!bucket) return;
 		for (const token of bucket) {
 			this._byToken.delete(token);
 		}
-		this._bySession.delete(sessionId as SessionId);
+		this._bySession.delete(asSessionId(sessionId));
 	}
 
 	size(sessionId?: string): number {
 		if (sessionId === undefined) return this._byToken.size;
-		return this._bySession.get(sessionId as SessionId)?.size ?? 0;
+		return this._bySession.get(asSessionId(sessionId))?.size ?? 0;
 	}
 
 	start(): void {

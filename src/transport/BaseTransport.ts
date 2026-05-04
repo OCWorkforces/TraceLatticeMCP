@@ -18,7 +18,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { URL } from 'node:url';
+import type { URL } from 'node:url';
 import type { HealthChecker } from '../health/HealthChecker.js';
 import type { Logger, LogLevel } from '../logger/StructuredLogger.js';
 import { SESSION_ID_PATTERN, MAX_SESSION_ID_LENGTH } from '../core/ids.js';

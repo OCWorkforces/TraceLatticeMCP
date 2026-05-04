@@ -33,7 +33,7 @@ import type { IHistoryManager } from './IHistoryManager.js';
 import { normalizeInput } from './InputNormalizer.js';
 import type { ThoughtData, ToolCallThought, ToolObservationThought, ValidatedThought } from './thought.js';
 import type { ThoughtEvaluator } from './ThoughtEvaluator.js';
-import { ThoughtFormatter } from './ThoughtFormatter.js';
+import type { ThoughtFormatter } from './ThoughtFormatter.js';
 import type { PatternName, PatternSignal } from './reasoning.js';
 import { SequentialStrategy } from './reasoning/strategies/SequentialStrategy.js';
 import type { CompressionService } from './compression/CompressionService.js';
