@@ -1623,7 +1623,7 @@ describe('ThoughtProcessor — uncovered branches', () => {
 			// Create a HistoryManager that throws a non-Error value
 			class StringThrowingHistoryManager implements IHistoryManager {
 				addThought(): void {
-					throw 'string failure'; // eslint-disable-line no-throw-literal
+					throw 'string failure';  
 				}
 				getHistory(): ThoughtData[] { return []; }
 				getHistoryLength(): number { return 0; }

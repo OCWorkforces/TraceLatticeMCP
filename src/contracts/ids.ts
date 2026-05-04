@@ -54,6 +54,7 @@ export type SummaryId = Brand<string, 'SummaryId'>;
  */
 export function asSessionId(value: string): SessionId {
 	if (value === '__global__') {
+		// eslint-disable-next-line no-restricted-syntax -- branding constructor, cannot self-reference
 		return value as SessionId;
 	}
 	if (typeof value !== 'string' || value.length === 0) {
@@ -71,6 +72,7 @@ export function asSessionId(value: string): SessionId {
 			'must match alphanumeric, hyphens, underscores',
 		);
 	}
+	// eslint-disable-next-line no-restricted-syntax -- branding constructor, cannot self-reference
 	return value as SessionId;
 }
 
@@ -125,4 +127,4 @@ export function generateSummaryId(): SummaryId {
  * Branded once here so production and test code share one constant
  * instead of casting `'__global__'` ad-hoc.
  */
-export const GLOBAL_SESSION_ID: SessionId = '__global__' as SessionId;
+export const GLOBAL_SESSION_ID: SessionId = asSessionId('__global__');

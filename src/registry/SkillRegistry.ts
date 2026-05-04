@@ -10,7 +10,7 @@
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { DiscoveryCache } from '../cache/DiscoveryCache.js';
+import type { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { DuplicateSkillError, InvalidSkillError, SkillNotFoundError } from '../errors.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { Skill } from '../types/skill.js';

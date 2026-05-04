@@ -10,7 +10,7 @@
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { DiscoveryCache } from '../cache/DiscoveryCache.js';
+import type { DiscoveryCache } from '../cache/DiscoveryCache.js';
 import { DuplicateToolError, InvalidToolError, ToolNotFoundError } from '../errors.js';
 import type { Logger } from '../logger/StructuredLogger.js';
 import type { Tool } from '../types/tool.js';

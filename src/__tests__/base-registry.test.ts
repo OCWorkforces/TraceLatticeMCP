@@ -665,7 +665,7 @@ describe('BaseRegistry', () => {
 			registry.add = (item: TestItem) => {
 				callCount++;
 				if (callCount === 2) {
-					// eslint-disable-next-line no-throw-literal
+					 
 					throw 'non-error string';
 				}
 				origAdd(item);

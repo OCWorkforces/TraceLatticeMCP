@@ -377,7 +377,7 @@ export class HistoryManager implements IHistoryManager {
 		}
 		const sid = sessionId ?? HistoryManager.DEFAULT_SESSION;
 		const policy = new DehydrationPolicy(this._summaryStore);
-		return policy.apply(history, sid as SessionId, opts);
+		return policy.apply(history, asSessionId(sid), opts);
 	}
 
 	public getHistoryLength(sessionId?: string): number {

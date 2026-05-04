@@ -1,6 +1,8 @@
 /**
  * Transport kind discriminator.
  */
+import type { McpServer } from 'tmcp';
+
 export type TransportKind = 'sse' | 'http' | 'streamable-http';
 
 /**
@@ -14,7 +16,7 @@ export interface ITransport {
 	readonly kind: TransportKind;
 
 	/** Connect the transport to an MCP server. */
-	connect(mcpServer: import('tmcp').McpServer): Promise<void>;
+	connect(mcpServer: McpServer): Promise<void>;
 
 	/** Stop the transport with graceful shutdown. */
 	stop(timeout?: number): Promise<void>;

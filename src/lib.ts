@@ -3,11 +3,12 @@
 // For the CLI entry point, see cli.ts.
 
 import { EventEmitter } from 'node:events';
-import * as v from 'valibot';
-import { ThoughtData } from './core/thought.js';
+import type * as v from 'valibot';
+import type { ThoughtData } from './core/thought.js';
 import { asBranchId, type BranchId } from './contracts/ids.js';
-import { SEQUENTIAL_THINKING_TOOL, SequentialThinkingSchema } from './schema.js';
-import { IDisposable } from './types/disposable.js';
+import type { SequentialThinkingSchema } from './schema.js';
+import { SEQUENTIAL_THINKING_TOOL } from './schema.js';
+import type { IDisposable } from './types/disposable.js';
 import { getErrorMessage } from './errors.js';
 
 // New component imports

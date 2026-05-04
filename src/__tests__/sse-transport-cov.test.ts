@@ -9,6 +9,7 @@ import { HealthChecker } from '../health/HealthChecker.js';
 import { McpServer } from 'tmcp';
 import { ValibotJsonSchemaAdapter } from '@tmcp/adapter-valibot';
 import { request } from 'node:http';
+import type { ServerResponse } from 'node:http';
 import { setTimeout } from 'node:timers';
 import { setTimeout as setTimeoutPromise } from 'node:timers/promises';
 import type { IMetrics } from '../contracts/interfaces.js';
@@ -965,8 +966,8 @@ describe('SseTransport coverage: _sendSseEvent catch block', () => {
 
 		// Access internal _clients set and _sendSseEvent
 		const internals = transport as unknown as {
-			_clients: Set<import('node:http').ServerResponse>;
-			_sendSseEvent: (res: import('node:http').ServerResponse, event: string, data: unknown) => void;
+		_clients: Set<ServerResponse>;
+		_sendSseEvent: (res: ServerResponse, event: string, data: unknown) => void;
 		};
 
 		// Create a mock response whose write() throws
@@ -974,7 +975,7 @@ describe('SseTransport coverage: _sendSseEvent catch block', () => {
 			write: () => {
 				throw new Error('Client disconnected');
 			},
-		} as unknown as import('node:http').ServerResponse;
+	} as unknown as ServerResponse;
 
 		// Add fake client to the set
 		internals._clients.add(fakeRes);
@@ -994,7 +995,7 @@ describe('SseTransport coverage: _sendSseEvent catch block', () => {
 		await transport.connect({} as McpServer);
 
 		const internals = transport as unknown as {
-			_clients: Set<import('node:http').ServerResponse>;
+		_clients: Set<ServerResponse>;
 		};
 
 		// Create a mock response whose write() throws
@@ -1002,7 +1003,7 @@ describe('SseTransport coverage: _sendSseEvent catch block', () => {
 			write: () => {
 				throw new Error('Connection reset');
 			},
-		} as unknown as import('node:http').ServerResponse;
+	} as unknown as ServerResponse;
 
 		internals._clients.add(fakeRes);
 		expect(transport.clientCount).toBe(1);

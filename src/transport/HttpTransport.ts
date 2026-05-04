@@ -14,7 +14,8 @@
  * ```
  */
 
-import { createServer, IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import type { McpServer } from 'tmcp';
 import { safeParse } from 'valibot';
